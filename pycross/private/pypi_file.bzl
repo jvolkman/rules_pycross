@@ -66,62 +66,32 @@ def _find_tag_end(content, pos):
 
 def _extract_href(tag):
     """Extract the href attribute value from an HTML tag body, ignoring quoted values."""
-    tag_len = len(tag)
-    tag_lower = tag.lower()
-    i = 0
-    for _ in range(tag_len):
-        if i >= tag_len:
-            break
-        if tag[i] in " \t\r\n":
-            i += 1
-            continue
-
-        # Read attribute name up to whitespace or '='.
-        name_start = i
-        for _ in range(tag_len - i):
-            if i >= tag_len or tag[i] in " \t\r\n=":
-                break
-            i += 1
-        attr_name = tag_lower[name_start:i]
-
-        # Skip whitespace after attribute name.
-        for _ in range(tag_len - i):
-            if i >= tag_len or tag[i] not in " \t\r\n":
-                break
-            i += 1
-
-        if i >= tag_len or tag[i] != "=":
-            continue
-        i += 1  # consume '='
-
-        # Skip whitespace after '='.
-        for _ in range(tag_len - i):
-            if i >= tag_len or tag[i] not in " \t\r\n":
-                break
-            i += 1
-        if i >= tag_len:
-            break
-
-        if tag[i] in ("\"", "'"):
-            quote = tag[i]
-            val_start = i + 1
-            close = tag.find(quote, val_start)
-            if close < 0:
-                val = tag[val_start:]
-                i = tag_len
-            else:
-                val = tag[val_start:close]
-                i = close + 1
+    rest = tag.lstrip()
+    for _ in range(len(tag)):
+        if not rest:
+            return None
+        token = rest.replace("\t", " ").replace("\r", " ").replace("\n", " ").split(" ", 1)[0]
+        name, has_eq, _ = token.partition("=")
+        if has_eq:
+            attr_name = name.lower()
+            rest = rest[len(name) + 1:].lstrip()
         else:
-            val_start = i
-            for _ in range(tag_len - i):
-                if i >= tag_len or tag[i] in " \t\r\n":
-                    break
-                i += 1
-            val = tag[val_start:i]
+            attr_name = token.lower()
+            rest = rest[len(token):].lstrip()
+            if not rest.startswith("="):
+                continue
+            rest = rest[1:].lstrip()
 
+        if not rest:
+            return None
+        if rest[0] in ("\"", "'"):
+            val, _, rest = rest[1:].partition(rest[0])
+        else:
+            val = rest.replace("\t", " ").replace("\r", " ").replace("\n", " ").split(" ", 1)[0]
+            rest = rest[len(val):]
         if attr_name == "href":
             return val
+        rest = rest.lstrip()
     return None
 
 def _parse_simple_html(content):
