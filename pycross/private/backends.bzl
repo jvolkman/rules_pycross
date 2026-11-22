@@ -40,6 +40,11 @@ def _collect_registrations(modules, warn = _print_warn):
             if name in backend_configs and not module.is_root:
                 if name not in root_names:
                     warn("Ignoring duplicate backend registration '{}' from module '{}'".format(name, module.name))
+                elif tag.override_json and name not in override_file_by_name:
+                    # Root re-registered a backend without specifying override_json;
+                    # inherit the overridden registration's override file so existing
+                    # `<backend>.override(...)` tags remain active.
+                    override_file_by_name[name] = str(tag.override_json)
                 continue
             if module.is_root:
                 if name in backend_configs:

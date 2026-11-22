@@ -318,6 +318,7 @@ def _find_site_paths_from_items(
     all_files: set[str] = set()
     members: dict[str, str] = {}  # relative path -> archive entry name
     top_level_dirs: set[str] = set()
+    trusted_dirs: set[str] = set()  # explicit DIRTYPE entries or dirs under src/
     root_files: set[str] = set()
     src_layout = False
 
@@ -348,6 +349,7 @@ def _find_site_paths_from_items(
                 # dirs from Python module files under src/ (ignoring C/Rust-only src/ trees).
                 if _is_candidate_dir(rel.parts[1]):
                     top_level_dirs.add(rel.parts[1])
+                    trusted_dirs.add(rel.parts[1])
                     if _extract_module_name(rel.parts[-1]):
                         src_layout = True
             elif len(rel.parts) >= 2 and _is_candidate_dir(rel.parts[0]):
@@ -355,8 +357,10 @@ def _find_site_paths_from_items(
         elif is_dir:
             if len(rel.parts) == 1 and _is_candidate_dir(rel.parts[0]):
                 top_level_dirs.add(rel.parts[0])
+                trusted_dirs.add(rel.parts[0])
             elif len(rel.parts) == 2 and rel.parts[0] == "src" and _is_candidate_dir(rel.parts[1]):
                 top_level_dirs.add(rel.parts[1])
+                trusted_dirs.add(rel.parts[1])
 
     # For src-layout, adjust file paths to be relative to src/
     if src_layout:
@@ -392,7 +396,14 @@ def _find_site_paths_from_items(
 
     # An sdist's top-level dirs are only a guess at what the built wheel installs; a dir with
     # no Python anywhere below it (.github/, requirements/, licenses/) can't be an import package.
-    top_level_dirs = {d for d in top_level_dirs if d.isidentifier() and _has_python(d)}
+    # For file-only sdists (flit, hatchling, poetry-core, pdm, maturin), also require an explicit
+    # `<dir>/__init__.py` on non-`src/` dirs inferred solely from file entries so non-package trees
+    # (`pysrc/`, `crates/`, `bindings/`, `bench/`) return `[]` and preserve wheel_library's fallback.
+    top_level_dirs = {
+        d
+        for d in top_level_dirs
+        if d.isidentifier() and _has_python(d) and (d in trusted_dirs or f"{d}/__init__.py" in all_files)
+    }
     pkgs = _resolve_top_level_paths(all_files, top_level_dirs, read_file)
     for f in root_files:
         name = _extract_module_name(f)

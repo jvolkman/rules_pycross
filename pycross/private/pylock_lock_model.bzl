@@ -551,13 +551,14 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 dependencies.append({
                     "name": dep_display,
                     "version": explicit_ver,
-                    "marker": dep_marker,
+                    "marker": _combine_markers(dep_marker, dep_versions[explicit_ver]),
                 })
             elif len(dep_versions) == 1:
+                only_ver = versions[dep_name]
                 dependencies.append({
                     "name": dep_display,
-                    "version": versions[dep_name],
-                    "marker": dep_marker,
+                    "version": only_ver,
+                    "marker": _combine_markers(dep_marker, dep_versions[only_ver]),
                 })
             else:
                 for cand_ver, cand_marker in sorted(dep_versions.items()):

@@ -1034,6 +1034,46 @@ class InspectPackageTest(unittest.TestCase):
         )
         self.assertEqual(inspect_sdist(src_pkg)["site_paths"], ["mypkg"])
 
+    def test_sdist_file_only_non_package_trees_return_empty_site_paths(self):
+        """File-only sdists without top-level __init__.py or src/ return [] to keep [imp] fallback."""
+        # Maturin custom python-source layout (e.g. python/mypkg/__init__.py, no DIRTYPE entries).
+        maturin_sdist = self.create_tarball(
+            "maturin_pkg-1.0.tar.gz",
+            {
+                "maturin_pkg-1.0/pyproject.toml": (
+                    '[build-system]\nrequires = ["maturin>=1.0"]\nbuild-backend = "maturin"\n'
+                    '[tool.maturin]\npython-source = "python"\n'
+                ),
+                "maturin_pkg-1.0/Cargo.toml": '[package]\nname = "maturin_pkg"\nversion = "1.0.0"\n',
+                "maturin_pkg-1.0/src/lib.rs": "// rust\n",
+                "maturin_pkg-1.0/python/maturin_pkg/__init__.py": "",
+            },
+        )
+        self.assertEqual(inspect_sdist(maturin_sdist)["site_paths"], [])
+
+        # Compiled-only file-only sdist with a stray bench/run.py (no bench/__init__.py).
+        compiled_sdist = self.create_tarball(
+            "cext_pkg-1.0.tar.gz",
+            {
+                "cext_pkg-1.0/pyproject.toml": '[build-system]\nrequires = ["maturin>=1.0"]\nbuild-backend = "maturin"\n',
+                "cext_pkg-1.0/Cargo.toml": '[package]\nname = "cext_pkg"\nversion = "1.0.0"\n',
+                "cext_pkg-1.0/crates/core/src/lib.rs": "// rust\n",
+                "cext_pkg-1.0/bench/run.py": "# benchmark\n",
+            },
+        )
+        self.assertEqual(inspect_sdist(compiled_sdist)["site_paths"], [])
+
+        # File-only flat package WITH __init__.py alongside stray bench/run.py keeps only the package.
+        mixed_sdist = self.create_tarball(
+            "mixed_pkg-1.0.tar.gz",
+            {
+                "mixed_pkg-1.0/pyproject.toml": '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n',
+                "mixed_pkg-1.0/mixed_pkg/__init__.py": "",
+                "mixed_pkg-1.0/bench/run.py": "# benchmark\n",
+            },
+        )
+        self.assertEqual(inspect_sdist(mixed_sdist)["site_paths"], ["mixed_pkg"])
+
     def test_sdist_top_level_txt_single_file_module(self):
         """Single-file .py modules declared in top_level.txt resolve to <name>.py."""
         flat = self._create_tarball_with_dirs(

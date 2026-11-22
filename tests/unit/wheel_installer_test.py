@@ -630,20 +630,21 @@ class WheelInstallerDestinationAndFlagsTest(unittest.TestCase):
         bin_dir = wheel_dir / "bin"
         bin_dir.mkdir(parents=True)
 
-        # Console script with placeholder `#!python` shebang (LF and CRLF).
-        (bin_dir / "meson").write_bytes(b"#!python\nimport sys\nsys.exit(0)\n")
+        # Console script with placeholder `#!python` shebang (LF and CRLF, including multi-chunk body).
+        large_body = b"x = 1\n" * 20000
+        (bin_dir / "meson").write_bytes(b"#!python\n" + large_body)
         (bin_dir / "cmake").write_bytes(b"#!python\r\nimport sys\r\n")
         # Native binary and .exe fallback should pass through unmodified.
-        (bin_dir / "ninja").write_bytes(b"\x7fELF\x02\x01binary")
+        (bin_dir / "ninja").write_bytes(b"\x7fELF\x02\x01binary" + b"\x00" * 100000)
         (bin_dir / "win_tool.exe").write_bytes(b"MZbinary")
 
         out_dir = Path(self.temp_dir) / "out"
         out_dir.mkdir()
 
         for name, expected in [
-            ("meson", b"#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n"),
+            ("meson", b"#!/usr/bin/env python3\n" + large_body),
             ("cmake", b"#!/usr/bin/env python3\nimport sys\r\n"),
-            ("ninja", b"\x7fELF\x02\x01binary"),
+            ("ninja", b"\x7fELF\x02\x01binary" + b"\x00" * 100000),
             ("win_tool", b"MZbinary"),
         ]:
             out_file = out_dir / name
