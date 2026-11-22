@@ -7,6 +7,10 @@ It produces:
   - `package_repo_dispatch.bzl`: exports PACKAGE_REPO_HOOKS mapping backend names to package repo hook functions
 """
 
+def _default_hook_fn(rule_name, hook_suffix):
+    base = rule_name[:-len("_build")] if rule_name.endswith("_build") else rule_name
+    return base + hook_suffix
+
 def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_suffix, rule_names):
     lines = [
         '"""Generated {} dispatch table. Do not edit."""'.format(doc_title),
@@ -15,7 +19,7 @@ def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_
     load_aliases = {}
     for rule_name in sorted(bzl_map.keys()):
         bzl_file = bzl_map[rule_name]
-        fn_name = fn_map.get(rule_name, rule_name.replace("_build", hook_suffix))
+        fn_name = fn_map.get(rule_name) or _default_hook_fn(rule_name, hook_suffix)
         alias = "{}_{}".format(hook_suffix, rule_name)
         lines.append('load("{}", {} = "{}")'.format(bzl_file, alias, fn_name))
         load_aliases[rule_name] = alias
@@ -149,3 +153,6 @@ backend_registry_repo = repository_rule(
         ),
     },
 )
+
+# Visible for testing
+render_hook_dispatch_for_testing = _render_hook_dispatch

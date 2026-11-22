@@ -56,28 +56,58 @@ def _compute_toolchains(
         )
     return toolchains
 
+def _parse_registered_python_versions(content):
+    """Parse `python_versions = [...]` from a rules_python `pip.bzl` file.
+
+    Handles both single-line and multi-line list literals, trailing commas, and
+    inline comments.
+    """
+    collecting = False
+    closed = False
+    chunks = []
+    for line in content.splitlines():
+        code = line.split("#", 1)[0]
+        if not collecting:
+            stripped = code.strip()
+            lhs, sep, rhs = stripped.partition("=")
+            if not sep or lhs.strip() != "python_versions":
+                continue
+            rhs = rhs.lstrip()
+            if not rhs.startswith("["):
+                continue
+            rest = rhs[1:]
+            bracket_end = rest.find("]")
+            if bracket_end != -1:
+                chunks.append(rest[:bracket_end])
+                closed = True
+                break
+            chunks.append(rest)
+            collecting = True
+        else:
+            bracket_end = code.find("]")
+            if bracket_end != -1:
+                chunks.append(code[:bracket_end])
+                closed = True
+                break
+            chunks.append(code)
+
+    if not closed:
+        return []
+
+    versions = []
+    for item in ",".join(chunks).split(","):
+        version = item.strip().strip("'\"")
+        if version:
+            versions.append(version)
+    return versions
+
 def _get_registered_python_versions(rctx, python_toolchain_repo):
     pip_bzl_file = python_toolchain_repo.relative("//:pip.bzl")
     content = rctx.read(pip_bzl_file)
 
-    versions = []
-    for line in content.splitlines():
-        if line.strip().startswith("python_versions"):
-            # We found a line that is like `python_versions = ["3.11.6", "3.12.0"],`
-            # Split by the equal sign and parse the array.
-            _, version_side = line.split("=")
-            version_list = version_side.strip(" ,")
-            version_list_contents = version_list.strip("[]")
-            quoted_versions = version_list_contents.split(",")
-            for version in quoted_versions:
-                version = version.strip()  # strip whitespace
-                version = version.strip("'\"")  # strip quotes
-                versions.append(version)
-
-            break
-
+    versions = _parse_registered_python_versions(content)
     if not versions:
-        fail("Unable to determine versions from " + pip_bzl_file)
+        fail("Unable to determine versions from {}".format(pip_bzl_file))
 
     return versions
 
@@ -194,3 +224,6 @@ pycross_toolchains_repo = repository_rule(
         "requested_python_versions": attr.string_list(),
     },
 )
+
+# Visible for testing
+parse_registered_python_versions_for_testing = _parse_registered_python_versions

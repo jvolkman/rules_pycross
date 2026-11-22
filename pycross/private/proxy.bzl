@@ -38,8 +38,20 @@ _platform_transition = transition(
 
 def _pycross_library_proxy_impl(ctx):
     # The actual target is wrapped in a list due to the transition cfg.
-    actual = ctx.attr.actual[0] if type(ctx.attr.actual) == "list" else ctx.attr.actual
+    actual = (ctx.attr.actual[0] if ctx.attr.actual else None) if type(ctx.attr.actual) == "list" else ctx.attr.actual
     deps = ctx.attr.deps
+
+    if actual == None:
+        if len(deps) == 1:
+            return [
+                DefaultInfo(runfiles = deps[0][DefaultInfo].default_runfiles),
+                deps[0][PyInfo],
+            ]
+        merged = merge_py_providers(ctx, deps, uses_shared_libraries = False)
+        return [
+            DefaultInfo(runfiles = merged.runfiles),
+            merged.py_info,
+        ]
 
     if deps:
         # Merge PyInfo from actual + deps using the standard pycross merge utility.
@@ -83,9 +95,8 @@ Replaces py_library wrappers in generated lock repos, preserving PycrossExtracte
 PycrossPackageInfo, and OutputGroupInfo that py_library would drop.""",
     attrs = dict({
         "actual": attr.label(
-            mandatory = True,
             providers = [PyInfo],
-            doc = "The primary target to forward providers from.",
+            doc = "The primary target to forward providers from. When omitted, only merges `deps`.",
         ),
         "deps": attr.label_list(
             default = [],

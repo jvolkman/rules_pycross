@@ -636,6 +636,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
 
     # Compute the sdist build target (if available) for fallback when no wheel matches.
     sdist_target = None
+    has_sdist_repo = False
     if pkg.get("build_target"):
         sdist_target = pkg["build_target"]
     elif sdist_file and has_build_fallback(pkg):
@@ -643,6 +644,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
         if sdist_file_key:
             sdist_repo_name = "{}_sdist_{}".format(rctx_name, sanitize_name(pkg_key))
             sdist_target = "@@{}//:wheel".format(sdist_repo_name)
+            has_sdist_repo = True
 
     # Wheel chooser
     wheel_gated = False
@@ -727,6 +729,18 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
         _ind(")"),
         "",
     ])
+
+    # Sdist build runtime deps proxy: evaluated under wheel_build.deps's exec
+    # platform transition so PEP 508 markers match the host platform, same-cycle
+    # deps are excluded, and edges merged across workspace members are included.
+    if has_sdist_repo and has_marker_deps:
+        lines.extend([
+            _ind("pycross_library_proxy("),
+            _ind('name = "_sdist_deps_{}",'.format(pkg_key), 2),
+            _ind("deps = _{}_deps,".format(pkg_key_san), 2),
+            _ind(")"),
+            "",
+        ])
 
 # ---- Variant reset -----------------------------------------------------------
 #
