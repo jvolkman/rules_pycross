@@ -314,11 +314,12 @@ _SEMANTICS_CASES = [
         expected = {"s1": "g-a", "s2": "g-a", "s3": "y"},
     ),
     struct(
-        id = "pin_gb_beats_flag_in_s1",
+        id = "pin_gb_beats_flag_and_usable_blocks_ga_in_s2",
         pins = {"s1": "g-b"},
         defaults = {"s1": "g-a", "s2": "g-a"},
+        usables = {"s1": "g-b", "s2": "x"},
         bools = ["g-a"],
-        expected = {"s1": "g-b", "s2": "g-a", "s3": ""},
+        expected = {"s1": "g-b", "s2": "", "s3": ""},
     ),
     struct(
         id = "pin_gb_suppresses_s2_default",
@@ -327,18 +328,12 @@ _SEMANTICS_CASES = [
         expected = {"s1": "g-b", "s2": "", "s3": ""},
     ),
     struct(
-        id = "pin_gb_with_s2_usable_x_suppresses_s2_default",
-        pins = {"s1": "g-b"},
-        defaults = {"s1": "g-a", "s2": "g-a"},
-        usables = {"s2": "x"},
-        expected = {"s1": "g-b", "s2": "", "s3": ""},
-    ),
-    struct(
         id = "pin_ga_ignores_rival_flags",
         pins = {"s1": "g-a", "s2": "g-a"},
+        usables = {"s1": "g-a", "s2": "g-a", "s3": "y"},
         bools = ["g-b"],
         variants = "x",
-        expected = {"s1": "g-a", "s2": "g-a", "s3": "x"},
+        expected = {"s1": "g-a", "s2": "g-a", "s3": ""},
     ),
     struct(
         id = "usable_filters_bool_rival_flag",
@@ -409,7 +404,15 @@ _SEMANTICS_CASES = [
 
 def _expect_tuple_impl(expected):
     def _impl(env, target):
-        env.expect.that_dict(target[_VariantTupleInfo].values).contains_exactly(expected)
+        actual = target[_VariantTupleInfo].values
+        env.expect.that_dict(actual).contains_exactly(expected)
+
+        # Harness-level conflict invariant: across all resolved sets, the active
+        # items must never include two distinct members of the same conflict set.
+        active = {v: True for v in actual.values() if v}
+        for _sid, items in sorted(_CHAIN_SETS.items()):
+            active_in_set = [item for item in items if item in active]
+            env.expect.that_bool(len(active_in_set) <= 1).equals(True)
 
     return _impl
 
