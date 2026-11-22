@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "run_package_repo_hooks_for_testing")
+load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "compute_rival_specs_for_testing", "run_package_repo_hooks_for_testing")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -13,8 +13,10 @@ load(
     "collect_variants_for_testing",
     "flag_values_for_testing",
     "is_platform_specific_for_testing",
+    "modules_mapping_deps_for_testing",
     "packages_bzl_for_testing",
     "pin_build_for_testing",
+    "pin_versions_for_testing",
     "requirements_bzl_for_testing",
     "transition_settings_for_testing",
     "variant_fallbacks_for_testing",
@@ -1323,6 +1325,275 @@ def _test_cargo_build_filters_backends_and_wildcards(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_cargo_build_filters_backends_and_wildcards_impl)
 
+# buildifier: disable=unused-variable
+def _test_modules_mapping_deps_selection_impl(env, target):
+    """modules_mapping selects active resolution-marker forks and pinned variants while unioning unpinned variants."""
+    packages = {
+        "common@1.0": {"wheel_candidates": [{"filename": "common-1.0-py3-none-any.whl"}]},
+        "numpy@1.26": {"wheel_candidates": [{"filename": "numpy-1.26-py3-none-any.whl"}]},
+        "numpy@2.2": {"wheel_candidates": [{"filename": "numpy-2.2-py3-none-any.whl"}]},
+        "torch@2.0+cpu": {"wheel_candidates": [{"filename": "torch-2.0+cpu-py3-none-any.whl"}]},
+        "torch@2.0+gpu": {"wheel_candidates": [{"filename": "torch-2.0+gpu-py3-none-any.whl"}]},
+    }
+    pins = {
+        "common": {"": "common@1.0", "extra_app_gpu": "common@1.0"},
+        "numpy": {"res_py311": "numpy@1.26", "res_py312": "numpy@2.2"},
+        "torch": {"extra_app_cpu": "torch@2.0+cpu", "extra_app_gpu": "torch@2.0+gpu"},
+    }
+    variant_info = collect_variants_for_testing([{
+        "items": [
+            {"package": "app", "kind": "extra", "name": "cpu", "flags": ["extra_cpu"]},
+            {"package": "app", "kind": "extra", "name": "gpu", "flags": ["extra_gpu"]},
+        ],
+    }])
+    s_cpu_gpu = "extra_app_cpu_extra_app_gpu"
+    fallbacks = variant_fallbacks_for_testing({
+        "extra_app_cpu": [s_cpu_gpu],
+        "extra_app_gpu": [s_cpu_gpu],
+    })
+
+    # 1. Unpinned repo: resolution-marker forks are selected, unpinned conflict variants are unioned via _unselected_.
+    unpinned = modules_mapping_deps_for_testing(
+        pins,
+        packages,
+        "ws",
+        variant_info = variant_info,
+        no_variant_fallbacks = fallbacks,
+    )
+    unpinned_deps = "\n".join(unpinned.deps_lines)
+    unpinned_extra = "\n".join(unpinned.extra_target_lines)
+    env.expect.that_int(unpinned_deps.count('"@ws//_lock:common@1.0"')).equals(1)
+    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py311": [\n            "@ws//_lock:numpy@1.26",')
+    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py312": [\n            "@ws//_lock:numpy@2.2",')
+    env.expect.that_bool(unpinned.needs_selects).equals(True)
+    env.expect.that_str(unpinned_extra).contains('"@ws//_lock:is_extra_app_cpu"')
+    env.expect.that_str(unpinned_extra).contains('"@ws//_lock:is_extra_app_gpu"')
+    env.expect.that_str(unpinned_extra).contains('"@ws//_lock:_unselected_{}"'.format(s_cpu_gpu))
+
+    # 2. Pinned repo: no _unselected_ unioning; only is_extra_app_* selects are emitted.
+    pinned = modules_mapping_deps_for_testing(
+        pins,
+        packages,
+        "ws",
+        variant_info = variant_info,
+        no_variant_fallbacks = variant_fallbacks_for_testing({
+            "extra_app_cpu": [s_cpu_gpu],
+            "extra_app_gpu": [s_cpu_gpu],
+        }),
+        pins_by_set = {s_cpu_gpu: "extra_app_gpu"},
+        excluded = {"extra_app_cpu": True},
+    )
+    pinned_all = "\n".join(pinned.extra_target_lines + pinned.deps_lines)
+    env.expect.that_bool("_unselected_" in pinned_all).equals(False)
+    env.expect.that_str(pinned_all).contains('"@ws//_lock:is_extra_app_gpu": [\n            "@ws//_lock:torch@2.0+gpu",')
+
+    # 3. Compound {variant, marker} on unpinned set preserves the marker filter when unselected.
+    comp = modules_mapping_deps_for_testing(
+        {"numpy": {"extra_app_gpu_res_py312": "numpy@2.2"}},
+        packages,
+        "ws",
+        variant_info = variant_info,
+        no_variant_fallbacks = variant_fallbacks_for_testing({
+            "extra_app_gpu": [s_cpu_gpu],
+            "extra_app_gpu_res_py312": [s_cpu_gpu],
+        }),
+        resolution_marker_exprs = {
+            "extra_app_gpu_res_py312": {"variant": "extra_app_gpu", "marker": "res_py312"},
+        },
+    )
+    comp_extra = "\n".join(comp.extra_target_lines)
+    env.expect.that_str(comp_extra).contains('name = "_mm_unselected_extra_app_gpu_res_py312"')
+    env.expect.that_str(comp_extra).contains("match_all = [")
+    env.expect.that_str(comp_extra).contains('"@ws//_lock:is_res_py312"')
+
+    # 4. Overlapping sets: one unpinned (S1=[a,b]), one defaulted to a (S2=[a,c]).
+    #    `a` must NOT union on _unselected_S1 (would falsely fire when rival `c` is chosen).
+    #    Also check overlapping unpinned sets register _unselected_all_* and platform-specific uses //__maybe:.
+    overlap_info = collect_variants_for_testing([
+        {"items": [
+            {"package": "app", "kind": "extra", "name": "a", "flags": ["extra_a"]},
+            {"package": "app", "kind": "extra", "name": "b", "flags": ["extra_b"]},
+        ]},
+        {
+            "items": [
+                {"package": "app", "kind": "extra", "name": "a", "flags": ["extra_a"]},
+                {"package": "app", "kind": "extra", "name": "c", "flags": ["extra_c"]},
+            ],
+            "repo_default": "extra_app_a",
+        },
+    ])
+    s1 = "extra_app_a_extra_app_b"
+    s2 = "extra_app_a_extra_app_c"
+    overlap_mm = modules_mapping_deps_for_testing(
+        {
+            "pkg_a": {"extra_app_a": "pkg-a@1.0"},
+            "pkg_b": {"extra_app_b": "pkg-b@1.0"},
+        },
+        {
+            "pkg-a@1.0": {"wheel_candidates": [{"filename": "pkg_a-1.0-py3-none-any.whl"}]},
+            "pkg-b@1.0": {"wheel_candidates": [{"filename": "pkg_b-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}]},
+        },
+        "ws",
+        variant_info = overlap_info,
+        no_variant_fallbacks = variant_fallbacks_for_testing({
+            "extra_app_a": [s1, s2],
+            "extra_app_b": [s1],
+        }),
+    )
+    overlap_deps = "\n".join(overlap_mm.deps_lines)
+    env.expect.that_str(overlap_deps).contains('"@ws//_lock:is_extra_app_a": [\n            "@ws//_lock:pkg-a@1.0",')
+    env.expect.that_bool("pkg_b_1_0" in overlap_mm.maybe_mapping_targets).equals(True)
+    env.expect.that_str(overlap_deps).contains('"//__maybe:pkg_b_1_0"')
+
+    # 5. _variants_build for overlapping sets S1=[a,b] (no default), S2=[a,c] (default=a):
+    #    _selected_extra_app_a must require BOTH S1 and S2 unselected so selecting rival `b` doesn't fire is_extra_a.
+    overlap_vbuild = variants_build_for_testing(overlap_info, "ws", "pypi")
+    selected_a = overlap_vbuild.split('name = "_selected_extra_app_a"')[1].split("\n)")[0]
+    env.expect.that_bool("_unselected_all_" in selected_a).equals(True)
+    env.expect.that_bool('"@ws//_lock:_unselected_{}"'.format(s2) in selected_a).equals(False)
+    env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s1))
+    env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s2))
+
+    # 6. compute_rival_specs_for_testing wires rival_bool_flags, rival_member_tokens, and rival_usables
+    #    and skips rival_usables when an overlapping set contributes no flags.
+    vset_s1 = {
+        "qnames": ["a", "b"],
+        "flags": {"@r//_variants:b": ["b"], "@r//_variants:a": ["a"]},
+        "member_flags": {"r": {"b": ["b"], "a": ["a"]}},
+    }
+    vset_s2 = {
+        "qnames": ["a", "c"],
+        "flags": {"@r//_variants:a": ["a"], "@r//_variants:c": ["c"]},
+        "member_flags": {"r": {"a": ["a"], "c": ["c"]}},
+    }
+    vset_s3_empty = {
+        "qnames": ["a", "d"],
+        "flags": {},
+        "member_flags": {},
+    }
+    rivals = compute_rival_specs_for_testing(vset_s2, [vset_s1, vset_s2, vset_s3_empty])
+    env.expect.that_dict(rivals.rival_bool_flags).contains_exactly({"@r//_variants:b": [["a", "b", "a_b"]]})
+    env.expect.that_dict(rivals.rival_member_tokens).contains_exactly({"r": {"b": [["a", "b", "a_b"]]}})
+    env.expect.that_collection(rivals.rival_usables).contains_exactly(["a_b"])
+
+def _test_modules_mapping_deps_selection(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_modules_mapping_deps_selection_impl)
+
+# buildifier: disable=unused-variable
+def _test_partial_fork_maybe_and_testonly_impl(env, target):
+    """Variant-only/partial-fork pins route through :maybe in all_requirements and propagate testonly."""
+    mock_rctx = struct(name = "my_repo")
+    pins = {
+        "tomli": {"res_py311": "tomli@2.0.1"},
+        "triton[cuda]": {"extra_gpu": "triton[cuda]@3.0.0"},
+    }
+    packages = {
+        "tomli@2.0.1": {"wheel_candidates": [{"filename": "tomli-2.0.1-py3-none-any.whl"}], "sdist_file": {"key": "t"}},
+        "triton@3.0.0": {"wheel_candidates": [{"filename": "triton-3.0.0-py3-none-any.whl"}], "sdist_file": {"key": "tr"}},
+        "triton[cuda]@3.0.0": {},
+    }
+    req_bzl = requirements_bzl_for_testing(mock_rctx, pins, packages)
+    env.expect.that_str(req_bzl).contains('"@@my_repo//tomli:maybe"')
+    env.expect.that_str(req_bzl).contains('"@@my_repo//triton:[cuda]_maybe"')
+
+    # _pin_build emits :maybe even when maybe_available_keys is empty, and forwards testonly = True.
+    res = pin_build_for_testing(
+        target_name = "tomli",
+        pin_target_dict = {"res_py311": "tomli@2.0.1"},
+        package = packages["tomli@2.0.1"],
+        workspace_repo = "ws",
+        extras_dict = {"dev": {"res_py311": "tomli[dev]@2.0.1"}},
+        testonly = True,
+    ).build
+    maybe_block = res.split('name = "maybe"')[1].split("\n)")[0]
+    env.expect.that_str(maybe_block).contains('"@ws//_lock:is_res_py311": ":pkg"')
+    env.expect.that_str(maybe_block).contains('"//conditions:default": "//:_empty_library"')
+    env.expect.that_str(maybe_block).contains("testonly = True,")
+
+    extra_maybe_block = res.split('name = "[dev]_maybe"')[1].split("\n)")[0]
+    env.expect.that_str(extra_maybe_block).contains('"@ws//_lock:is_res_py311": ":[dev]"')
+    env.expect.that_str(extra_maybe_block).contains("testonly = True,")
+
+    # Single-branch untransitioned platform-specific testonly pin also carries testonly = True on :maybe.
+    single_testonly = pin_build_for_testing(
+        target_name = "pywin32",
+        pin_target_dict = {"": "pywin32@312"},
+        package = {},
+        workspace_repo = "ws",
+        maybe_available_keys = ["pywin32@312"],
+        testonly = True,
+    ).build
+    single_maybe = single_testonly.split('name = "maybe"')[1].split("\n)")[0]
+    env.expect.that_str(single_maybe).contains("testonly = True,")
+
+    # Multi-branch untransitioned testonly pin with maybe_available_keys forwards testonly to per-branch helper.
+    multi_testonly = pin_build_for_testing(
+        target_name = "foo",
+        pin_target_dict = {"res_1": "foo@1.0", "res_2": "foo@2.0"},
+        package = {},
+        workspace_repo = "ws",
+        maybe_available_keys = ["foo@1.0"],
+        testonly = True,
+    ).build
+    helper_block = multi_testonly.split('name = "_maybe_foo_1_0"')[1].split("\n)")[0]
+    env.expect.that_str(helper_block).contains("testonly = True,")
+
+    # Transitioned partial-fork pin emits :maybe in actual_build wrapped by transitioning proxy.
+    trans_partial = pin_build_for_testing(
+        target_name = "tomli",
+        pin_target_dict = {"res_py311": "tomli@2.0.1"},
+        package = packages["tomli@2.0.1"],
+        workspace_repo = "ws",
+        target_platform = "@my//platform:linux",
+        testonly = True,
+    )
+    env.expect.that_str(trans_partial.build).contains('actual = "//__actual/tomli:maybe"')
+    env.expect.that_str(trans_partial.actual_build).contains('name = "maybe"')
+    env.expect.that_str(trans_partial.actual_build).contains('"@ws//_lock:is_res_py311": "//__actual/tomli:pkg"')
+
+def _test_partial_fork_maybe_and_testonly(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_partial_fork_maybe_and_testonly_impl)
+
+# buildifier: disable=unused-variable
+def _test_requirement_extra_canon_and_extras_only_metadata_impl(env, target):
+    """requirement() canonicalizes extras and pin_versions/_packages include extras-only pins."""
+    mock_rctx = struct(name = "my_repo")
+    req_bzl = requirements_bzl_for_testing(mock_rctx, {}, {})
+    env.expect.that_str(req_bzl).contains('extra = pypackaging.utils.canonicalize_name(extra.rstrip("]"))')
+
+    grouped_pins = {
+        "uvicorn": {
+            "base_target": None,
+            "extras": {"standard": {"": "uvicorn[standard]@0.30.0"}},
+        },
+        "httpx": {
+            "base_target": None,
+            "extras": {
+                "http2": {"extra_a": "httpx[http2]@0.26.0"},
+                "socks": {"extra_b": "httpx[socks]@0.27.0"},
+            },
+        },
+    }
+    packages = {
+        "uvicorn@0.30.0": {"sdist_file": {"key": "uv_sdist"}},
+        "uvicorn[standard]@0.30.0": {},
+        "httpx@0.26.0": {},
+        "httpx@0.27.0": {},
+    }
+    pv = pin_versions_for_testing(grouped_pins)
+    env.expect.that_str(pv["uvicorn"]).equals("0.30.0")
+    env.expect.that_dict(pv["httpx"]).contains_exactly({"extra_a": "0.26.0", "extra_b": "0.27.0"})
+
+    pkgs_bzl = packages_bzl_for_testing(grouped_pins, packages)
+    uvicorn_block = pkgs_bzl.split('"uvicorn": struct(')[1].split("),")[0]
+    env.expect.that_str(uvicorn_block).contains("has_sdist = True,")
+
+def _test_requirement_extra_canon_and_extras_only_metadata(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirement_extra_canon_and_extras_only_metadata_impl)
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -1333,6 +1604,9 @@ def thin_package_repo_test_suite(name):
             _test_variants_build_hidden_flags,
             _test_pin_build_member_availability_markers,
             _test_cargo_build_filters_backends_and_wildcards,
+            _test_modules_mapping_deps_selection,
+            _test_partial_fork_maybe_and_testonly,
+            _test_requirement_extra_canon_and_extras_only_metadata,
             _test_transition_settings,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,

@@ -1190,12 +1190,35 @@ def _test_uv_project_conflict_asymmetric_edges_impl(env, target):
     exprs = result["resolution_marker_exprs"]
     env.expect.that_str(pin["package_a"]).equals("iniconfig@1.1.1")
 
-    # `b` has no entry, so c's 2.3.1 edge stays, guarded on a variant being selected.
+    # `b` has no entry, so c's 2.3.1 edge stays, guarded only on the uncovered item `b`
+    # so it never collides with `package_a`.
     narrowed = [k for k, v in pin.items() if v == "iniconfig@2.3.1"]
     env.expect.that_collection(narrowed).has_size(1)
     env.expect.that_str(exprs[narrowed[0]]).equals(
-        "(extra == '__variant_package_a' or extra == '__variant_package_b') and (extra == '__variant_package_b' or extra != '__variant_package_a')",
+        "(extra == '__variant_package_b') and (extra == '__variant_package_b' or extra != '__variant_package_a')",
     )
+
+    # Double-quoted conflict markers are also detected and narrowed cleanly.
+    lock_dq = _lock(
+        [
+            _pkg("a", "0", source = {"virtual": "a"}, deps = [_dep("iniconfig", "1.1.1", marker = 'extra == "project-1-a"')]),
+            _pkg("b", "0", source = {"virtual": "b"}),
+            _pkg("c", "0", source = {"virtual": "c"}, deps = [
+                _dep("iniconfig", "1.1.1", marker = 'extra == "project-1-a"'),
+                _dep("iniconfig", "2.3.1", marker = 'extra != "project-1-a"'),
+            ]),
+            _pkg("iniconfig", "1.1.1", wheels = [_whl("iniconfig-1.1.1-py2.py3-none-any.whl", "aaa")]),
+            _pkg("iniconfig", "2.3.1", wheels = [_whl("iniconfig-2.3.1-py3-none-any.whl", "bbb")]),
+        ],
+        conflicts = [[{"package": "a"}, {"package": "b"}]],
+    )
+    result_dq = translate_uv(_project(name = "root"), lock_dq, _lock_model())
+    narrowed_dq = [k for k, v in result_dq["pins"]["iniconfig"].items() if v == "iniconfig@2.3.1"]
+    env.expect.that_collection(narrowed_dq).has_size(1)
+    env.expect.that_str(result_dq["resolution_marker_exprs"][narrowed_dq[0]]).contains("(extra == '__variant_package_b') and ")
+    edges_111 = [k for k, v in result_dq["pins"]["iniconfig"].items() if v == "iniconfig@1.1.1" and k != "package_a"]
+    for edge_key in edges_111:
+        env.expect.that_str(result_dq["resolution_marker_exprs"][edge_key]).contains("(extra == '__variant_package_b') and ")
 
 def _test_uv_project_conflict_asymmetric_edges(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
