@@ -1,6 +1,6 @@
 """Helpers for creating Pycross environments and toolchains"""
 
-load("@pythons_hub//:versions.bzl", "MINOR_MAPPING", "PYTHON_VERSIONS")
+load("@pythons_hub//:versions.bzl", "DEFAULT_PYTHON_VERSION", "MINOR_MAPPING", "PYTHON_VERSIONS")
 load(":python_versions.bzl", "dedupe_versions", "get_micro_version")
 
 # The hub's tables reflect the root module's rules_python configuration, including versions
@@ -57,42 +57,17 @@ def _compute_toolchains(
     return toolchains
 
 def _get_registered_python_versions(rctx, python_toolchain_repo):
-    pip_bzl_file = python_toolchain_repo.relative("//:pip.bzl")
-    content = rctx.read(pip_bzl_file)
-
-    versions = []
-    for line in content.splitlines():
-        if line.strip().startswith("python_versions"):
-            # We found a line that is like `python_versions = ["3.11.6", "3.12.0"],`
-            # Split by the equal sign and parse the array.
-            _, version_side = line.split("=")
-            version_list = version_side.strip(" ,")
-            version_list_contents = version_list.strip("[]")
-            quoted_versions = version_list_contents.split(",")
-            for version in quoted_versions:
-                version = version.strip()  # strip whitespace
-                version = version.strip("'\"")  # strip quotes
-                versions.append(version)
-
-            break
-
+    # `rules_python`'s `@python_versions` repo creates one `<version>/defs.bzl`
+    # package per registered Python toolchain.
+    repo_root = rctx.path(python_toolchain_repo.relative("//:BUILD.bazel")).dirname
+    versions = sorted([
+        entry.basename
+        for entry in repo_root.readdir()
+        if entry.is_dir and entry.get_child("defs.bzl").exists
+    ])
     if not versions:
-        fail("Unable to determine versions from " + pip_bzl_file)
-
+        fail("Unable to determine registered Python versions from {}".format(python_toolchain_repo))
     return versions
-
-def _get_default_python_version(rctx, pythons_hub_repo):
-    if not pythons_hub_repo:
-        fail("Must provide python_hub_repo.")
-    versions_bzl_file = Label("@@{}//:versions.bzl".format(pythons_hub_repo.workspace_name))
-    content = rctx.read(versions_bzl_file)
-    for line in content.splitlines():
-        if line.startswith("DEFAULT_PYTHON_VERSION"):
-            _, val = line.split("=")
-            val = val.strip(" \"'")
-            return val
-
-    fail("Unable to determine default version for python hub repo '{}'".format(pythons_hub_repo))
 
 # This requires the user to provide a `default_version` value.
 _TOOLCHAINS_BUILD_HEADER = """\
@@ -162,12 +137,10 @@ def _get_python_version_info(rctx):
     registered_python_versions = _get_registered_python_versions(rctx, python_repo)
     python_versions = _get_requested_python_versions(rctx, registered_python_versions)
 
-    default_version = _get_default_python_version(rctx, rctx.attr.pythons_hub_repo)
-
     return struct(
         python_versions = python_versions,
-        default_version = default_version,
-        default_micro_version = _get_micro_version(default_version),
+        default_version = DEFAULT_PYTHON_VERSION,
+        default_micro_version = _get_micro_version(DEFAULT_PYTHON_VERSION),
     )
 
 def _pycross_toolchain_repo_impl(rctx):
@@ -190,7 +163,6 @@ pycross_toolchains_repo = repository_rule(
     implementation = _pycross_toolchain_repo_impl,
     attrs = {
         "python_toolchains_repo": attr.label(),
-        "pythons_hub_repo": attr.label(),
         "requested_python_versions": attr.string_list(),
     },
 )

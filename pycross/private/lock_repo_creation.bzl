@@ -89,8 +89,21 @@ def _validate_override_packages(override_configs, all_resolved_locks, workspace_
                     ", ".join(sorted(known_names[pkg_name].keys())),
                 ))
 
-def _create_remote_file_repo(key, file, indexes):
-    remote_file_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
+def _remote_file_dedup_key_and_repo_name(key, file, indexes):
+    """Return (dedup_key, repo_name) for a remote file.
+
+    Filename-only entries (no explicit `urls` and no per-package `index`) resolve
+    against the workspace's `pypi_indexes`, so different index lists must not
+    deduplicate to the same remote file repository across workspaces.
+    """
+    base_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
+    if file.get("urls") or file.get("index") or not indexes:
+        return ((key, ()), base_repo)
+    index_tuple = tuple(indexes)
+    idx_hash = "%x" % (hash("|".join(indexes)) & 0xffffffff)
+    return ((key, index_tuple), "{}_idx_{}".format(base_repo, idx_hash))
+
+def _create_remote_file_repo(remote_file_repo, file, indexes):
     is_wheel = file["name"].endswith(".whl")
     remote_file_label = (
         "@{}//:wheel".format(remote_file_repo) if is_wheel else "@{}//file:{}".format(remote_file_repo, file["name"])
@@ -243,6 +256,16 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
 # Visible for testing
 compute_variant_pins_for_testing = _compute_variant_pins
 
+def _compute_workspace_pkg_has_deps(all_resolved_locks, workspace_memberships):
+    """Return {(workspace_name, pkg_key): True} for packages with marker_dependencies in any member."""
+    has_deps = {}
+    for repo_name, rlock in all_resolved_locks.items():
+        ws_name = workspace_memberships.get(repo_name, repo_name)
+        for pkg_key, pkg in rlock.get("packages", {}).items():
+            if pkg.get("marker_dependencies"):
+                has_deps[(ws_name, pkg_key)] = True
+    return has_deps
+
 def create_repos(
         module_ctx,
         all_locks,
@@ -318,6 +341,11 @@ def create_repos(
 
     _validate_override_packages(override_configs, all_resolved_locks, workspace_memberships)
 
+    # Precompute which (workspace_name, pkg_key) pairs have runtime marker_dependencies
+    # in any member of the workspace, matching package_repo._merge_dependencies so
+    # sdist repos created from an earlier member still receive merged deps.
+    workspace_pkg_has_deps = _compute_workspace_pkg_has_deps(all_resolved_locks, workspace_memberships)
+
     # Generate the lock repos and any remote package repos
     per_repo_data = {}  # repo_name -> struct(repo_map, lock_file, resolved_lock)
     created_sdist_repos = {}  # sdist_repo_name -> True, for workspace-level dedup
@@ -325,19 +353,17 @@ def create_repos(
         resolved_lock = all_resolved_locks[repo_name]
 
         repo_remote_files = {}
-        workspace_name = workspace_memberships.get(repo_name)
-        indexes = workspace_pypi_indexes.get(workspace_name, []) if workspace_name else []
+        workspace_name = workspace_memberships.get(repo_name, repo_name)
+        indexes = workspace_pypi_indexes.get(workspace_name, [])
 
         for key, file in resolved_lock.get("remote_files", {}).items():
-            if key not in all_remote_files:
-                all_remote_files[key] = _create_remote_file_repo(key, file, indexes)
-            repo_remote_files[key] = all_remote_files[key]
+            dedup_key, remote_file_repo = _remote_file_dedup_key_and_repo_name(key, file, indexes)
+            if dedup_key not in all_remote_files:
+                all_remote_files[dedup_key] = _create_remote_file_repo(remote_file_repo, file, indexes)
+            repo_remote_files[key] = all_remote_files[dedup_key]
 
         # Pre-calculate known packages in this lock file to filter sdist build_requires
         known_packages = known_packages_by_repo[repo_name]
-
-        # Every repo has a workspace.
-        workspace_name = workspace_memberships.get(repo_name, repo_name)
 
         lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
@@ -362,11 +388,9 @@ def create_repos(
                 continue
             created_sdist_repos[sdist_repo_name] = True
 
-            deps_set = {}
-
-            for md in pkg.get("marker_dependencies", []):
-                dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, md["key"])
-                deps_set[dep_label] = True
+            sdist_deps = (
+                ["@{}//_lock:_sdist_deps_{}".format(lock_repo_for_deps, pkg_key)] if (workspace_name, pkg_key) in workspace_pkg_has_deps else []
+            )
 
             parts = parse_package_key(pkg_key)
             pkg_name_part = parts.name
@@ -384,7 +408,7 @@ def create_repos(
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
                 "sdist": sdist_label,
-                "deps": sorted(deps_set.keys()),
+                "deps": sdist_deps,
                 "known_packages": known_packages_by_repo.get(thin_repo, known_packages),
                 "pin_versions_json": "@{}//:pin_versions.json".format(thin_repo),
                 "lock_repo": lock_repo_for_deps,
@@ -529,3 +553,5 @@ def create_repos(
 # Visible for testing
 validate_override_packages_for_testing = _validate_override_packages
 normalize_override_name_for_testing = _normalize_override_name
+remote_file_dedup_key_and_repo_name_for_testing = _remote_file_dedup_key_and_repo_name
+compute_workspace_pkg_has_deps_for_testing = _compute_workspace_pkg_has_deps

@@ -23,7 +23,8 @@ def _collect_registrations(modules, warn = _print_warn):
     package_repo_hook_fn = {}  # rule name -> custom package repo hook function name
     default_backend = None
     default_backend_module = None
-    override_files = []
+    backend_order = []
+    override_file_by_name = {}  # rule name -> override_json label string
 
     # Registrations made by the root module. The root module comes first in
     # module_ctx.modules, so later registrations it overrides are dropped silently.
@@ -35,16 +36,31 @@ def _collect_registrations(modules, warn = _print_warn):
         for tag in module.tags.register:
             name = tag.name
 
-            if tag.override_json:
-                override_files.append(str(tag.override_json))
-
             # Duplicate rule name: root module wins, otherwise first-registered wins.
             if name in backend_configs and not module.is_root:
                 if name not in root_names:
                     warn("Ignoring duplicate backend registration '{}' from module '{}'".format(name, module.name))
                 continue
             if module.is_root:
+                if name in backend_configs:
+                    # Root re-registering the same backend replaces its prior
+                    # pyproject_backends mappings and default flag cleanly.
+                    for py_be in [k for k, v in backend_to_rule.items() if v == name]:
+                        backend_to_rule.pop(py_be)
+                        root_pyproject_backends.pop(py_be, None)
+                    if default_backend == name and not tag.default:
+                        default_backend = None
+                        default_backend_module = None
+                        root_default = False
                 root_names[name] = True
+
+            if name not in backend_order:
+                backend_order.append(name)
+
+            if tag.override_json:
+                override_file_by_name[name] = str(tag.override_json)
+            else:
+                override_file_by_name.pop(name, None)
 
             config = {
                 "rule_bzl": str(tag.rule_bzl),
@@ -54,12 +70,20 @@ def _collect_registrations(modules, warn = _print_warn):
 
             if tag.sdist_hook_bzl:
                 sdist_hook_bzl[name] = str(tag.sdist_hook_bzl)
+            else:
+                sdist_hook_bzl.pop(name, None)
             if tag.sdist_hook_fn:
                 sdist_hook_fn[name] = tag.sdist_hook_fn
+            else:
+                sdist_hook_fn.pop(name, None)
             if tag.package_repo_hook_bzl:
                 package_repo_hook_bzl[name] = str(tag.package_repo_hook_bzl)
+            else:
+                package_repo_hook_bzl.pop(name, None)
             if tag.package_repo_hook_fn:
                 package_repo_hook_fn[name] = tag.package_repo_hook_fn
+            else:
+                package_repo_hook_fn.pop(name, None)
 
             for pyproject_backend in tag.pyproject_backends:
                 if pyproject_backend in backend_to_rule and not module.is_root:
@@ -96,6 +120,14 @@ def _collect_registrations(modules, warn = _print_warn):
 
     if not default_backend:
         fail("No default build backend registered. Set `default = True` on one `backends.register` tag.")
+
+    override_files = []
+    seen_override_files = {}
+    for name in backend_order:
+        f = override_file_by_name.get(name)
+        if f and f not in seen_override_files:
+            seen_override_files[f] = True
+            override_files.append(f)
 
     return struct(
         backend_to_rule = backend_to_rule,

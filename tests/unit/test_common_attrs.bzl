@@ -186,6 +186,60 @@ def _group_tool_deps_via_library_proxy_test(name):
     )
     analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_via_library_proxy_impl)
 
+def _mock_py_lib_impl(ctx):
+    f = ctx.actions.declare_file(ctx.label.name + ".py")
+    ctx.actions.write(f, "")
+    return [
+        DefaultInfo(
+            files = depset([f]),
+            runfiles = ctx.runfiles(files = [f]),
+        ),
+        PyInfo(
+            transitive_sources = depset([f]),
+            imports = depset([ctx.attr.import_path]),
+            uses_shared_libraries = False,
+        ),
+    ]
+
+_mock_py_lib = rule(
+    implementation = _mock_py_lib_impl,
+    attrs = {"import_path": attr.string(mandatory = True)},
+    provides = [DefaultInfo, PyInfo],
+)
+
+def _proxy_deps_only_empty_impl(env, target):
+    env.expect.that_collection(target[PyInfo].transitive_sources.to_list()).contains_exactly([])
+    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_exactly([])
+    env.expect.that_bool(target[PyInfo].uses_shared_libraries).equals(False)
+    env.expect.that_collection(target[DefaultInfo].default_runfiles.files.to_list()).contains_exactly([])
+
+def _proxy_deps_only_single_impl(env, target):
+    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_exactly(["mod_a"])
+    env.expect.that_int(len(target[PyInfo].transitive_sources.to_list())).equals(1)
+    env.expect.that_bool(target[PyInfo].uses_shared_libraries).equals(False)
+    env.expect.that_int(len(target[DefaultInfo].default_runfiles.files.to_list())).equals(1)
+
+def _proxy_deps_only_multi_impl(env, target):
+    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_exactly(["mod_a", "mod_b"])
+    env.expect.that_int(len(target[PyInfo].transitive_sources.to_list())).equals(2)
+    env.expect.that_bool(target[PyInfo].uses_shared_libraries).equals(False)
+    env.expect.that_int(len(target[DefaultInfo].default_runfiles.files.to_list())).equals(2)
+
+def _proxy_deps_only_empty_test(name):
+    pycross_library_proxy(name = name + "_subject", deps = [])
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _proxy_deps_only_empty_impl)
+
+def _proxy_deps_only_single_test(name):
+    _mock_py_lib(name = name + "_a", import_path = "mod_a")
+    pycross_library_proxy(name = name + "_subject", deps = [":" + name + "_a"])
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _proxy_deps_only_single_impl)
+
+def _proxy_deps_only_multi_test(name):
+    _mock_py_lib(name = name + "_a", import_path = "mod_a")
+    _mock_py_lib(name = name + "_b", import_path = "mod_b")
+    pycross_library_proxy(name = name + "_subject", deps = [":" + name + "_a", ":" + name + "_b"])
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _proxy_deps_only_multi_impl)
+
 def common_attrs_test_suite(name):
     test_suite(
         name = name,
@@ -196,5 +250,8 @@ def common_attrs_test_suite(name):
             _group_tool_deps_single_test,
             _group_tool_deps_same_test,
             _group_tool_deps_via_library_proxy_test,
+            _proxy_deps_only_empty_test,
+            _proxy_deps_only_single_test,
+            _proxy_deps_only_multi_test,
         ],
     )

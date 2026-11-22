@@ -1406,6 +1406,89 @@ def _test_wheel_available_always_emitted(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_available_always_emitted_impl)
 
+# buildifier: disable=unused-variable
+def _test_sdist_deps_proxy_rendering_impl(env, target):
+    """Sdist-buildable packages with deps emit _sdist_deps_<pkg> using marker-gated, cycle-filtered deps."""
+    lock = {
+        "cycle_groups": {
+            "cycle_0": ["cyc_sdist@1.0", "cyc_peer@1.0"],
+        },
+        "packages": {
+            "cyc_sdist@1.0": {
+                "sdist_file": {"key": "cyc_sdist_tar"},
+                "cycle_group": "cycle_0",
+                "marker_dependencies": [
+                    {"key": "cyc_peer@1.0"},
+                    {"key": "win_dep@1.0", "marker": "sys_platform == 'win32'"},
+                    {"key": "common_dep@1.0"},
+                ],
+            },
+            "cyc_peer@1.0": {
+                "sdist_file": {"key": "cp_sdist"},
+                "wheel_candidates": [_whl("cp_whl", "cyc_peer-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
+                "cycle_group": "cycle_0",
+                "marker_dependencies": [{"key": "cyc_sdist@1.0"}],
+            },
+            "win_dep@1.0": {
+                "wheel_candidates": [_whl("w_whl", "win_dep-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "common_dep@1.0"}],
+            },
+            "common_dep@1.0": {
+                "wheel_candidates": [_whl("c_whl", "common_dep-1.0-py3-none-any.whl")],
+            },
+            "nodeps_sdist@1.0": {
+                "sdist_file": {"key": "nodeps_tar"},
+            },
+            "never_sdist@1.0": {
+                "sdist_file": {"key": "never_tar"},
+                "build_mode": "never",
+                "marker_dependencies": [{"key": "common_dep@1.0"}],
+            },
+            "custom_sdist@1.0": {
+                "sdist_file": {"key": "custom_tar"},
+                "build_target": "//custom:wheel",
+                "marker_dependencies": [{"key": "common_dep@1.0"}],
+            },
+        },
+    }
+    repo_map = {
+        "cyc_sdist_tar": "@r//cyc:sdist",
+        "cp_sdist": "@r//cp:sdist",
+        "cp_whl": "@r//cp:whl",
+        "w_whl": "@r//w:whl",
+        "c_whl": "@r//c:whl",
+        "nodeps_tar": "@r//nodeps:sdist",
+        "never_tar": "@r//never:sdist",
+        "custom_tar": "@r//custom:sdist",
+    }
+    res = render_lock_bzl(lock, repo_map, "ws__pkgs")
+
+    # Sdist-buildable package with deps gets _sdist_deps_<pkg> pointing at its marker-gated, cycle-filtered deps var.
+    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "_sdist_deps_cyc_sdist@1.0",\n        deps = _cyc_sdist_1_0_deps,\n    )')
+
+    # Wheel + sdist fallback package whose only dep is same-cycle still emits _sdist_deps_ pointing at empty deps.
+    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "_sdist_deps_cyc_peer@1.0",\n        deps = _cyc_peer_1_0_deps,\n    )')
+    peer_deps_block = res.split("_cyc_peer_1_0_deps = [")[1].split("\n\n")[0]
+    env.expect.that_bool("cyc_sdist@1.0" in peer_deps_block).equals(False)
+
+    # _cyc_sdist_1_0_deps must skip same-cycle cyc_peer@1.0, keep common_dep@1.0 unconditionally,
+    # and gate win_dep@1.0 behind its marker select.
+    deps_block = res.split("_cyc_sdist_1_0_deps = [")[1].split("\n\n")[0]
+    env.expect.that_bool("cyc_peer@1.0" in deps_block).equals(False)
+    env.expect.that_str(deps_block).contains('":common_dep@1.0"')
+    env.expect.that_str(deps_block).contains('":win_dep@1.0"')
+    env.expect.that_str(deps_block).contains("select({")
+
+    # Packages with no deps, build_mode="never", custom build_target, or wheel-only must not emit _sdist_deps_.
+    env.expect.that_bool("_sdist_deps_nodeps_sdist@1.0" in res).equals(False)
+    env.expect.that_bool("_sdist_deps_never_sdist@1.0" in res).equals(False)
+    env.expect.that_bool("_sdist_deps_custom_sdist@1.0" in res).equals(False)
+    env.expect.that_bool("_sdist_deps_win_dep@1.0" in res).equals(False)
+
+def _test_sdist_deps_proxy_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_sdist_deps_proxy_rendering_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -1419,6 +1502,7 @@ def resolved_lock_renderer_test_suite(name):
             _test_marker_deps_dedup,
             _test_epoch_and_marker_sanitization,
             _test_wheel_available_always_emitted,
+            _test_sdist_deps_proxy_rendering,
             _test_epoch_sdist_repo_name,
             _test_cycle_group_rendering,
             _test_cycle_group_marker_specific_rendering,
