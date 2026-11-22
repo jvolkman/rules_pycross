@@ -7,8 +7,8 @@ _CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
 def find_cargo_lock_in_sdist(rctx, sdist_root):
     """Find Cargo.lock in sdist.
 
-    Checks pyproject.toml (maturin and setuptools-rust config) first,
-    then falls back to recursive search.
+    Checks pyproject.toml (maturin and setuptools-rust config) for the manifest
+    directory and walks up to the sdist root to support Cargo workspaces.
 
     Args:
         rctx: The repository context.
@@ -18,7 +18,6 @@ def find_cargo_lock_in_sdist(rctx, sdist_root):
         The Path to the Cargo.lock file, or None if not found.
     """
     pyproject_path = sdist_root.get_child("pyproject.toml")
-    cargo_dir = sdist_root
     manifest_path = "Cargo.toml"
 
     if pyproject_path.exists:
@@ -34,11 +33,21 @@ def find_cargo_lock_in_sdist(rctx, sdist_root):
             if ext_modules and type(ext_modules) == "list":
                 manifest_path = ext_modules[0].get("path", "Cargo.toml")
 
-        parts = manifest_path.split("/")
-        for part in parts[:-1]:
-            cargo_dir = cargo_dir.get_child(part)
+        parts = [p for p in manifest_path.split("/")[:-1] if p and p != "."]
 
-    lock = cargo_dir.get_child("Cargo.lock")
+        # Walk from the manifest directory up to sdist_root (Cargo places
+        # Cargo.lock at the workspace root when manifest-path points into a
+        # member subdirectory).
+        for depth in range(len(parts), -1, -1):
+            d = sdist_root
+            for part in parts[:depth]:
+                d = d.get_child(part)
+            lock = d.get_child("Cargo.lock")
+            if lock.exists:
+                return lock
+        return None
+
+    lock = sdist_root.get_child("Cargo.lock")
     if lock.exists:
         return lock
 

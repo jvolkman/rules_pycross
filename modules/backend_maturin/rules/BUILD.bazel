@@ -29,4 +29,7 @@ bzl_library(
 bzl_library(
     name = "generate_cargo_lock",
     srcs = ["generate_cargo_lock.bzl"],
+    deps = [
+        "//private:rust_layer",
+    ],
 )

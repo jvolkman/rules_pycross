@@ -7,12 +7,14 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import zipfile
 from pathlib import Path
+from typing import Optional
 
 
 def derive_default_output(sdist_path: Path) -> str:
     name = sdist_path.name
-    for ext in (".tar.gz", ".tgz"):
+    for ext in (".tar.gz", ".tgz", ".zip"):
         if name.endswith(ext):
             name = name[: -len(ext)]
             break
@@ -24,7 +26,18 @@ def derive_default_output(sdist_path: Path) -> str:
     return "Cargo.lock"
 
 
-def _find_cargo_toml_dir_from_pyproject(sdist_root: Path) -> Path | None:
+def _extract_sdist(sdist_path: Path, dest: Path) -> None:
+    if sdist_path.name.endswith(".zip"):
+        with zipfile.ZipFile(sdist_path, "r") as zf:
+            zf.extractall(dest)
+    else:
+        with tarfile.open(sdist_path, "r:*") as tar:
+            if hasattr(tarfile, "data_filter"):
+                tar.extraction_filter = tarfile.data_filter
+            tar.extractall(path=dest)
+
+
+def _find_cargo_toml_dir_from_pyproject(sdist_root: Path) -> Optional[Path]:
     pyproject_path = sdist_root / "pyproject.toml"
     if not pyproject_path.exists():
         return sdist_root
@@ -41,7 +54,16 @@ def _find_cargo_toml_dir_from_pyproject(sdist_root: Path) -> Path | None:
     try:
         with open(pyproject_path, "rb") as f:
             pyproject_data = tomllib.load(f)
-        manifest_path = pyproject_data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
+        tool_cfg = pyproject_data.get("tool", {})
+        maturin_cfg = tool_cfg.get("maturin", {})
+        if maturin_cfg and "manifest-path" in maturin_cfg:
+            manifest_path = maturin_cfg["manifest-path"]
+        else:
+            ext_modules = tool_cfg.get("setuptools-rust", {}).get("ext-modules", [])
+            if ext_modules and isinstance(ext_modules, list) and isinstance(ext_modules[0], dict):
+                manifest_path = ext_modules[0].get("path", "Cargo.toml")
+            else:
+                manifest_path = "Cargo.toml"
         return (sdist_root / manifest_path).parent
     except Exception as e:
         print(
@@ -74,11 +96,16 @@ def main():
     if workspace_dir and not output_path.is_absolute():
         output_path = Path(workspace_dir) / output_path
 
+    cargo_cmd = args.cargo
+    if os.sep in cargo_cmd or "/" in cargo_cmd:
+        # Use abspath (not resolve) so symlinks such as rustup/cargo proxies
+        # preserve their argv[0] dispatch name.
+        cargo_cmd = os.path.abspath(cargo_cmd)
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
         print(f"Extracting {sdist_path} to {tmp_path}...")
-        with tarfile.open(sdist_path, "r:gz") as tar:
-            tar.extractall(path=tmp_path, filter="data")
+        _extract_sdist(sdist_path, tmp_path)
 
         # Find sdist root (should be a single directory in tmpdir)
         sdist_root = None
@@ -104,19 +131,19 @@ def main():
                 print(f"Warning: Found multiple Cargo.toml files, using {cargo_toml_paths[0]}", file=sys.stderr)
             cargo_toml_dir = cargo_toml_paths[0].parent
 
-        print(f"Running '{args.cargo} generate-lockfile' in {cargo_toml_dir}...")
+        print(f"Running '{cargo_cmd} generate-lockfile' in {cargo_toml_dir}...")
         try:
-            subprocess.run([args.cargo, "generate-lockfile"], cwd=cargo_toml_dir, check=True)
+            subprocess.run([cargo_cmd, "generate-lockfile"], cwd=cargo_toml_dir, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error: cargo failed: {e}", file=sys.stderr)
             sys.exit(1)
         except FileNotFoundError:
-            print(f"Error: cargo binary '{args.cargo}' not found.", file=sys.stderr)
+            print(f"Error: cargo binary '{cargo_cmd}' not found.", file=sys.stderr)
             sys.exit(1)
 
         try:
             locate_output = subprocess.check_output(
-                [args.cargo, "locate-project", "--workspace", "--message-format", "plain"],
+                [cargo_cmd, "locate-project", "--workspace", "--message-format", "plain"],
                 cwd=cargo_toml_dir,
                 text=True,
             ).strip()

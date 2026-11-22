@@ -8,3 +8,12 @@ py_test(
         "//private/tools:generate_cargo_lock_lib",
     ],
 )
+
+py_test(
+    name = "rust_common_test",
+    srcs = ["rust_common_test.py"],
+    main = "rust_common_test.py",
+    deps = [
+        "//private/tools:rust_common_lib",
+    ],
+)

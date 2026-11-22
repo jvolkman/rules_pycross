@@ -31,10 +31,12 @@ def _test_generate_cargo_lock_basic_impl(env, target):
     out_file = "{}/{}_runner.sh".format(target.label.package, target.label.name)
     env.expect.that_target(target).default_outputs().contains_exactly([out_file])
 
-    # Check action content
+    # Check action content (uses registered rust toolchain cargo when available).
     action = env.expect.that_target(target).action_generating(out_file)
     action.content().contains("TOOL_PATH")
     action.content().contains("SDIST_PATH")
+    action.content().contains("CARGO_PATH=")
+    action.content().contains('--cargo "$CARGO_PATH"')
 
 # buildifier: disable=unused-variable
 def _test_cargo_lock_hook_overrides_impl(env, target):
