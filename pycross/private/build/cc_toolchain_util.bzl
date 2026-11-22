@@ -63,20 +63,28 @@ def configure_features(ctx, cc_toolchain):
         unsupported_features = disabled_features,
     )
 
-def _defines_from_deps(ctx):
-    return depset(transitive = [dep[CcInfo].compilation_context.defines for dep in getattr(ctx.attr, "deps", []) if CcInfo in dep])
+def _defines_from_deps(ctx, native_deps = None):
+    deps = native_deps if native_deps != None else getattr(ctx.attr, "native_deps", [])
+    return depset(transitive = [dep[CcInfo].compilation_context.defines for dep in deps if CcInfo in dep])
 
-def get_tools_info(ctx):
+def get_tools_info(ctx, cc_toolchain = None, feature_configuration = None):
     """Takes information about tools paths from cc_toolchain, returns CxxToolsInfo
 
     Args:
         ctx: rule context
+        cc_toolchain: optional pre-resolved C++ toolchain info
+        feature_configuration: optional pre-configured FeatureConfiguration
+
+    Returns:
+        CxxToolsInfo: A provider containing C/C++ tool paths.
     """
-    cc_toolchain = find_cpp_toolchain(ctx)
-    feature_configuration = configure_features(
-        ctx = ctx,
-        cc_toolchain = cc_toolchain,
-    )
+    if cc_toolchain == None:
+        cc_toolchain = find_cpp_toolchain(ctx)
+    if feature_configuration == None:
+        feature_configuration = configure_features(
+            ctx = ctx,
+            cc_toolchain = cc_toolchain,
+        )
 
     return CxxToolsInfo(
         cc = cc_common.get_tool_for_action(
@@ -114,7 +122,14 @@ def _strip_archiver_output_sentinel(flags):
         result.append("-o")
     return result
 
-def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
+def get_flags_info(
+        ctx,
+        copts = [],
+        linkopts = [],
+        link_output_file = None,
+        native_deps = None,
+        cc_toolchain = None,
+        feature_configuration = None):
     """Takes information about flags from cc_toolchain, returns CxxFlagsInfo
 
     Args:
@@ -123,20 +138,24 @@ def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
         linkopts: linker options
         link_output_file: output file to be specified in the link command line
             flags
+        native_deps: optional list of native dependency targets providing CcInfo
+        cc_toolchain: optional pre-resolved C++ toolchain info
+        feature_configuration: optional pre-configured FeatureConfiguration
 
     Returns:
         CxxFlagsInfo: A provider containing Cxx flags
     """
-    cc_toolchain_ = find_cpp_toolchain(ctx)
-    feature_configuration = configure_features(
-        ctx = ctx,
-        cc_toolchain = cc_toolchain_,
-    )
+    cc_toolchain_ = cc_toolchain if cc_toolchain != None else find_cpp_toolchain(ctx)
+    if feature_configuration == None:
+        feature_configuration = configure_features(
+            ctx = ctx,
+            cc_toolchain = cc_toolchain_,
+        )
 
-    copts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + copts) or []
-    cxxopts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + copts) or []
-    linkopts = (ctx.fragments.cpp.linkopts + linkopts) or []
-    defines = _defines_from_deps(ctx)
+    c_opts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + copts) or []
+    cxx_opts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + copts) or []
+    link_opts = (ctx.fragments.cpp.linkopts + linkopts) or []
+    defines = _defines_from_deps(ctx, native_deps)
 
     flags = CxxFlagsInfo(
         cc = cc_common.get_memory_inefficient_command_line(
@@ -202,11 +221,11 @@ def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
     # User flags are appended verbatim (no dedup against toolchain tokens:
     # that would split pairs like `-isystem DIR`).
     return CxxFlagsInfo(
-        cc = _convert_flags(cc_toolchain_.compiler, flags.cc + copts),
-        cxx = _convert_flags(cc_toolchain_.compiler, flags.cxx + cxxopts),
-        cxx_linker_shared = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_shared + linkopts),
+        cc = _convert_flags(cc_toolchain_.compiler, flags.cc + c_opts),
+        cxx = _convert_flags(cc_toolchain_.compiler, flags.cxx + cxx_opts),
+        cxx_linker_shared = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_shared + link_opts),
         cxx_linker_static = _convert_flags(cc_toolchain_.compiler, cxx_linker_static),
-        cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_executable + linkopts),
+        cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_executable + link_opts),
         needs_pic_for_dynamic_libraries = cc_toolchain_.needs_pic_for_dynamic_libraries(
             feature_configuration = feature_configuration,
         ),
@@ -217,7 +236,7 @@ def _convert_flags(compiler, flags):
 
     MSYS2 may convert leading slashes to the absolute path of the msys root directory, even if MSYS_NO_PATHCONV=1 and MSYS2_ARG_CONV_EXCL="*"
     .E.g MSYS2 may convert "/nologo" to "C:/msys64/nologo".
-    Therefore, as MSVC tool flags can start with either a slash or dash, convert slashes to dashes
+    Therefore, as MSVC tool flags can start with either a slash or dash, convert the leading slash to a dash.
 
     Args:
         compiler: The target compiler, e.g. gcc, msvc-cl, mingw-gcc
@@ -227,7 +246,7 @@ def _convert_flags(compiler, flags):
         list: The converted flags
     """
     if compiler == "msvc-cl":
-        return [flag.replace("/", "-") if flag.startswith("/") else flag for flag in flags]
+        return ["-" + flag[1:] if flag.startswith("/") else flag for flag in flags]
     return flags
 
 def absolutize_path_in_str(workspace_name, root_str, text, force = False):
@@ -259,9 +278,10 @@ def absolutize_path_in_str(workspace_name, root_str, text, force = False):
                           (len(text) > 2 and text[0].isalpha() and text[1] == ":")
 
     # absolutize relative by adding our working directory
-    # this works because we ru on windows under msys now
+    # this works because we run on windows under msys now
     if force and new_text == text and not is_already_absolute:
-        new_text = root_str + "/" + text
+        sep = "" if root_str.endswith("/") else "/"
+        new_text = root_str + sep + text
 
     return new_text
 
@@ -272,13 +292,13 @@ def _prefix(text, from_str, prefix):
     return before + prefix + middle + after
 
 def get_headers(ccinfo):
-    """Returns a struct containing headers and include_dirs for the given CcInfo.
+    """Returns a struct containing headers depset and include_dirs for the given CcInfo.
 
     Args:
         ccinfo: The CcInfo provider
 
     Returns:
-        struct: A struct containing headers and include_dirs.
+        struct: A struct containing headers (depset) and include_dirs (list[str]).
     """
     compilation_info = ccinfo.compilation_context
     include_dirs = compilation_info.system_includes.to_list() + \
@@ -287,29 +307,22 @@ def get_headers(ccinfo):
     # do not use quote includes, currently they do not contain
     # library-specific information
     include_dirs = collections.uniq(include_dirs)
-    headers = []
-    for header in compilation_info.headers.to_list():
-        path = header.path
-        included = False
-        for dir_ in include_dirs:
-            if path.startswith(dir_):
-                included = True
-                break
-        if not included:
-            headers.append(header)
     return struct(
-        headers = headers,
+        headers = compilation_info.headers,
         include_dirs = include_dirs,
     )
 
 def get_libraries(ccinfo):
     """Returns a list of libraries for the given CcInfo.
 
+    Prefers PIC static libraries over non-PIC static libraries because Python
+    extension modules are linked as shared libraries.
+
     Args:
         ccinfo: The CcInfo provider
 
     Returns:
-        struct: A list of libraries.
+        list: A list of library Files.
     """
     all_libraries = []
 
@@ -319,8 +332,10 @@ def get_libraries(ccinfo):
 
     for li in ccinfo.linking_context.linker_inputs.to_list():
         for library_to_link in li.libraries:
-            add(library_to_link.static_library)
-            add(library_to_link.pic_static_library)
+            add(library_to_link.pic_static_library or library_to_link.static_library)
             add(library_to_link.resolved_symlink_dynamic_library or library_to_link.dynamic_library)
             add(library_to_link.resolved_symlink_interface_library or library_to_link.interface_library)
     return all_libraries
+
+# Visible for testing.
+convert_flags_for_testing = _convert_flags

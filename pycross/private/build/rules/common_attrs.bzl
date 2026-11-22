@@ -83,7 +83,7 @@ COMMON_BUILD_ATTRS = {
     ),
     "build_env": attr.string_dict(
         doc = "Environment variables passed to the sdist build. " +
-              "Values are subject to 'Make variable' and $(location) expansion.",
+              "Values are subject to $(location) expansion.",
     ),
     "data": attr.label_list(
         doc = "Additional data and dependencies used by the build. " +
