@@ -22,6 +22,10 @@ def _test_get_module_name_valid_impl(env, target):
     env.expect.that_str(g("PyQt5/sip.cpython-313-x86_64-linux-gnu.so")).equals("PyQt5.sip")
     env.expect.that_str(g("pkg/mod.abi3-x86_64.so")).equals("pkg.mod")
     env.expect.that_str(g("pkg/ext.pyd")).equals("pkg.ext")
+    env.expect.that_str(g("_regex.cp313-win_amd64.pyd")).equals("_regex")
+    env.expect.that_str(g("pkg/_ext.cp314t-win_arm64.pyd")).equals("pkg._ext")
+    env.expect.that_str(g("pkg/_ext.abi3t.so")).equals("pkg._ext")
+    env.expect.that_str(g("pkg/_ext.pypy310-pp73-x86_64-linux-gnu.so")).equals("pkg._ext")
     env.expect.that_str(g("zope/interface/__init__.py")).equals("zope.interface")
     env.expect.that_str(g("nvidia/cusparse/__init__.py")).equals("nvidia.cusparse")
 
@@ -120,11 +124,16 @@ def _test_build_modules_mapping_preserves_distinct_packages_in_namespace_impl(en
             package_name = "google-cloud-storage",
             site_paths = ["google/cloud/storage"],
         ),
+        struct(
+            package_name = "Foo.Bar__Baz",
+            site_paths = ["foobar"],
+        ),
     ]
     mapping = build_modules_mapping_for_testing(pkg_infos)
     env.expect.that_dict(mapping).contains_exactly({
         "google.cloud": "google_cloud_core",
         "google.cloud.storage": "google_cloud_storage",
+        "foobar": "foo_bar_baz",
     })
 
 def _test_build_modules_mapping_preserves_distinct_packages_in_namespace(name):

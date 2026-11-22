@@ -540,5 +540,87 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
         run_mock.assert_not_called()
 
 
+class WheelInstallerDestinationAndFlagsTest(unittest.TestCase):
+    """Tests for portable RECORD paths, case-sensitive excludes, and flagfile parsing."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.temp_dir = self._tmp.name
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_record_uses_posix_relative_paths_with_windows_separators(self):
+        import csv
+        from unittest import mock
+
+        from installer.records import RecordEntry
+
+        from pycross.private.tools.wheel_installer import PycrossWheelDestination
+
+        out_dir = Path(self.temp_dir) / "win_record"
+        lib_dir = out_dir / "site-packages"
+        (lib_dir / "pkg-1.0.dist-info").mkdir(parents=True)
+        scheme_dict = {
+            "platlib": str(lib_dir),
+            "purelib": str(lib_dir),
+            "headers": str(out_dir / "include"),
+            "scripts": str(out_dir / "bin"),
+            "data": str(out_dir / "data"),
+        }
+        dest = PycrossWheelDestination(
+            scheme_dict=scheme_dict,
+            interpreter="python",
+            script_kind="posix",
+            bytecode_optimization_levels=[],
+        )
+        records = [
+            ("purelib", RecordEntry("pkg/__init__.py", None, 0)),
+            ("platlib", RecordEntry("pkg/_ext.pyd", None, 0)),
+            ("scripts", RecordEntry("mytool", None, 0)),
+        ]
+        # Simulate Windows os.path.relpath returning backslash separators.
+        with mock.patch("os.path.relpath", side_effect=lambda p, start: "." if p == start else "..\\bin"):
+            dest.finalize_installation("purelib", "pkg-1.0.dist-info/RECORD", records)
+
+        with open(lib_dir / "pkg-1.0.dist-info/RECORD", encoding="utf-8", newline="") as f:
+            paths = [row[0] for row in csv.reader(f)]
+        self.assertIn("pkg/__init__.py", paths)
+        self.assertIn("pkg/_ext.pyd", paths)
+        self.assertIn("../bin/mytool", paths)
+        for p in paths:
+            self.assertNotIn("\\", p)
+
+    def test_install_exclude_globs_case_sensitive_and_flagfile_utf8_help(self):
+        import io
+        import zipfile
+        from unittest import mock
+
+        from pycross.private.tools.args import FlagFileArgumentParser
+        from pycross.private.tools.wheel_installer import FilteredWheelFile
+
+        whl_path = Path(self.temp_dir) / "case-1.0-py3-none-any.whl"
+        with zipfile.ZipFile(whl_path, "w") as zf:
+            zf.writestr("pkg/Data.txt", b"upper")
+            zf.writestr("pkg/data.txt", b"lower")
+        with FilteredWheelFile.open_filtered(whl_path, ["pkg/Data.txt"]) as filtered:
+            self.assertFalse(filtered.should_install("pkg/Data.txt"))
+            self.assertTrue(filtered.should_install("pkg/data.txt"))
+
+        ff = Path(self.temp_dir) / "flags.txt"
+        ff.write_text("--name r\u00e9sum\u00e9\n", encoding="utf-8")
+        parser = FlagFileArgumentParser(prog="test_prog")
+        parser.add_argument("--name")
+        parsed = parser.parse_args([f"--flagfile={ff}"])
+        self.assertEqual(parsed.name, "r\u00e9sum\u00e9")
+
+        stdout = io.StringIO()
+        with mock.patch("sys.stdout", stdout):
+            with self.assertRaises(SystemExit) as cm:
+                parser.parse_args(["--help"])
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("--name", stdout.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

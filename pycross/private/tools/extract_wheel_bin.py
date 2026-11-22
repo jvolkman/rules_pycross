@@ -17,6 +17,16 @@ def main():
     out_file = sys.argv[3]
 
     src = os.path.join(wheel_dir, "bin", binary_name)
+    if not os.path.isfile(src) and os.path.isfile(src + ".exe"):
+        src = src + ".exe"
+
+    if os.path.lexists(out_file):
+        try:
+            os.chmod(out_file, 0o644)
+        except OSError:
+            pass
+        os.unlink(out_file)
+
     shutil.copyfile(src, out_file)
     os.chmod(out_file, 0o755)
 

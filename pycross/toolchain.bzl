@@ -7,6 +7,7 @@ load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transitio
 PycrossBuildExecRuntimeInfo = provider(
     doc = "Extended information about a (exec, target) Python interpreter pair.",
     fields = {
+        "bytecode_cache_tag": "Optional PEP 3147 bytecode cache tag for the target interpreter (e.g. 'cpython-314'), or None.",
         "exec_python_files": "A depset containing all files for the exec interpreter.",
         "exec_python_compile_files": "A depset containing the subset of exec interpreter files needed for .pyc bytecode compilation.",
         "exec_python_files_to_run": "Optional FilesToRunProvider for the exec interpreter.",
@@ -83,6 +84,18 @@ def _python_executable(runtime):
         return exe_file.path
     return runtime.interpreter_path
 
+def _bytecode_cache_tag(runtime):
+    """Return CPython's PEP 3147 bytecode cache tag (e.g. 'cpython-314'), or None."""
+    impl_name = getattr(runtime, "implementation_name", "cpython")
+    if impl_name and impl_name != "cpython":
+        return None
+    vi = getattr(runtime, "interpreter_version_info", None)
+    major = getattr(vi, "major", None) if vi else None
+    minor = getattr(vi, "minor", None) if vi else None
+    if major == None or minor == None:
+        return None
+    return "cpython-{}{}".format(major, minor)
+
 def _pycross_hermetic_toolchain_impl(ctx):
     target_py_info = ctx.attr.target_interpreter[PyRuntimeInfo]
 
@@ -108,6 +121,7 @@ def _pycross_hermetic_toolchain_impl(ctx):
     ]) if exec_py_info.files else depset()
 
     pycross_info = PycrossBuildExecRuntimeInfo(
+        bytecode_cache_tag = _bytecode_cache_tag(target_py_info),
         exec_python_files = exec_py_info.files,
         exec_python_compile_files = exec_python_compile_files,
         exec_python_files_to_run = getattr(exec_py_info, "interpreter_files_to_run", None),
