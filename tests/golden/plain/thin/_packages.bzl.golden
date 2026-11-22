@@ -1,0 +1,19 @@
+"""Generated package metadata. Do not edit."""
+
+PACKAGES = {
+    "alpha": struct(
+        has_sdist = False,
+    ),
+    "beta": struct(
+        has_sdist = False,
+    ),
+    "devtool": struct(
+        has_sdist = False,
+    ),
+    "gamma": struct(
+        has_sdist = False,
+    ),
+    "setuptools": struct(
+        has_sdist = False,
+    ),
+}

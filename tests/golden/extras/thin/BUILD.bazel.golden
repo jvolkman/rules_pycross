@@ -1,0 +1,53 @@
+load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_library")
+package(default_visibility = ["//visibility:public"])
+
+# Empty library for _maybe_ targets on incompatible platforms.
+py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
+
+exports_files(["requirements.bzl", "_packages.bzl"])
+
+pycross_modules_mapping(
+    name = "modules_mapping",
+    deps = [
+        "//__maybe:win_only_1_0_0",
+        "@golden_extras__pkgs//_lock:only-extra[opt]@1.0.0",
+        "@golden_extras__pkgs//_lock:pkg-a@1.0.0",
+        "@golden_extras__pkgs//_lock:pkg-a[cli]@1.0.0",
+        "@golden_extras__pkgs//_lock:pkg-a[fast]@1.0.0",
+    ],
+)
+
+alias(
+    name = "only-extra",
+    actual = "//only_extra:pkg",
+)
+
+alias(
+    name = "only-extra[opt]",
+    actual = "//only_extra:[opt]",
+)
+
+alias(
+    name = "pkg-a",
+    actual = "//pkg_a:pkg",
+)
+alias(
+    name = "pkg-a[]",
+    actual = "//pkg_a:[]",
+)
+
+alias(
+    name = "pkg-a[cli]",
+    actual = "//pkg_a:[cli]",
+)
+
+alias(
+    name = "pkg-a[fast]",
+    actual = "//pkg_a:[fast]",
+)
+
+alias(
+    name = "win-only",
+    actual = "//win_only:pkg",
+)

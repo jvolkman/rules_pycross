@@ -1,0 +1,9 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "merged_pkg_1_0_0",
+    actual = select({
+        "@golden_sdist_reset__pkgs//_lock:_wheel_available_merged-pkg@1.0.0": "@golden_sdist_reset__pkgs//_lock:merged-pkg@1.0.0",
+        "//conditions:default": "//:_empty_library",
+    }),
+)

@@ -263,3 +263,11 @@ use_repo(
     "starlark_uv_lock_pre_0_2_35",
     "starlark_uv_lock_workspace",
 )
+
+# Golden snapshot test repo for package_repo / thin_package_repo outputs (dev-only).
+golden_snapshots = use_extension(
+    "//tests/golden:repos.bzl",
+    "golden_snapshot_repos",
+    dev_dependency = True,
+)
+use_repo(golden_snapshots, "golden_snapshots")

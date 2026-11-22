@@ -1,0 +1,34 @@
+load("@rules_pycross//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
+
+package(default_visibility = ["//visibility:public"])
+
+pycross_wheel_dir(
+    name = "alpha@1.0.0",
+    src = "//_lock:_wheel_alpha@1.0.0",
+    whldir_name = "alpha-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "beta@2.0.0",
+    src = "//_lock:_wheel_beta@2.0.0",
+    whldir_name = "beta-2.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "devtool@0.1.0",
+    src = "//_lock:_wheel_devtool@0.1.0",
+    whldir_name = "devtool-0.1.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "gamma@1.0.0",
+    src = "//_lock:_wheel_gamma@1.0.0",
+    whldir_name = "gamma-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "setuptools@75.0.0",
+    src = "//_lock:_wheel_setuptools@75.0.0",
+    whldir_name = "setuptools-75.0.0.whldir",
+)
+

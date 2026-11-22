@@ -1,0 +1,201 @@
+package(default_visibility = ["//visibility:public"])
+
+load(":lock.bzl", "targets")
+
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")
+
+load("@bazel_skylib//lib:selects.bzl", "selects")
+
+targets()
+
+string_flag(
+    name = "_pin_group_app_g-a_group_app_g-b",
+    build_setting_default = "",
+)
+
+string_flag(
+    name = "_default_group_app_g-a_group_app_g-b",
+    build_setting_default = "",
+)
+
+string_flag(
+    name = "_usable_group_app_g-a_group_app_g-b",
+    build_setting_default = "*",
+)
+
+variant_resolver(
+    name = "_explicit_group_app_g-a_group_app_g-b",
+    pin = ":_pin_group_app_g-a_group_app_g-b",
+    usable = ":_usable_group_app_g-a_group_app_g-b",
+    items = ["group_app_g-a","group_app_g-b"],
+    flags = {
+        "@golden_overlapping_conflicts//_variants:group_g-a": "@golden_overlapping_conflicts//_variants:group_g-a|group_app_g-a",
+        "@golden_overlapping_conflicts//_variants:group_g-b": "@golden_overlapping_conflicts//_variants:group_g-b|group_app_g-b",
+        "@golden_overlapping_conflicts_pinned//_variants:group_g-a": "@golden_overlapping_conflicts_pinned//_variants:group_g-a|group_app_g-a",
+        "@golden_overlapping_conflicts_pinned//_variants:group_g-b": "@golden_overlapping_conflicts_pinned//_variants:group_g-b|group_app_g-b",
+    },
+    string_flags = {
+        "@golden_overlapping_conflicts//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts//_variants\",\"map\":{\"group_g-a\":[\"group_app_g-a\"],\"group_g-b\":[\"group_app_g-b\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
+        "@golden_overlapping_conflicts_pinned//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts_pinned//_variants\",\"map\":{\"group_g-a\":[\"group_app_g-a\"],\"group_g-b\":[\"group_app_g-b\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
+    },
+)
+
+variant_resolver(
+    name = "_resolver_group_app_g-a_group_app_g-b",
+    explicit = ":_explicit_group_app_g-a_group_app_g-b",
+    default_setting = ":_default_group_app_g-a_group_app_g-b",
+    usable = ":_usable_group_app_g-a_group_app_g-b",
+    items = ["group_app_g-a","group_app_g-b"],
+    rival_resolvers = {
+        ":_explicit_extra_app_x_group_app_g-a": "group_app_g-a",
+    },
+)
+
+config_setting(
+    name = "_unselected_group_app_g-a_group_app_g-b",
+    flag_values = {":_resolver_group_app_g-a_group_app_g-b": ""},
+)
+
+string_flag(
+    name = "_pin_extra_app_x_group_app_g-a",
+    build_setting_default = "",
+)
+
+string_flag(
+    name = "_default_extra_app_x_group_app_g-a",
+    build_setting_default = "",
+)
+
+string_flag(
+    name = "_usable_extra_app_x_group_app_g-a",
+    build_setting_default = "*",
+)
+
+variant_resolver(
+    name = "_explicit_extra_app_x_group_app_g-a",
+    pin = ":_pin_extra_app_x_group_app_g-a",
+    usable = ":_usable_extra_app_x_group_app_g-a",
+    items = ["extra_app_x","group_app_g-a"],
+    flags = {
+        "@golden_overlapping_conflicts//_variants:extra_x": "@golden_overlapping_conflicts//_variants:extra_x|extra_app_x",
+        "@golden_overlapping_conflicts//_variants:group_g-a": "@golden_overlapping_conflicts//_variants:group_g-a|group_app_g-a",
+        "@golden_overlapping_conflicts_pinned//_variants:extra_x": "@golden_overlapping_conflicts_pinned//_variants:extra_x|extra_app_x",
+        "@golden_overlapping_conflicts_pinned//_variants:group_g-a": "@golden_overlapping_conflicts_pinned//_variants:group_g-a|group_app_g-a",
+    },
+    string_flags = {
+        "@golden_overlapping_conflicts//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"group_g-a\":[\"group_app_g-a\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
+        "@golden_overlapping_conflicts_pinned//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts_pinned//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"group_g-a\":[\"group_app_g-a\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
+    },
+)
+
+variant_resolver(
+    name = "_resolver_extra_app_x_group_app_g-a",
+    explicit = ":_explicit_extra_app_x_group_app_g-a",
+    default_setting = ":_default_extra_app_x_group_app_g-a",
+    usable = ":_usable_extra_app_x_group_app_g-a",
+    items = ["extra_app_x","group_app_g-a"],
+    rival_resolvers = {
+        ":_explicit_extra_app_x_extra_app_y": "extra_app_x",
+        ":_explicit_group_app_g-a_group_app_g-b": "group_app_g-a",
+    },
+)
+
+config_setting(
+    name = "_unselected_extra_app_x_group_app_g-a",
+    flag_values = {":_resolver_extra_app_x_group_app_g-a": ""},
+)
+
+string_flag(
+    name = "_pin_extra_app_x_extra_app_y",
+    build_setting_default = "",
+)
+
+string_flag(
+    name = "_default_extra_app_x_extra_app_y",
+    build_setting_default = "",
+)
+
+string_flag(
+    name = "_usable_extra_app_x_extra_app_y",
+    build_setting_default = "*",
+)
+
+variant_resolver(
+    name = "_explicit_extra_app_x_extra_app_y",
+    pin = ":_pin_extra_app_x_extra_app_y",
+    usable = ":_usable_extra_app_x_extra_app_y",
+    items = ["extra_app_x","extra_app_y"],
+    flags = {
+        "@golden_overlapping_conflicts//_variants:extra_x": "@golden_overlapping_conflicts//_variants:extra_x|extra_app_x",
+        "@golden_overlapping_conflicts//_variants:extra_y": "@golden_overlapping_conflicts//_variants:extra_y|extra_app_y",
+        "@golden_overlapping_conflicts_pinned//_variants:extra_x": "@golden_overlapping_conflicts_pinned//_variants:extra_x|extra_app_x",
+        "@golden_overlapping_conflicts_pinned//_variants:extra_y": "@golden_overlapping_conflicts_pinned//_variants:extra_y|extra_app_y",
+    },
+    string_flags = {
+        "@golden_overlapping_conflicts//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"extra_y\":[\"extra_app_y\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
+        "@golden_overlapping_conflicts_pinned//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts_pinned//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"extra_y\":[\"extra_app_y\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
+    },
+)
+
+variant_resolver(
+    name = "_resolver_extra_app_x_extra_app_y",
+    explicit = ":_explicit_extra_app_x_extra_app_y",
+    default_setting = ":_default_extra_app_x_extra_app_y",
+    usable = ":_usable_extra_app_x_extra_app_y",
+    items = ["extra_app_x","extra_app_y"],
+    rival_resolvers = {
+        ":_explicit_extra_app_x_group_app_g-a": "extra_app_x",
+    },
+)
+
+config_setting(
+    name = "_unselected_extra_app_x_extra_app_y",
+    flag_values = {":_resolver_extra_app_x_extra_app_y": ""},
+)
+
+config_setting(
+    name = "_is_extra_app_x_via_0",
+    flag_values = {":_resolver_extra_app_x_group_app_g-a": "extra_app_x"},
+)
+
+config_setting(
+    name = "_is_extra_app_x_via_1",
+    flag_values = {":_resolver_extra_app_x_extra_app_y": "extra_app_x"},
+)
+
+selects.config_setting_group(
+    name = "is_extra_app_x",
+    match_any = [
+        ":_is_extra_app_x_via_0",
+        ":_is_extra_app_x_via_1",
+    ],
+)
+
+config_setting(
+    name = "is_extra_app_y",
+    flag_values = {":_resolver_extra_app_x_extra_app_y": "extra_app_y"},
+)
+
+config_setting(
+    name = "_is_group_app_g-a_via_0",
+    flag_values = {":_resolver_group_app_g-a_group_app_g-b": "group_app_g-a"},
+)
+
+config_setting(
+    name = "_is_group_app_g-a_via_1",
+    flag_values = {":_resolver_extra_app_x_group_app_g-a": "group_app_g-a"},
+)
+
+selects.config_setting_group(
+    name = "is_group_app_g-a",
+    match_any = [
+        ":_is_group_app_g-a_via_0",
+        ":_is_group_app_g-a_via_1",
+    ],
+)
+
+config_setting(
+    name = "is_group_app_g-b",
+    flag_values = {":_resolver_group_app_g-a_group_app_g-b": "group_app_g-b"},
+)

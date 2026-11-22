@@ -1,0 +1,50 @@
+"""Generated transition rules for golden_sdist_reset with pinned flag values."""
+
+load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_library_proxy_rule")
+load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values", "split_setting_value")
+
+_FLAG_VALUES = {
+
+}
+
+_SETTING_VALUES = {
+
+}
+
+# Variant pins and defaults for the workspace repo's resolvers.
+_FIXED_VALUES = {
+    "@golden_sdist_reset__pkgs//_lock:_default_extra_app_cpu_extra_app_gpu": "extra_app_cpu",
+    "@golden_sdist_reset__pkgs//_lock:_usable_extra_app_cpu_extra_app_gpu": "",
+}
+
+def _transition_impl(settings, attr):
+    result = {
+        label: coerce_transition_values(settings[label], values)
+        for label, values in _FLAG_VALUES.items()
+    }
+    for label, value in _SETTING_VALUES.items():
+        result[label] = coerce_transition_values(settings[label], split_setting_value(settings[label], value))
+    result.update(_FIXED_VALUES)
+    if attr.platform:
+        result["//command_line_option:platforms"] = [str(attr.platform)]
+    else:
+        result["//command_line_option:platforms"] = settings["//command_line_option:platforms"]
+    return result
+
+_repo_transition = transition(
+    implementation = _transition_impl,
+    inputs = [
+        "//command_line_option:platforms",
+
+    ],
+    outputs = [
+        "//command_line_option:platforms",
+
+        "@golden_sdist_reset__pkgs//_lock:_default_extra_app_cpu_extra_app_gpu",
+        "@golden_sdist_reset__pkgs//_lock:_usable_extra_app_cpu_extra_app_gpu",
+    ],
+)
+
+pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition)
+
+pycross_transitioning_file_proxy = make_file_proxy_rule(cfg = _repo_transition)

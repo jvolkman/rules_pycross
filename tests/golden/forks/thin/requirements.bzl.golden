@@ -1,0 +1,25 @@
+load("@pypackaging.bzl", "pypackaging")
+
+def requirement(pkg):
+    extra = None
+    if "[" in pkg:
+        pkg, extra = pkg.split("[", 1)
+        extra = pypackaging.utils.canonicalize_name(extra.rstrip("]"))
+
+    pkg = pypackaging.utils.canonicalize_name(pkg)
+    pkg_dir = pkg.replace("-", "_")
+
+    if extra:
+        return "@@golden_forks//%s:[%s]" % (pkg_dir, extra)
+    return "@@golden_forks//%s" % (pkg_dir)
+
+
+# All pinned requirements, excluding testonly ones
+all_requirements = [
+    "@@golden_forks//app_lib",
+    "@@golden_forks//forked_lib:maybe",
+]
+
+# All testonly pinned requirements
+all_testonly_requirements = [
+]

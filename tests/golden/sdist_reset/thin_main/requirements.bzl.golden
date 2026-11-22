@@ -1,0 +1,31 @@
+load("@pypackaging.bzl", "pypackaging")
+
+def requirement(pkg):
+    extra = None
+    if "[" in pkg:
+        pkg, extra = pkg.split("[", 1)
+        extra = pypackaging.utils.canonicalize_name(extra.rstrip("]"))
+
+    pkg = pypackaging.utils.canonicalize_name(pkg)
+    pkg_dir = pkg.replace("-", "_")
+
+    if extra:
+        return "@@golden_sdist_reset//%s:[%s]" % (pkg_dir, extra)
+    return "@@golden_sdist_reset//%s" % (pkg_dir)
+
+
+# All pinned requirements, excluding testonly ones
+all_requirements = [
+    "@@golden_sdist_reset//custom_build",
+    "@@golden_sdist_reset//merged_pkg",
+    "@@golden_sdist_reset//mixed_consumer",
+    "@@golden_sdist_reset//native2",
+    "@@golden_sdist_reset//native3",
+    "@@golden_sdist_reset//pure_leaf",
+    "@@golden_sdist_reset//sdistonly",
+    "@@golden_sdist_reset//variant_dep",
+]
+
+# All testonly pinned requirements
+all_testonly_requirements = [
+]

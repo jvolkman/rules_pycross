@@ -1,0 +1,77 @@
+{
+  "cycle_groups": {
+    "cycle_group_ab": [
+      "cycle-a@1.0.0",
+      "cycle-b@1.0.0"
+    ]
+  },
+  "packages": {
+    "cycle-a@1.0.0": {
+      "cycle_group": "cycle_group_ab",
+      "marker_dependencies": [
+        {
+          "key": "cycle-b@1.0.0",
+          "marker": null
+        },
+        {
+          "key": "leaf@1.0.0",
+          "marker": null
+        },
+        {
+          "key": "mac-dep@1.0.0",
+          "marker": "sys_platform == 'darwin'"
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "cycle_a_1_0_0_whl"
+          },
+          "filename": "cycle_a-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "cycle-b@1.0.0": {
+      "cycle_group": "cycle_group_ab",
+      "marker_dependencies": [
+        {
+          "key": "cycle-a@1.0.0",
+          "marker": null
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "cycle_b_1_0_0_whl"
+          },
+          "filename": "cycle_b-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "leaf@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "leaf_1_0_0_whl"
+          },
+          "filename": "leaf-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "mac-dep@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "mac_dep_1_0_0_whl"
+          },
+          "filename": "mac_dep-1.0.0-py3-none-any.whl"
+        }
+      ]
+    }
+  },
+  "pins": {
+    "cycle-a": "cycle-a@1.0.0",
+    "cycle-b": "cycle-b@1.0.0",
+    "leaf": "leaf@1.0.0"
+  }
+}

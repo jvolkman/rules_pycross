@@ -1,0 +1,5 @@
+"""Backend macro alias for this thin repo."""
+
+load("@golden_plain__pkgs//_backend:setuptools_build.bzl", _setuptools_build = "setuptools_build")
+
+setuptools_build = _setuptools_build

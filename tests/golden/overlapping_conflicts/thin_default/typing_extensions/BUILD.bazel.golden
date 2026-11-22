@@ -1,0 +1,33 @@
+load("//:_transition.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")
+
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "typing_extensions",
+    actual = ":pkg",
+)
+
+pycross_transitioning_library_proxy(
+    name = "pkg",
+    actual = "//__actual/typing_extensions:pkg",
+)
+
+pycross_transitioning_file_proxy(
+    name = "wheel",
+    actual = "//__actual/typing_extensions:wheel",
+)
+
+pycross_transitioning_file_proxy(
+    name = "dist_info",
+    actual = "//__actual/typing_extensions:dist_info",
+)
+
+alias(
+    name = "data",
+    actual = ":pkg",
+)
+pycross_transitioning_library_proxy(
+    name = "maybe",
+    actual = "//__actual/typing_extensions:maybe",
+)
+

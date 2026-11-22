@@ -1,0 +1,20 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+
+diff_test(
+    name = "manifest_test",
+    size = "small",
+    file1 = "@golden_snapshots//:manifest.txt",
+    file2 = "manifest.txt",
+    tags = ["golden"],
+)
+
+[
+    diff_test(
+        name = path.replace("/", "_").replace(".", "_") + "_test",
+        size = "small",
+        file1 = "@golden_snapshots//:" + path,
+        file2 = path,
+        tags = ["golden"],
+    )
+    for path in glob(["**/*.golden"])
+]

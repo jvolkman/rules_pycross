@@ -1,0 +1,84 @@
+{
+  "packages": {
+    "helper@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "helper_1_0_0_whl"
+          },
+          "filename": "helper-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "only-extra@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "only_extra_1_0_0_whl"
+          },
+          "filename": "only_extra-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "only-extra[opt]@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "helper@1.0.0",
+          "marker": null
+        }
+      ]
+    },
+    "pkg-a@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "win-only@1.0.0",
+          "marker": "sys_platform == 'win32'"
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "pkg_a_1_0_0_whl"
+          },
+          "filename": "pkg_a-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "pkg-a[cli]@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "helper@1.0.0",
+          "marker": "sys_platform != 'win32'"
+        }
+      ]
+    },
+    "pkg-a[fast]@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "helper@1.0.0",
+          "marker": null
+        }
+      ]
+    },
+    "win-only@1.0.0": {
+      "availability_markers": [
+        "sys_platform == 'win32'"
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "win_only_1_0_0_whl"
+          },
+          "filename": "win_only-1.0.0-py3-none-any.whl"
+        }
+      ]
+    }
+  },
+  "pins": {
+    "only-extra[opt]": "only-extra[opt]@1.0.0",
+    "pkg-a": "pkg-a@1.0.0",
+    "pkg-a[cli]": "pkg-a[cli]@1.0.0",
+    "pkg-a[fast]": "pkg-a[fast]@1.0.0",
+    "win-only": "win-only@1.0.0"
+  }
+}

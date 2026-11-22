@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
+
+pycross_no_variant_selected(
+    name = "_no_variant_extra_app_cpu_extra_app_gpu",
+    message = "No uv conflict variant selected, and @golden_sdist_reset__build has no _variants flag for it (app[cpu], app[gpu]). Select it through a repo for the declaring project.",
+)

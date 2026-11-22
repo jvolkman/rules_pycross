@@ -1,0 +1,158 @@
+{
+  "packages": {
+    "custom-build@1.0.0": {
+      "build_target": "@custom_pkg//:wheel"
+    },
+    "merged-pkg@1.0.0": {
+      "sdist_file": {
+        "key": "merged_pkg_1_0_0_sdist"
+      },
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "merged_pkg_1_0_0_linux"
+          },
+          "filename": "merged_pkg-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl"
+        }
+      ]
+    },
+    "mixed-consumer@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "native2@1.0.0",
+          "marker": "sys_platform == 'linux'"
+        },
+        {
+          "key": "native3@1.0.0",
+          "marker": null
+        },
+        {
+          "key": "sdistonly@1.0.0",
+          "marker": "sys_platform == 'win32'"
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "mixed_consumer_1_0_0_whl"
+          },
+          "filename": "mixed_consumer-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "native2@1.0.0": {
+      "sdist_file": {
+        "key": "native2_1_0_0_sdist"
+      },
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "native2_1_0_0_linux"
+          },
+          "filename": "native2-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl"
+        },
+        {
+          "file_reference": {
+            "key": "native2_1_0_0_macos"
+          },
+          "filename": "native2-1.0.0-cp312-cp312-macosx_14_0_arm64.whl"
+        }
+      ]
+    },
+    "native3@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "pure-leaf@1.0.0",
+          "marker": null
+        }
+      ],
+      "sdist_file": {
+        "key": "native3_1_0_0_sdist"
+      },
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "native3_1_0_0_linux"
+          },
+          "filename": "native3-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl"
+        },
+        {
+          "file_reference": {
+            "key": "native3_1_0_0_macos"
+          },
+          "filename": "native3-1.0.0-cp312-cp312-macosx_14_0_arm64.whl"
+        },
+        {
+          "file_reference": {
+            "key": "native3_1_0_0_win"
+          },
+          "filename": "native3-1.0.0-cp312-cp312-win_amd64.whl"
+        }
+      ]
+    },
+    "pure-leaf@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "pure_leaf_1_0_0_whl"
+          },
+          "filename": "pure_leaf-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "sdistonly@1.0.0": {
+      "sdist_file": {
+        "key": "sdistonly_1_0_0_sdist"
+      }
+    },
+    "variant-dep@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "pure-leaf@1.0.0",
+          "marker": "extra == '__variant_extra_app_gpu'"
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "variant_dep_1_0_0_whl"
+          },
+          "filename": "variant_dep-1.0.0-py3-none-any.whl"
+        }
+      ]
+    }
+  },
+  "pins": {
+    "custom-build": "custom-build@1.0.0",
+    "merged-pkg": "merged-pkg@1.0.0",
+    "mixed-consumer": "mixed-consumer@1.0.0",
+    "native2": "native2@1.0.0",
+    "native3": "native3@1.0.0",
+    "pure-leaf": "pure-leaf@1.0.0",
+    "sdistonly": "sdistonly@1.0.0",
+    "variant-dep": "variant-dep@1.0.0"
+  },
+  "variants": [
+    {
+      "items": [
+        {
+          "flags": [
+            "extra_cpu"
+          ],
+          "kind": "extra",
+          "name": "cpu",
+          "package": "app"
+        },
+        {
+          "flags": [
+            "extra_gpu"
+          ],
+          "kind": "extra",
+          "name": "gpu",
+          "package": "app"
+        }
+      ],
+      "repo_default": "extra_app_cpu"
+    }
+  ]
+}

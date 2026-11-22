@@ -1,0 +1,46 @@
+package(default_visibility = ["//iniconfig:__pkg__"])
+
+alias(
+    name = "pkg",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x": "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@2.0.0",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a": "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@1.1.1",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b": "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@2.0.0",
+        "//_variants:_unselected_all_840c96e5": "//_variants:_no_variant_extra_app_x_group_app_g-a",
+        "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
+    }),
+)
+
+alias(
+    name = "wheel",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x": "@golden_overlapping_conflicts__pkgs//_wheel:iniconfig@2.0.0",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a": "@golden_overlapping_conflicts__pkgs//_wheel:iniconfig@1.1.1",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b": "@golden_overlapping_conflicts__pkgs//_wheel:iniconfig@2.0.0",
+        "//_variants:_unselected_all_840c96e5": "//_variants:_no_variant_extra_app_x_group_app_g-a",
+        "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
+    }),
+)
+
+alias(
+    name = "dist_info",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x": "@golden_overlapping_conflicts__pkgs//_lock:_dist_info_iniconfig@2.0.0",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a": "@golden_overlapping_conflicts__pkgs//_lock:_dist_info_iniconfig@1.1.1",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b": "@golden_overlapping_conflicts__pkgs//_lock:_dist_info_iniconfig@2.0.0",
+        "//_variants:_unselected_all_840c96e5": "//_variants:_no_variant_extra_app_x_group_app_g-a",
+        "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
+    }),
+)
+
+alias(
+    name = "maybe",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x": "//__actual/iniconfig:pkg",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a": "//__actual/iniconfig:pkg",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b": "//__actual/iniconfig:pkg",
+        "//_variants:_unselected_all_840c96e5": "//_variants:_no_variant_extra_app_x_group_app_g-a",
+        "//conditions:default": "//:_empty_library",
+    }),
+)
+

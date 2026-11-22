@@ -1,0 +1,98 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@bazel_skylib//lib:selects.bzl", "selects")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
+load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
+
+selects.config_setting_group(
+    name = "_selected_group_app_g-a",
+    match_any = [
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a",
+        ":_unselected_all_5283449",
+    ],
+)
+
+selects.config_setting_group(
+    name = "_unselected_all_1a2293e5",
+    match_all = [
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_extra_app_y",
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_group_app_g-a",
+    ],
+)
+
+selects.config_setting_group(
+    name = "_unselected_all_5283449",
+    match_all = [
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_group_app_g-a",
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_group_app_g-a_group_app_g-b",
+    ],
+)
+
+selects.config_setting_group(
+    name = "_unselected_all_840c96e5",
+    match_all = [
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_extra_app_y",
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_group_app_g-a",
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_group_app_g-a_group_app_g-b",
+    ],
+)
+
+string_flag(
+    name = "_variants",
+    build_setting_default = "",
+)
+
+bool_flag(
+    name = "extra_x",
+    build_setting_default = False,
+)
+
+alias(
+    name = "is_extra_x",
+    actual = "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x",
+)
+
+bool_flag(
+    name = "extra_y",
+    build_setting_default = False,
+)
+
+alias(
+    name = "is_extra_y",
+    actual = "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y",
+)
+
+bool_flag(
+    name = "group_g-a",
+    build_setting_default = False,
+)
+
+alias(
+    name = "is_group_g-a",
+    actual = ":_selected_group_app_g-a",
+)
+
+bool_flag(
+    name = "group_g-b",
+    build_setting_default = False,
+)
+
+alias(
+    name = "is_group_g-b",
+    actual = "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b",
+)
+
+pycross_no_variant_selected(
+    name = "_no_variant_extra_app_x_extra_app_y",
+    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: extra_x, extra_y (e.g. --@golden_overlapping_conflicts//_variants:extra_x=True or --@golden_overlapping_conflicts//_variants=extra_x)",
+)
+
+pycross_no_variant_selected(
+    name = "_no_variant_extra_app_x_group_app_g-a",
+    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: extra_x, group_g-a (e.g. --@golden_overlapping_conflicts//_variants:extra_x=True or --@golden_overlapping_conflicts//_variants=extra_x)",
+)
+
+pycross_no_variant_selected(
+    name = "_no_variant_group_app_g-a_group_app_g-b",
+    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: group_g-a, group_g-b (e.g. --@golden_overlapping_conflicts//_variants:group_g-a=True or --@golden_overlapping_conflicts//_variants=group_g-a)",
+)

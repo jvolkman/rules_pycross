@@ -1,0 +1,55 @@
+{
+  "packages": {
+    "app-lib@1.0.0": {
+      "marker_dependencies": [
+        {
+          "key": "forked-lib@1.0.0",
+          "marker": "python_full_version < '3.12'"
+        },
+        {
+          "key": "forked-lib@2.0.0",
+          "marker": "python_full_version >= '3.12'"
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "app_lib_1_0_0_whl"
+          },
+          "filename": "app_lib-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "forked-lib@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "forked_lib_1_0_0_whl"
+          },
+          "filename": "forked_lib-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "forked-lib@2.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "forked_lib_2_0_0_whl"
+          },
+          "filename": "forked_lib-2.0.0-py3-none-any.whl"
+        }
+      ]
+    }
+  },
+  "pins": {
+    "app-lib": "app-lib@1.0.0",
+    "forked-lib": {
+      "res_py311": "forked-lib@1.0.0",
+      "res_py312": "forked-lib@2.0.0"
+    }
+  },
+  "resolution_marker_exprs": {
+    "res_py311": "python_full_version < '3.12'",
+    "res_py312": "python_full_version >= '3.12'"
+  }
+}

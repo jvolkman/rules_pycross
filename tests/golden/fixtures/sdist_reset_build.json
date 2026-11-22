@@ -1,0 +1,51 @@
+{
+  "packages": {
+    "merged-pkg@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "merged_pkg_1_0_0_linux"
+          },
+          "filename": "merged_pkg-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl"
+        }
+      ]
+    },
+    "pure-leaf@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "pure_leaf_1_0_0_whl"
+          },
+          "filename": "pure_leaf-1.0.0-py3-none-any.whl"
+        }
+      ]
+    }
+  },
+  "pins": {
+    "merged-pkg": "merged-pkg@1.0.0",
+    "pure-leaf": "pure-leaf@1.0.0"
+  },
+  "variants": [
+    {
+      "items": [
+        {
+          "flags": [
+            "extra_cpu"
+          ],
+          "kind": "extra",
+          "name": "cpu",
+          "package": "app"
+        },
+        {
+          "flags": [
+            "extra_gpu"
+          ],
+          "kind": "extra",
+          "name": "gpu",
+          "package": "app"
+        }
+      ],
+      "repo_default": "extra_app_cpu"
+    }
+  ]
+}

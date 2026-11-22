@@ -1,0 +1,42 @@
+package(default_visibility = ["//typing_extensions:__pkg__"])
+
+alias(
+    name = "pkg",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x_res_py312": "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.11.0",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y": "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.12.2",
+        "//_variants:_unselected_all_1a2293e5": "//_variants:_no_variant_extra_app_x_extra_app_y",
+        "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
+    }),
+)
+
+alias(
+    name = "wheel",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x_res_py312": "@golden_overlapping_conflicts__pkgs//_wheel:typing-extensions@4.11.0",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y": "@golden_overlapping_conflicts__pkgs//_wheel:typing-extensions@4.12.2",
+        "//_variants:_unselected_all_1a2293e5": "//_variants:_no_variant_extra_app_x_extra_app_y",
+        "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
+    }),
+)
+
+alias(
+    name = "dist_info",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x_res_py312": "@golden_overlapping_conflicts__pkgs//_lock:_dist_info_typing-extensions@4.11.0",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y": "@golden_overlapping_conflicts__pkgs//_lock:_dist_info_typing-extensions@4.12.2",
+        "//_variants:_unselected_all_1a2293e5": "//_variants:_no_variant_extra_app_x_extra_app_y",
+        "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
+    }),
+)
+
+alias(
+    name = "maybe",
+    actual = select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x_res_py312": "//__actual/typing_extensions:pkg",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y": "//__actual/typing_extensions:pkg",
+        "//_variants:_unselected_all_1a2293e5": "//_variants:_no_variant_extra_app_x_extra_app_y",
+        "//conditions:default": "//:_empty_library",
+    }),
+)
+

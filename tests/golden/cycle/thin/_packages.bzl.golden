@@ -1,0 +1,13 @@
+"""Generated package metadata. Do not edit."""
+
+PACKAGES = {
+    "cycle_a": struct(
+        has_sdist = False,
+    ),
+    "cycle_b": struct(
+        has_sdist = False,
+    ),
+    "leaf": struct(
+        has_sdist = False,
+    ),
+}

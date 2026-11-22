@@ -1,0 +1,28 @@
+load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")
+
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "cycle_b",
+    actual = ":pkg",
+)
+
+pycross_library_proxy(
+    name = "pkg",
+    actual = "@golden_cycle__pkgs//_lock:cycle-b@1.0.0",
+)
+
+pycross_file_proxy(
+    name = "wheel",
+    actual = "@golden_cycle__pkgs//_wheel:cycle-b@1.0.0",
+)
+
+pycross_file_proxy(
+    name = "dist_info",
+    actual = "@golden_cycle__pkgs//_lock:_dist_info_cycle-b@1.0.0",
+)
+
+alias(
+    name = "data",
+    actual = ":pkg",
+)

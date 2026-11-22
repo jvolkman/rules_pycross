@@ -1,0 +1,49 @@
+load("@rules_pycross//pycross/private:proxy.bzl", "pycross_transitioning_file_proxy")
+load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_library")
+package(default_visibility = ["//visibility:public"])
+
+# Empty library for _maybe_ targets on incompatible platforms.
+py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
+
+platform(
+    name = "_internal_platform",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+pycross_transitioning_file_proxy(
+    name = "modules_mapping",
+    actual = ":_modules_mapping",
+    platform = "//:_internal_platform",
+)
+
+exports_files(["requirements.bzl", "_packages.bzl"])
+
+pycross_modules_mapping(
+    name = "_modules_mapping",
+    deps = [
+        "@golden_forks__pkgs//_lock:app-lib@1.0.0",
+    ] + select({
+        "@golden_forks__pkgs//_lock:is_res_py311": [
+            "@golden_forks__pkgs//_lock:forked-lib@1.0.0",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        "@golden_forks__pkgs//_lock:is_res_py312": [
+            "@golden_forks__pkgs//_lock:forked-lib@2.0.0",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+alias(
+    name = "app-lib",
+    actual = "//app_lib:pkg",
+)
+alias(
+    name = "forked-lib",
+    actual = "//forked_lib:pkg",
+)
