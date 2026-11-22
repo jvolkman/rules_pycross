@@ -21,7 +21,7 @@ py_library = _py_library
 py_test = _py_test
 """
 
-def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000, quiet = False):
+def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000, quiet = False, include_patch_module = False):
     """
     Execute a script under //pycross/private/tools.
 
@@ -32,6 +32,8 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
       flagfile_param: the parameter name used when dumping arguments to a flag file
       flagfile_threshold: use a flag file if len(args) >= this value
       quiet: The quiet value to pass to rctx.execute.
+      include_patch_module: Whether to add //pycross/private/patching to sys.path
+        and watch pycross_patch.py as a repo input.
 
     Returns:
       exec_result
@@ -58,32 +60,33 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
         rctx.file(flagfile, flagfile_data)
         args = [flagfile_param, str(flagfile)]
 
-    # Repo-time tools may import the stdlib-only patch engine (inspect_package applies
-    # pre_build_patches).
-    patch_module = Label("//pycross/private/patching:pycross_patch.py")
-    patch_module_dir = rctx.path(patch_module).dirname
-
     # rctx.path() doesn't record its file as an input, so changes to the tool (or to the patch
-    # module it may import) wouldn't re-run the calling repo rule, and the repo contents cache
+    # module when needed) wouldn't re-run the calling repo rule, and the repo contents cache
     # would keep serving stale results. Watch them explicitly.
     if hasattr(rctx, "watch"):
         rctx.watch(tool)
-        rctx.watch(patch_module)
+
+    extra_sys_path = ""
+    if include_patch_module:
+        patch_module = Label("//pycross/private/patching:pycross_patch.py")
+        patch_module_dir = rctx.path(patch_module).dirname
+        if hasattr(rctx, "watch"):
+            rctx.watch(patch_module)
+        extra_sys_path = "sys.path.insert(0, {})\n".format(repr(str(patch_module_dir)))
 
     wrapper_script = """
 import runpy
 import sys
 
 tool_path = {tool}
-sys.path.insert(0, {patch_module_dir})
-sys.argv = [tool_path] + sys.argv[1:]
+{extra_sys_path}sys.argv = [tool_path] + sys.argv[1:]
 
 runpy.run_path(tool_path, run_name="__main__")
 """
 
     wrapper_file = rctx.path("_internal_wrapper.py")
     rctx.file(wrapper_file, wrapper_script.format(
-        patch_module_dir = repr(str(patch_module_dir)),
+        extra_sys_path = extra_sys_path,
         tool = repr(str(rctx.path(tool))),
     ))
 
@@ -185,6 +188,9 @@ bzl_library(
 )
 """)
     rctx.file("defaults.bzl", _defaults_bzl(rctx))
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
 
 pycross_internal_config_repo = repository_rule(
     implementation = _pycross_internal_config_repo_impl,

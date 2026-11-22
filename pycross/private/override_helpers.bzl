@@ -43,6 +43,9 @@ def _overrides_repo_impl(rctx):
     """Simple repo that exports an overrides.json file."""
     rctx.file("overrides.json", rctx.attr.content)
     rctx.file("BUILD.bazel", 'exports_files(["overrides.json"])')
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
 
 create_overrides_repo = repository_rule(
     implementation = _overrides_repo_impl,

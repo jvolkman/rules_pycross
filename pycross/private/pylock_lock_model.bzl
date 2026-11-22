@@ -65,12 +65,14 @@ def _selects_requested_group(marker, requested_groups):
                 return True
     return False
 
-def _set_dependency(pkg, dep_pkg, marker):
+def _set_dependencies(pkg, updates):
+    """Replace or append dependency entries in one pass, preserving order."""
+    updated_keys = {(d["name"], d["version"]): True for d in updates}
     pkg["dependencies"] = [
         d
         for d in pkg["dependencies"]
-        if (d["name"], d["version"]) != (dep_pkg["name"], dep_pkg["version"])
-    ] + [{"name": dep_pkg["name"], "version": dep_pkg["version"], "marker": marker}]
+        if (d["name"], d["version"]) not in updated_keys
+    ] + updates
 
 def _link_through_hub(lock_packages, versions_all):
     """Ties a graphless lock into a single dependency cycle.
@@ -95,14 +97,23 @@ def _link_through_hub(lock_packages, versions_all):
         if versions_all[lock_packages[k]["name"]] == {lock_packages[k]["version"]: ""}
     ]
     hubs = unconditional[:1] or keys
+    single_hub = len(hubs) == 1
+    hub_pkg = lock_packages[hubs[0]] if single_hub else None
+    hub_back_dep = [{"name": hub_pkg["name"], "version": hub_pkg["version"], "marker": ""}] if single_hub else None
     for hub in hubs:
+        hub_updates = []
         for k in keys:
             if k == hub:
                 continue
             pkg = lock_packages[k]
-            _set_dependency(lock_packages[hub], pkg, versions_all[pkg["name"]][pkg["version"]])
-            if len(hubs) == 1:
-                _set_dependency(pkg, lock_packages[hub], "")
+            hub_updates.append({
+                "name": pkg["name"],
+                "version": pkg["version"],
+                "marker": versions_all[pkg["name"]][pkg["version"]],
+            })
+            if single_hub:
+                _set_dependencies(pkg, hub_back_dep)
+        _set_dependencies(lock_packages[hub], hub_updates)
 
 def _resolve_pylock_project_pins(project_dict, lock_model, lock_packages, deps_by_name, pkg_markers, versions_all):
     """Filter lock_packages and compute pins, testonly_pins, and root_dependency_markers."""
@@ -180,29 +191,32 @@ def _resolve_pylock_project_pins(project_dict, lock_model, lock_packages, deps_b
     all_roots = dict(root_package_names)
     all_roots.update(testonly_package_names)
     queue = sorted(all_roots.keys())
+    enqueued = dict(all_roots)
+    head = 0
 
     # Starlark has no while loop, simulate with for+range.
-    # Upper bound: each edge can add one item to the queue, plus the initial queue size.
+    # Each unique package name is enqueued at most once; upper bound is initial roots + edges.
     total_edges = 0
     for pkg_key in lock_packages:
         total_edges += len(lock_packages[pkg_key].get("dependencies", []))
     max_iter = total_edges + len(queue) + 1
     for _ in range(max_iter):
-        if not queue:
+        if head >= len(queue):
             break
-        curr = queue[0]
-        queue = queue[1:]
-        if curr in visited_names:
-            continue
+        curr = queue[head]
+        head += 1
         visited_names[curr] = True
 
         for pkg_key in deps_by_name.get(curr, []):
             if pkg_key not in lock_packages:
                 continue
             for dep in lock_packages[pkg_key].get("dependencies", []):
-                queue.append(parse_package_key(dep["name"]).name)
+                dep_name = parse_package_key(dep["name"]).name
+                if dep_name not in enqueued:
+                    enqueued[dep_name] = True
+                    queue.append(dep_name)
 
-    if queue:
+    if head < len(queue):
         fail("BFS traversal exceeded max iterations; this is a bug in pycross")
 
     # PDM's export drops extras edges (requests[socks] -> pysocks), leaving
@@ -475,7 +489,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         result["root_dependency_markers"] = filtered_root_markers
     return result
 
-def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model):
+def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the pylock translator in pure Starlark."""
-    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "the pylock file")
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "the pylock file", toml_cache)
     return translate_pylock(lock_dict, project_dict, lock_model)

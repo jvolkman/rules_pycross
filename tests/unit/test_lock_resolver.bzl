@@ -250,7 +250,7 @@ def _test_synthesized_deps_impl(env, target):
     extra_pkg = res.packages["foo[extra]@1.0"]
 
     # It should depend on the base package
-    env.expect.that_collection([d["name"] for d in extra_pkg["dependencies"]]).contains("foo")
+    env.expect.that_collection([d["key"] for d in extra_pkg["marker_dependencies"]]).contains("foo@1.0")
 
 def _test_synthesized_deps(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

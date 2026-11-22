@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:git_file.bzl", "parse_git_url")
+load("//pycross/private:git_file.bzl", "is_full_commit_sha_for_testing", "parse_git_url")
 
 _SHA = "be7c37807fc9f4f035ba4efc7dc33f42099f8308"
 
@@ -37,11 +37,23 @@ def _test_parse_git_url_uv_query_impl(env, target):
 def _test_parse_git_url_uv_query(name):
     _unit_test(name, _test_parse_git_url_uv_query_impl)
 
+# buildifier: disable=unused-variable
+def _test_is_full_commit_sha_impl(env, target):
+    env.expect.that_bool(is_full_commit_sha_for_testing(_SHA)).equals(True)
+    env.expect.that_bool(is_full_commit_sha_for_testing("a" * 64)).equals(True)
+    env.expect.that_bool(is_full_commit_sha_for_testing("main")).equals(False)
+    env.expect.that_bool(is_full_commit_sha_for_testing(_SHA[:12])).equals(False)
+    env.expect.that_bool(is_full_commit_sha_for_testing("g" + _SHA[1:])).equals(False)
+
+def _test_is_full_commit_sha(name):
+    _unit_test(name, _test_is_full_commit_sha_impl)
+
 def git_file_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_parse_git_url_plain,
             _test_parse_git_url_uv_query,
+            _test_is_full_commit_sha,
         ],
     )

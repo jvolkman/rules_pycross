@@ -61,18 +61,39 @@ def normalize_package_tag(tag):
         precompile = tag.precompile,
     )
 
-def discover_uv_all_members(mctx, lock_file_label):
+def read_toml_cached(ctx, file_label, toml_cache = None):
+    """Read and decode a TOML file, caching the decoded dict by label.
+
+    Args:
+        ctx: The module_ctx or repository_ctx object.
+        file_label: Label of the TOML file to read.
+        toml_cache: Optional dict mapping Label -> decoded dict (or None if missing).
+
+    Returns:
+        The decoded TOML dict, or None if the file does not exist.
+    """
+    if toml_cache != None and file_label in toml_cache:
+        return toml_cache[file_label]
+    path = ctx.path(file_label)
+    data = decode(ctx.read(path)) if path.exists else None
+    if toml_cache != None:
+        toml_cache[file_label] = data
+    return data
+
+def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
     """Parse uv.lock and return workspace members (editable packages).
 
     Args:
         mctx: The module_ctx object.
         lock_file_label: Label of the uv.lock file.
+        toml_cache: Optional dict caching decoded TOML files by label.
 
     Returns:
         A list of structs with 'name' and 'path' fields.
     """
-    lock_content = mctx.read(lock_file_label)
-    lock_data = decode(lock_content)
+    lock_data = read_toml_cached(mctx, lock_file_label, toml_cache)
+    if lock_data == None:
+        fail("Lock file not found: {}".format(lock_file_label))
 
     # uv.lock uses "package" (newer) or "distribution" (older) for the package list.
     packages_list = lock_data.get("package", lock_data.get("distribution", []))
@@ -102,18 +123,20 @@ def discover_uv_all_members(mctx, lock_file_label):
 
     return members
 
-def discover_pdm_all_members(mctx, lock_file_label):
+def discover_pdm_all_members(mctx, lock_file_label, toml_cache = None):
     """Parse pdm.lock and return workspace members (editable local packages).
 
     Args:
         mctx: The module_ctx object.
         lock_file_label: Label of the pdm.lock file.
+        toml_cache: Optional dict caching decoded TOML files by label.
 
     Returns:
         A list of structs with 'name' and 'path' fields.
     """
-    lock_content = mctx.read(lock_file_label)
-    lock_data = decode(lock_content)
+    lock_data = read_toml_cached(mctx, lock_file_label, toml_cache)
+    if lock_data == None:
+        fail("Lock file not found: {}".format(lock_file_label))
 
     packages_list = lock_data.get("package", [])
 
@@ -128,10 +151,10 @@ def discover_pdm_all_members(mctx, lock_file_label):
 
     return members
 
-def discover_poetry_all_members(_mctx, _lock_file_label):
+def discover_poetry_all_members(_mctx, _lock_file_label, _toml_cache = None):
     return [struct(name = "root", path = "")]
 
-def discover_pylock_all_members(_mctx, _lock_file_label):
+def discover_pylock_all_members(_mctx, _lock_file_label, _toml_cache = None):
     return [struct(name = "root", path = "")]
 
 def resolve_member_project_file(lock_file_label, member_path):
@@ -356,7 +379,8 @@ def process_workspaces(
         member_tags,
         discover_members_fn,
         model_type,
-        root_direct_deps):
+        root_direct_deps,
+        toml_cache = None):
     """Processes workspace definitions, discovers members, and processes them.
 
     Args:
@@ -369,6 +393,7 @@ def process_workspaces(
         discover_members_fn: Function to discover members.
         model_type: The lock model type.
         root_direct_deps: List to store root direct dependencies.
+        toml_cache: Optional dict caching decoded TOML files by label.
     """
 
     # Collect workspace definitions
@@ -381,7 +406,7 @@ def process_workspaces(
     # Auto-discover members for each workspace
     workspace_discovered_members = {}
     for name, ws_info in workspaces.items():
-        discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file)
+        discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file, toml_cache)
         workspace_discovered_members[name] = {m.name: m for m in discovered}
 
     # Compute extra_project_files for each workspace (explicit or auto-discovered)

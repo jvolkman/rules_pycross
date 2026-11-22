@@ -242,7 +242,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         root_dependency_markers = root_dependency_markers,
     )
 
-def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model):
+def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the PDM translator in pure Starlark."""
-    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "pdm.lock")
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "pdm.lock", toml_cache)
     return translate_pdm(project_dict, lock_dict, lock_model)

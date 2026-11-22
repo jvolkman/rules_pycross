@@ -252,7 +252,8 @@ def create_repos(
         repo_platforms,
         workspace_pypi_indexes = {},
         repo_settings = {},
-        resolved_locks = None):
+        resolved_locks = None,
+        resolved_locks_json = None):
     """Create all Bazel repos from resolved lock data.
 
     Args:
@@ -267,6 +268,8 @@ def create_repos(
         resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
             lock data is taken from this dict instead of reading from all_locks file labels.
             all_locks is still used for passing labels to package_repo/thin_package_repo.
+        resolved_locks_json: Optional dict of repo_name -> pre-encoded JSON string for
+            package_repo.member_lock_data, avoiding duplicate json.encode() calls.
 
     Returns:
         None. Creates repos as a side effect.
@@ -466,7 +469,12 @@ def create_repos(
         )
         if ws_overrides_json:
             package_repo_attrs["override_configs"] = ws_overrides_json
-        if resolved_locks:
+        if resolved_locks_json:
+            package_repo_attrs["member_lock_data"] = {
+                member: resolved_locks_json[member]
+                for member in member_repos
+            }
+        elif resolved_locks:
             package_repo_attrs["member_lock_data"] = {
                 member: json.encode(per_repo_data[member].resolved_lock)
                 for member in member_repos

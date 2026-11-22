@@ -145,7 +145,7 @@ def _is_item_requested(item, requested_keys):
     return "group:" + item["name"] in requested_keys
 
 def _rewrite_conflict_markers(marker, token_replacements):
-    if not marker or not token_replacements:
+    if not marker or not token_replacements or "extra" not in marker:
         return marker
     for old_quoted, new_quoted in token_replacements:
         if old_quoted in marker:
@@ -793,7 +793,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
         root_dependency_markers = root_dependency_markers,
     )
 
-def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model):
+def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the UV translator in pure Starlark."""
-    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "uv.lock")
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "uv.lock", toml_cache)
     return translate_uv(project_dict, lock_dict, lock_model)

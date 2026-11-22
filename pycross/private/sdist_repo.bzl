@@ -388,6 +388,7 @@ def _sdist_repo_common(rctx):
         rctx,
         Label("//pycross/private/tools:inspect_package.py"),
         inspect_args,
+        include_patch_module = bool(rctx.attr.pre_build_patches),
     )
 
     metadata = json.decode(rctx.read(output_json))

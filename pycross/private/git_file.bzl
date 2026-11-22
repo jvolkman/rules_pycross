@@ -2,6 +2,17 @@
 
 load(":internal_repo.bzl", "exec_internal_tool")
 
+_HEX_CHARS = "0123456789abcdefABCDEF"
+
+def _is_full_commit_sha(commit):
+    """Return True if commit is a full 40-char SHA-1 or 64-char SHA-256 hex digest."""
+    if len(commit) not in (40, 64):
+        return False
+    for ch in commit.elems():
+        if ch not in _HEX_CHARS:
+            return False
+    return True
+
 def parse_git_url(url):
     """Splits a lock file git URL into its remote, commit and options.
 
@@ -87,13 +98,14 @@ def _pycross_git_file_impl(rctx):
         # `git lfs pull` only checks out objects in repos with LFS installed.
         _git(rctx, git_path, ["lfs", "install", "--local"], "Failed to set up Git LFS")
         _git(rctx, git_path, ["lfs", "pull"], "Failed to fetch Git LFS objects", skip_smudge = False)
-        _git(
-            rctx,
-            git_path,
-            ["submodule", "foreach", "-q", "--recursive", "git lfs install --local && git lfs pull"],
-            "Failed to fetch Git LFS objects for submodules",
-            skip_smudge = False,
-        )
+        if rctx.path("checkout/.gitmodules").exists:
+            _git(
+                rctx,
+                git_path,
+                ["submodule", "foreach", "-q", "--recursive", "git lfs install --local && git lfs pull"],
+                "Failed to fetch Git LFS objects for submodules",
+                skip_smudge = False,
+            )
 
     # Record the commit time as every entry's mtime, as `git archive` does.
     mtime = _git(rctx, git_path, ["log", "-1", "--format=%ct", "HEAD"], "Failed to read commit time").stdout.strip()
@@ -123,6 +135,10 @@ exports_files(["{filename}"])
     # Clean up the git clone.
     rctx.delete("checkout")
 
+    if hasattr(rctx, "repo_metadata") and _is_full_commit_sha(src.commit):
+        return rctx.repo_metadata(reproducible = True)
+    return None
+
 pycross_git_file = repository_rule(
     implementation = _pycross_git_file_impl,
     attrs = {
@@ -130,3 +146,6 @@ pycross_git_file = repository_rule(
         "filename": attr.string(mandatory = True),
     },
 )
+
+# Visible for testing
+is_full_commit_sha_for_testing = _is_full_commit_sha

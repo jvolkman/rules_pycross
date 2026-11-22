@@ -7,6 +7,9 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["data.json"])
 """)
     rctx.file("data.json", rctx.attr.content)
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
 
 json_file_repo = repository_rule(
     implementation = _json_file_repo_impl,

@@ -595,7 +595,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         root_dependency_markers = root_dependency_markers,
     )
 
-def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model):
+def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the Poetry translator in pure Starlark."""
-    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "poetry.lock")
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "poetry.lock", toml_cache)
     return translate_poetry(project_dict, lock_dict, lock_model)
