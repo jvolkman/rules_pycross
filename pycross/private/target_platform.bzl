@@ -12,6 +12,7 @@ PycrossTargetPlatformInfo = provider(
         "abis": "List of compatible ABIs.",
         "platforms": "List of compatible platforms.",
         "compatibility_tags": "List of compatible PEP 425 tags, ordered by preference.",
+        "tag_priority": "Dict mapping lowercase PEP 425 tag string to preference rank (0 is most preferred).",
         "markers": "Dict of PEP 508 markers.",
     },
 )
@@ -98,6 +99,7 @@ def _pycross_target_platform_impl(ctx):
         impl = impl_prefix,
         abis = abis,
     )
+    tag_priority = pypackaging.tags.priority_map(tags)
 
     # Generate JSON for TargetEnv compatibility
     target_env_data = {
@@ -124,6 +126,7 @@ def _pycross_target_platform_impl(ctx):
             abis = abis,
             platforms = platforms,
             compatibility_tags = tags,
+            tag_priority = tag_priority,
             markers = markers,
         ),
         DefaultInfo(files = depset([out_json])),

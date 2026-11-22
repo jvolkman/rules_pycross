@@ -611,7 +611,7 @@ def _transition_settings(variant_info, variant_pins, workspace_repo, member_name
         fixed_settings.update(_usable_settings(variant_info, pins_by_set, excluded, workspace_repo))
     return struct(fixed_settings = fixed_settings, pins_by_set = pins_by_set, excluded = excluded)
 
-def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None, pins_by_set = None, excluded = None):
+def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None, pins_by_set = None, excluded = None, expose_variant_flags = True):
     """Render _variants/BUILD.bazel: this repo's variant flags.
 
     The workspace repo's variant resolvers read these bool_flags (see
@@ -629,22 +629,26 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
             groups that the repo's selects reference.
         pins_by_set: {set suffix: qname} this repo's transition pins.
         excluded: {qname: True} of items that conflict with those pins.
+        expose_variant_flags: Whether to emit user-facing `_variants` flags and
+            `is_<flag>` config_settings (False for auto-generated `<ws>__build`).
 
     Returns:
         The file content, or None if the repo has no variants.
     """
-    if not variant_info.flags and not variant_info.sets:
+    flags = variant_info.flags if expose_variant_flags else {}
+    if not flags and not variant_info.sets:
         return None
 
     pins_by_set = pins_by_set or {}
     excluded = excluded or {}
     defaults = {}  # qname -> [set suffixes where this repo selects it by default or pins it]
-    for set_suffix, vset in variant_info.sets.items():
-        selected = pins_by_set.get(set_suffix) or vset.pin
-        if not selected and vset.default not in excluded:
-            selected = vset.default
-        if selected:
-            defaults.setdefault(selected, []).append(set_suffix)
+    if expose_variant_flags:
+        for set_suffix, vset in variant_info.sets.items():
+            selected = pins_by_set.get(set_suffix) or vset.pin
+            if not selected and vset.default not in excluded:
+                selected = vset.default
+            if selected:
+                defaults.setdefault(selected, []).append(set_suffix)
 
     body = []
     needs_selects = False
@@ -679,7 +683,7 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
         body.extend(['        "@{}//_lock:_unselected_{}",'.format(workspace_repo, s) for s in set_suffixes])
         body.extend(["    ],", ")", ""])
 
-    if variant_info.flags:
+    if flags:
         body.extend([
             "string_flag(",
             '    name = "_variants",',
@@ -688,7 +692,7 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
             "",
         ])
 
-    for flag, qnames in sorted(variant_info.flags.items()):
+    for flag, qnames in sorted(flags.items()):
         body.extend([
             "bool_flag(",
             '    name = "{}",'.format(flag),
@@ -714,7 +718,7 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
         body.extend(["    ],", ")", ""])
 
     for set_suffix, vset in sorted(variant_info.sets.items()):
-        if vset.flags:
+        if expose_variant_flags and vset.flags:
             message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True or --@{}//_variants={})".format(
                 ", ".join(vset.flags),
                 repo_name,
@@ -738,7 +742,7 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
     header = ['package(default_visibility = ["//visibility:public"])', ""]
     if needs_selects:
         header.append('load("@bazel_skylib//lib:selects.bzl", "selects")')
-    if variant_info.flags:
+    if flags:
         header.append('load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")')
     if variant_info.sets:
         header.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")')
@@ -1230,6 +1234,7 @@ pycross_transitioning_file_proxy = rule(
         unselected_groups = no_variant_fallbacks.groups,
         pins_by_set = pins_by_set,
         excluded = excluded,
+        expose_variant_flags = rctx.attr.expose_variant_flags,
     )
     if variants_build:
         rctx.file("_variants/BUILD.bazel", variants_build)
@@ -1386,6 +1391,10 @@ thin_package_repo = repository_rule(
         ),
         "override_configs": attr.string(
             doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",
+        ),
+        "expose_variant_flags": attr.bool(
+            doc = "Whether to emit user-facing `_variants` flags in this thin repo.",
+            default = True,
         ),
     },
 )

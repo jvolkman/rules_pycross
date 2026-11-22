@@ -41,19 +41,23 @@ def _pycross_library_proxy_impl(ctx):
     actual = ctx.attr.actual[0] if type(ctx.attr.actual) == "list" else ctx.attr.actual
     deps = ctx.attr.deps
 
-    # Merge PyInfo from actual + deps using the standard pycross merge utility.
-    all_deps = [actual] + deps
-    merged = merge_py_providers(
-        ctx,
-        all_deps,
-    )
+    if deps:
+        # Merge PyInfo from actual + deps using the standard pycross merge utility.
+        merged = merge_py_providers(ctx, [actual] + deps)
+        py_info = merged.py_info
+        runfiles = merged.runfiles
+    else:
+        # Fast path for thin-repo and deps-free proxies: forward providers directly
+        # without instantiating PyInfoBuilder or wrapping depsets.
+        py_info = actual[PyInfo]
+        runfiles = actual[DefaultInfo].default_runfiles
 
     providers = [
         DefaultInfo(
             files = actual[DefaultInfo].files,
-            runfiles = merged.runfiles,
+            runfiles = runfiles,
         ),
-        merged.py_info,
+        py_info,
     ]
 
     # Forward pycross-specific providers from the actual target.
