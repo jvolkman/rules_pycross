@@ -25,7 +25,7 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
         resolution_marker_exprs: Lock `resolution_marker_exprs` dict, or None.
 
     Returns:
-        `struct(deps_lines, extra_target_lines, maybe_mapping_targets, needs_selects)`.
+        `struct(deps_lines, extra_target_lines, maybe_mapping_targets, needs_selects, unselected_groups)`.
     """
     pins_by_set = pins_by_set or {}
     excluded = excluded or {}
@@ -61,6 +61,7 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
     extra_target_lines = []
     emitted_unselected_compounds = {}
     emitted_any_groups = {}
+    unselected_groups = {}
     by_cond = {}  # condition_label -> [dep_label, ...]
 
     for dep_label in sorted(conditional.keys()):
@@ -102,7 +103,9 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
             if has_pin_or_default:
                 continue
 
-            unselected_cond = unselected_condition(sorted(v_sets), workspace_repo, no_variant_fallbacks.groups)
+            unselected = unselected_condition(sorted(v_sets), workspace_repo)
+            unselected_groups.update(unselected.groups)
+            unselected_cond = unselected.condition
 
             if marker_cname:
                 comp_name = "_mm_unselected_{}".format(sanitize_name(constraint))
@@ -143,4 +146,5 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
         extra_target_lines = extra_target_lines,
         maybe_mapping_targets = maybe_mapping_targets,
         needs_selects = bool(extra_target_lines),
+        unselected_groups = unselected_groups,
     )

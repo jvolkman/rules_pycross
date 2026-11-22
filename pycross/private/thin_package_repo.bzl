@@ -14,13 +14,13 @@ The file structure is:
 
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS", "PACKAGE_REPO_HOOK_SUBDIRS")
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
-load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS", "cargo_build", "emit_backend_files", "hook_subdir_build", "packages_bzl", "pin_versions", "requirements_bzl")
+load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS", "emit_backend_files", "hook_subdir_build", "packages_bzl", "pin_versions", "requirements_bzl")
 load("//pycross/private/thin_repo:modules_mapping_deps.bzl", "modules_mapping_deps")
-load("//pycross/private/thin_repo:pins.bzl", "append_root_aliases", "emit_pin_directories", "pin_build")
+load("//pycross/private/thin_repo:pins.bzl", "append_root_aliases", "emit_pin_directories")
 load("//pycross/private/thin_repo:selects.bzl", "variant_fallbacks")
-load("//pycross/private/thin_repo:transition.bzl", "flag_values", "render_transition_bzl")
+load("//pycross/private/thin_repo:transition.bzl", "render_transition_bzl")
 load("//pycross/private/thin_repo:variants.bzl", "collect_variants", "transition_settings", "variants_build")
-load(":util.bzl", "base_packages_with_extras", "is_platform_specific", "parse_package_key")
+load(":util.bzl", "base_packages_with_extras", "parse_package_key")
 
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
@@ -111,6 +111,8 @@ def _thin_package_repo_impl(rctx):
             render_transition_bzl(rctx.attr.member_name, rctx.attr.flags, rctx.attr.settings, fixed_settings),
         )
 
+    unselected_groups = {}
+
     # Collect conditional deps and platform-specific packages for modules_mapping.
     mm = modules_mapping_deps(
         pins,
@@ -122,6 +124,7 @@ def _thin_package_repo_impl(rctx):
         excluded = excluded,
         resolution_marker_exprs = lock.get("resolution_marker_exprs", {}),
     )
+    unselected_groups.update(mm.unselected_groups)
     if mm.needs_selects:
         root_build_lines.insert(0, 'load("@bazel_skylib//lib:selects.bzl", "selects")')
 
@@ -163,7 +166,7 @@ def _thin_package_repo_impl(rctx):
         append_root_aliases(root_build_lines, grouped_pins, extras_by_base)
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
-    emit_pin_directories(
+    unselected_groups.update(emit_pin_directories(
         rctx,
         grouped_pins,
         packages,
@@ -173,7 +176,7 @@ def _thin_package_repo_impl(rctx):
         target_platform,
         has_flags,
         testonly_pins_set,
-    )
+    ))
     emit_backend_files(rctx, rctx.attr.backend_configs, workspace_repo)
 
     rctx.file("_packages.bzl", packages_bzl(grouped_pins, packages))
@@ -189,7 +192,7 @@ def _thin_package_repo_impl(rctx):
     if rctx.attr.override_configs and hook_backends_by_subdir:
         override_configs = json.decode(rctx.attr.override_configs)
         for subdir, hook_backends in sorted(hook_backends_by_subdir.items()):
-            hook_build = hook_subdir_build(
+            hook_result = hook_subdir_build(
                 grouped_pins,
                 packages,
                 override_configs,
@@ -198,22 +201,23 @@ def _thin_package_repo_impl(rctx):
                 hook_backends = hook_backends,
                 subdir = subdir,
             )
-            if hook_build:
-                rctx.file("{}/BUILD.bazel".format(subdir), hook_build)
+            if hook_result:
+                unselected_groups.update(hook_result.unselected_groups)
+                rctx.file("{}/BUILD.bazel".format(subdir), hook_result.build)
 
-    # _variants/ BUILD: this repo's variant flags (see variants_build). Last,
-    # since the selects above collect the `_unselected_all_*` groups it emits.
-    variants_b = variants_build(
+    # _variants/ BUILD: this repo's variant flags (see variants_build), including
+    # every `_unselected_all_*` group collected from the selects above.
+    variants_content = variants_build(
         variant_info,
         workspace_repo,
         getattr(rctx, "original_name", "") or "<repo>",
-        unselected_groups = no_variant_fallbacks.groups,
+        unselected_groups = unselected_groups,
         pins_by_set = pins_by_set,
         excluded = excluded,
         expose_variant_flags = rctx.attr.expose_variant_flags,
     )
-    if variants_b:
-        rctx.file("_variants/BUILD.bazel", variants_b)
+    if variants_content:
+        rctx.file("_variants/BUILD.bazel", variants_content)
 
     rctx.file("pin_versions.json", json.encode(pin_versions(grouped_pins)))
 
@@ -268,20 +272,3 @@ thin_package_repo = repository_rule(
         ),
     },
 )
-
-# Visible for testing
-collect_variants_for_testing = collect_variants
-variant_fallbacks_for_testing = variant_fallbacks
-transition_settings_for_testing = transition_settings
-variants_build_for_testing = variants_build
-pin_build_for_testing = pin_build
-flag_values_for_testing = flag_values
-is_platform_specific_for_testing = is_platform_specific
-requirements_bzl_for_testing = requirements_bzl
-packages_bzl_for_testing = packages_bzl
-pin_versions_for_testing = pin_versions
-modules_mapping_deps_for_testing = modules_mapping_deps
-cargo_build_for_testing = cargo_build
-hook_subdir_build_for_testing = hook_subdir_build
-render_transition_bzl_for_testing = render_transition_bzl
-render_maybe_build_for_testing = render_maybe_build
