@@ -270,12 +270,31 @@ def _test_merge_dependencies_paths_impl(env, target):
         "bin_paths": ["foo-bin"],
         "data_paths": ["foo-data"],
         "include_paths": ["foo-inc"],
+        "availability_markers": ["sys_platform == 'linux'"],
     })
-    merged = merge_dependencies_for_testing(entry_a[1], [entry_a, entry_b])
+    entry_c = ("member_c", {
+        "availability_markers": ["sys_platform == 'darwin'", "sys_platform == 'linux'"],
+    })
+    merged = merge_dependencies_for_testing(entry_a[1], [entry_a, entry_b, entry_c])
     env.expect.that_collection(merged.get("site_paths", [])).contains_exactly(["foo"])
     env.expect.that_collection(merged.get("bin_paths", [])).contains_exactly(["foo-bin"])
     env.expect.that_collection(merged.get("data_paths", [])).contains_exactly(["foo-data"])
     env.expect.that_collection(merged.get("include_paths", [])).contains_exactly(["foo-inc"])
+    env.expect.that_collection(merged.get("availability_markers", [])).contains_exactly([
+        "sys_platform == 'darwin'",
+        "sys_platform == 'linux'",
+    ]).in_order()
+
+    # When one member is wheel-only platform-specific and another provides an sdist,
+    # emit_unconditional_wheel_available ensures the wheel-only member's thin repo
+    # still resolves @ws//_lock:_wheel_available_<pkg>.
+    wheel_only = ("member_a", {"wheel_candidates": [{"filename": "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}]})
+    with_sdist = ("member_b", {
+        "wheel_candidates": [{"filename": "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+        "sdist_file": {"key": "foo_sdist"},
+    })
+    merged_sdist = merge_dependencies_for_testing(wheel_only[1], [wheel_only, with_sdist])
+    env.expect.that_bool(merged_sdist.get("emit_unconditional_wheel_available", False)).equals(True)
 
 def _test_merge_dependencies_paths(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

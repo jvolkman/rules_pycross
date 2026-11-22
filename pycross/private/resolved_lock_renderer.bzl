@@ -23,7 +23,7 @@ def _ind(text, tabs = 1):
     return ("    " * tabs) + text
 
 def _sanitize_name(name):
-    return name.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_").replace("[", "_").replace("]", "_")
+    return sanitize_name(name)
 
 def _is_in_same_cycle(dep_key, pkg, packages):
     cycle_group = pkg.get("cycle_group")
@@ -225,7 +225,10 @@ def _build_cycle_edges_dict(scc, packages):
     edges = {}
     for pkg_key in sorted(scc):
         pkg = packages.get(pkg_key, {})
+        parts = parse_package_key(pkg_key)
+        base_key = "{}@{}".format(parts.name, parts.version) if parts.extra else None
         edge_list = []
+        has_unconditional_base = False
         for md in pkg.get("marker_dependencies", []):
             dep_key = md["key"]
             if dep_key not in scc_set:
@@ -233,7 +236,12 @@ def _build_cycle_edges_dict(scc, packages):
             entry = {"dep": dep_key}
             if md.get("marker"):
                 entry["marker"] = md["marker"]
+            elif base_key and dep_key == base_key:
+                has_unconditional_base = True
             edge_list.append(entry)
+        if not pkg.get("wheel_candidates") and base_key and not has_unconditional_base:
+            if base_key in scc_set:
+                edge_list.append({"dep": base_key})
         edges[pkg_key] = edge_list
     return edges
 
@@ -311,10 +319,9 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_reso
 def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = None):
     """Render a wheel chooser target and per-wheel config_settings + alias.
 
-    Returns True when the wheel-based availability group was emitted under the
-    name _wheel_available_<pkg> because the package also carries availability
-    markers - the caller must then compose the two groups into the final
-    _available_<pkg> via _render_marker_availability(wheel_gated = True).
+    Returns True when a wheel-only availability target was emitted under the
+    name _wheel_available_<pkg>; the caller must then expose _available_<pkg>
+    via _render_marker_availability(wheel_gated = True).
     """
     candidates = pkg.get("wheel_candidates", [])
     if not candidates:
@@ -387,12 +394,11 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
         "",
     ])
 
-    # Availability config_setting: matches when any wheel matches. Only emitted
-    # for packages that could fall to no_match_error (no sdist fallback and no
-    # universal py3-none-any candidate), so that all_requirements can exclude
-    # them on incompatible platforms. When the package also carries availability
-    # markers, the setting is named _wheel_available_ so _render_marker_availability
-    # can compose it with the marker-based group into _available_.
+    # Wheel-only availability config_setting: matches when any wheel matches.
+    # Always emitted under _wheel_available_<pkg> so thin repos can compose it
+    # with their own per-member availability_markers. When the package carries
+    # no availability_markers in _lock, _render_marker_availability aliases
+    # _available_<pkg> -> _wheel_available_<pkg> for direct consumers.
     has_universal = (
         len(resolved_candidates) == len(candidates) and
         any([is_universal_py3_wheel(c["filename"]) for c, _ in resolved_candidates])
@@ -400,8 +406,7 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
     if sdist_target or not resolved_candidates or has_universal:
         return False
 
-    wheel_gated = bool(pkg.get("availability_markers"))
-    group_name = "_wheel_available_{}".format(pkg_key) if wheel_gated else "_available_{}".format(pkg_key)
+    group_name = "_wheel_available_{}".format(pkg_key)
     cs_names = [
         ":_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(candidate["filename"]))
         for candidate, _target in resolved_candidates
@@ -443,14 +448,14 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
             _ind(")"),
             "",
         ])
-    return wheel_gated
+    return True
 
 def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     """Render deps using marker-based select() instead of environment-based."""
     marker_deps = pkg.get("marker_dependencies", [])
     extra = parse_package_key(pkg_key).extra
 
-    unconditional = []
+    unconditional = {}
     conditional = []
     for md in marker_deps:
         dep_key = md["key"]
@@ -459,54 +464,91 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
         if md.get("marker"):
             conditional.append(md)
         else:
-            unconditional.append(md)
+            unconditional[dep_key] = True
+
+    # Collect per-dep unique evaluators, dropping any dep already unconditional.
+    dep_evals = {}  # dep_key -> {eval_name: True}
+    for md in conditional:
+        dep_key = md["key"]
+        if dep_key in unconditional:
+            continue
+        effective_extra = extra if "extra" in md["marker"] else ""
+        eval_name = marker_evaluator_name(md["marker"], effective_extra)
+        dep_evals.setdefault(dep_key, {})[eval_name] = True
+
+    # Group single-evaluator deps by evaluator; deps reachable under multiple
+    # distinct markers get a shared match_any config_setting_group so overlapping
+    # markers never emit duplicate labels in `deps`.
+    by_condition = {}  # condition_label -> {dep_key: True}
+    multi_groups = {}  # tuple(sorted_evals) -> group_name
+    for dep_key in sorted(dep_evals.keys()):
+        evals = sorted(dep_evals[dep_key].keys())
+        if len(evals) == 1:
+            cond = ":{}_match".format(evals[0])
+        else:
+            evals_key = tuple(evals)
+            if evals_key not in multi_groups:
+                group_name = "_dep_any_%s_%x" % (
+                    pkg_key_san,
+                    hash("|".join(evals)) & 0xffffffff,
+                )
+                multi_groups[evals_key] = group_name
+                lines.extend([
+                    _ind("selects.config_setting_group("),
+                    _ind('name = "{}",'.format(group_name), 2),
+                    _ind("match_any = [", 2),
+                ])
+                for ev in evals:
+                    lines.append(_ind('":{}_match",'.format(ev), 3))
+                lines.extend([
+                    _ind("],", 2),
+                    _ind(")"),
+                    "",
+                ])
+            cond = ":{}".format(multi_groups[evals_key])
+        by_condition.setdefault(cond, {})[dep_key] = True
 
     lines.append(_ind("_{}_deps = [".format(pkg_key_san)))
-    for md in sorted(unconditional, key = lambda m: m["key"]):
-        lines.append(_ind('":{}\",'.format(md["key"]), 2))
+    for dep_key in sorted(unconditional.keys()):
+        lines.append(_ind('"{}",'.format(":" + dep_key), 2))
     lines.append(_ind("]"))
 
-    if conditional:
-        # Group conditional deps sharing the same marker evaluator into one select().
-        by_eval = {}
-        for md in conditional:
-            effective_extra = extra if "extra" in md["marker"] else ""
-            eval_name = marker_evaluator_name(md["marker"], effective_extra)
-            by_eval.setdefault(eval_name, {})[md["key"]] = True
-        for eval_name in sorted(by_eval.keys()):
-            dep_list = ", ".join(['":{}"'.format(k) for k in sorted(by_eval[eval_name].keys())])
-            lines[-1] = lines[-1] + " + select({"
-            lines.append(_ind('":{}_match": [{}],'.format(eval_name, dep_list), 2))
-            lines.append(_ind('"//conditions:default": [],', 2))
-            lines.append(_ind("})", 1))
+    for cond in sorted(by_condition.keys()):
+        dep_list = ", ".join(['":{}"'.format(k) for k in sorted(by_condition[cond].keys())])
+        lines[-1] = lines[-1] + " + select({"
+        lines.append(_ind('"{}": [{}],'.format(cond, dep_list), 2))
+        lines.append(_ind('"//conditions:default": [],', 2))
+        lines.append(_ind("})", 1))
 
     lines.append("")
 
 def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False, base_available = None):
     """Render an _available_<pkg> config_setting_group from availability markers.
 
-    No-op unless the package carries availability_markers or base_available is
-    given. With wheel_gated, the marker group is ANDed with the chooser's
-    _wheel_available_<pkg> group; with base_available (extras packages), it is
-    ANDed with the base package's _available_ group; otherwise the markers alone
-    gate the package.
+    No-op unless the package carries availability_markers, wheel_gated, or
+    base_available is given. With wheel_gated, the marker group is ANDed with
+    the chooser's _wheel_available_<pkg> group (or aliased directly when no
+    markers exist); with base_available (extras packages), it is ANDed with
+    the base package's _available_ group; otherwise the markers alone gate the
+    package.
     """
     markers = pkg.get("availability_markers", [])
-    if not markers:
-        if base_available:
-            lines.extend([
-                _ind("native.alias("),
-                _ind('name = "_available_{}",'.format(pkg_key), 2),
-                _ind('actual = ":{}",'.format(base_available), 2),
-                _ind(")"),
-                "",
-            ])
-        return
     gate = None
     if wheel_gated:
         gate = "_wheel_available_{}".format(pkg_key)
     elif base_available:
         gate = base_available
+
+    if not markers:
+        if gate:
+            lines.extend([
+                _ind("native.alias("),
+                _ind('name = "_available_{}",'.format(pkg_key), 2),
+                _ind('actual = ":{}",'.format(gate), 2),
+                _ind(")"),
+                "",
+            ])
+        return
     marker_group = "_available_{}".format(pkg_key)
     if gate:
         marker_group = "_marker_available_{}".format(pkg_key)
@@ -569,10 +611,13 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
             base_available = "_available_{}".format(base_pkg_key)
         _render_marker_availability(lines, pkg_key, pkg, base_available = base_available)
 
+        proxy_name = "_raw_{}".format(pkg_key) if pkg.get("cycle_group") else pkg_key
+        base_actual = "_raw_{}".format(base_pkg_key) if _is_in_same_cycle(base_pkg_key, pkg, packages) else base_pkg_key
+
         lines.extend([
             _ind("pycross_library_proxy("),
-            _ind('name = "{}",'.format(pkg_key), 2),
-            _ind('actual = ":{}",'.format(base_pkg_key), 2),
+            _ind('name = "{}",'.format(proxy_name), 2),
+            _ind('actual = ":{}",'.format(base_actual), 2),
             _ind("deps = _{}_deps,".format(pkg_key_san) if has_marker_deps else "deps = [],", 2),
             _ind(")"),
             "",
@@ -610,6 +655,15 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
             _ind("native.alias("),
             _ind('name = "_wheel_{}",'.format(pkg_key), 2),
             _ind('actual = "{}",'.format(target), 2),
+            _ind(")"),
+            "",
+        ])
+
+    if not wheel_gated and pkg.get("emit_unconditional_wheel_available"):
+        lines.extend([
+            _ind("native.alias("),
+            _ind('name = "_wheel_available_{}",'.format(pkg_key), 2),
+            _ind('actual = "@rules_pycross//pycross/private:always_true",', 2),
             _ind(")"),
             "",
         ])

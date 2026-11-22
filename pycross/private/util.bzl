@@ -12,16 +12,21 @@ REPO_HTTP_DEPS = [
 def sanitize_name(val):
     """Sanitize a string into a valid Bazel repository and target name identifier.
 
+    Lowercases and replaces every character outside `[a-z0-9_]` with `_`.
+
     Args:
         val: The string to sanitize.
 
     Returns:
         The sanitized string.
     """
-    res = val.lower()
-    for c in "-.+@!:/?=&%,~".elems():
-        res = res.replace(c, "_")
-    return res
+    out = []
+    for c in val.lower().elems():
+        if ("a" <= c and c <= "z") or ("0" <= c and c <= "9") or c == "_":
+            out.append(c)
+        else:
+            out.append("_")
+    return "".join(out)
 
 def marker_evaluator_name(marker_str, extra = ""):
     """Generate a deterministic target name for a PEP 508 marker evaluator.
@@ -38,18 +43,15 @@ def marker_evaluator_name(marker_str, extra = ""):
     # We sanitize the marker string for readability and add the hash for uniqueness.
     effective_extra = extra if (extra and "extra" in marker_str) else ""
     key = marker_str if not effective_extra else "{}|extra={}".format(marker_str, effective_extra)
-    san = (
-        key.lower()
-            .replace(" ", "")
-            .replace("\"", "")
-            .replace("'", "")
-            .replace("-", "_")
-            .replace("@", "_")
-            .replace("+", "_")
-            .replace(".", "_")
-            .replace("[", "_")
-            .replace("]", "_")
-    )
+    san_chars = []
+    for c in key.lower().elems():
+        if c in (" ", "\"", "'"):
+            continue
+        if ("a" <= c and c <= "z") or ("0" <= c and c <= "9") or c == "_":
+            san_chars.append(c)
+        else:
+            san_chars.append("_")
+    san = "".join(san_chars)
 
     # Truncate to keep target names reasonable
     if len(san) > 40:
@@ -170,6 +172,23 @@ def is_universal_py3_wheel(filename):
         "any" in plat_tag.split(".")
     )
 
+def is_wheel_platform_specific(pkg):
+    """Whether a resolved package's wheel selection alone can fail on some target platforms.
+
+    True when the package has wheel candidates, no sdist/build_target fallback,
+    and no universal py3-none-any candidate.
+
+    Args:
+        pkg: A resolved package dict.
+
+    Returns:
+        True if wheel selection may fail on some target platform.
+    """
+    candidates = pkg.get("wheel_candidates", [])
+    if not candidates or has_build_fallback(pkg):
+        return False
+    return not any([is_universal_py3_wheel(c["filename"]) for c in candidates])
+
 def is_platform_specific(pkg):
     """Whether a resolved package may be unavailable in some target environments.
 
@@ -181,10 +200,7 @@ def is_platform_specific(pkg):
     """
     if pkg.get("availability_markers"):
         return True
-    candidates = pkg.get("wheel_candidates", [])
-    if not candidates or has_build_fallback(pkg):
-        return False
-    return not any([is_universal_py3_wheel(c["filename"]) for c in candidates])
+    return is_wheel_platform_specific(pkg)
 
 def variant_item_qname(item):
     """Return the internal name for a variant item.

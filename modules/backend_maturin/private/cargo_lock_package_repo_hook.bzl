@@ -31,17 +31,22 @@ def cargo_lock_package_repo_hook(packages_info, override_packages):
         "",
     ]
 
-    for pkg_name in sorted(override_packages.keys()):
-        attrs = override_packages[pkg_name]
-        pkg_info = packages_info.get(pkg_name)
-        if not pkg_info:
-            continue
-
+    has_targets = False
+    for pkg_name in sorted(packages_info.keys()):
+        pkg_info = packages_info[pkg_name]
         for version_info in pkg_info["versions"]:
             if not version_info.has_sdist:
                 continue
 
             versioned_name = "{}@{}".format(pkg_name, version_info.version)
+            attrs = {}
+            matched = False
+            for key in ("*", pkg_name, versioned_name):
+                if key in override_packages:
+                    matched = True
+                    attrs.update(override_packages[key])
+            if not matched:
+                continue
 
             lines.append("pycross_generate_cargo_lock(")
             lines.append('    name = "%s",' % versioned_name)
@@ -56,6 +61,10 @@ def cargo_lock_package_repo_hook(packages_info, override_packages):
 
             lines.append(")")
             lines.append("")
+            has_targets = True
+
+    if not has_targets:
+        return []
 
     return [struct(
         dir = "_cargo",

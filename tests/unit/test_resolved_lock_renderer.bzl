@@ -6,6 +6,9 @@ load("@rules_testing//lib:util.bzl", "util")
 # buildifier: disable=bzl-visibility
 load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "marker_evaluator_name", "sanitize_name")
+
 # buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
     """Verify basic rendering with wheel_candidates (wheel selection via pycross_wheel_chooser)."""
@@ -1228,6 +1231,181 @@ def _test_scoped_variants_and_grouped_deps(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_scoped_variants_and_grouped_deps_impl)
 
+# buildifier: disable=unused-variable
+def _test_extras_in_cycle_impl(env, target):
+    """Extras proxy inside a cycle emits _raw_<extra> pointing to _raw_<base> and records the base edge."""
+    lock = {
+        "cycle_groups": {
+            "cycle_group_c1": ["alpha@1.0", "alpha[extra]@1.0", "alpha[explicit]@1.0", "beta@1.0", "gamma[cyc]@1.0"],
+        },
+        "packages": {
+            "alpha@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "wheel_candidates": [_whl("a_whl", "alpha-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "beta@1.0"}],
+            },
+            "alpha[extra]@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "marker_dependencies": [{"key": "beta@1.0"}],
+            },
+            "alpha[explicit]@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "marker_dependencies": [{"key": "alpha@1.0"}, {"key": "beta@1.0"}],
+            },
+            "beta@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "wheel_candidates": [_whl("b_whl", "beta-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "alpha[extra]@1.0"}, {"key": "gamma[cyc]@1.0"}],
+            },
+            "gamma@1.0": {
+                "wheel_candidates": [_whl("g_whl", "gamma-1.0-py3-none-any.whl")],
+            },
+            "gamma[cyc]@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "marker_dependencies": [{"key": "beta@1.0"}],
+            },
+        },
+    }
+    res = render_lock_bzl(
+        lock,
+        {"a_whl": "@r//a:whl", "b_whl": "@r//b:whl", "g_whl": "@r//g:whl"},
+        "ws__pkgs",
+    )
+
+    # Extras proxy uses _raw_ name and points to _raw_ base so there is no target collision or cycle.
+    env.expect.that_str(res).contains('name = "_raw_alpha[extra]@1.0",')
+    env.expect.that_str(res).contains('actual = ":_raw_alpha@1.0",')
+    env.expect.that_int(res.count('name = "alpha[extra]@1.0",')).equals(1)
+    env.expect.that_str(res).contains('pycross_cycle_member_marker_deps(\n        name = "alpha[extra]@1.0",')
+
+    # Extras proxy inside a cycle whose base is outside the cycle points to the non-_raw_ base.
+    gamma_proxy = res.split('pycross_library_proxy(\n        name = "_raw_gamma[cyc]@1.0",')[1].split(")")[0]
+    env.expect.that_str(gamma_proxy).contains('actual = ":gamma@1.0",')
+
+    # Cycle edges include the implicit alpha[extra]@1.0 -> alpha@1.0 edge, do not
+    # duplicate explicit alpha[explicit]@1.0 -> alpha@1.0, and omit out-of-cycle gamma@1.0.
+    edges_section = res.split("_CYCLE_GROUP_C1_EDGES = ")[1].split("\n\n")[0]
+    extra_edges_block = edges_section.split('"alpha[extra]@1.0":')[1].split("],")[0]
+    env.expect.that_str(extra_edges_block).contains('{"dep": "alpha@1.0"}')
+    explicit_edges_block = edges_section.split('"alpha[explicit]@1.0":')[1].split("],")[0]
+    env.expect.that_int(explicit_edges_block.count('{"dep": "alpha@1.0"}')).equals(1)
+    gamma_edges_block = edges_section.split('"gamma[cyc]@1.0":')[1].split("],")[0]
+    env.expect.that_bool("gamma@1.0" in gamma_edges_block).equals(False)
+
+def _test_extras_in_cycle(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_extras_in_cycle_impl)
+
+# buildifier: disable=unused-variable
+def _test_marker_deps_dedup_impl(env, target):
+    """Duplicate unconditional, shadowed conditional, and overlapping marker deps never duplicate labels."""
+    lock = {
+        "packages": {
+            "app@1.0": {
+                "wheel_candidates": [_whl("app_whl", "app-1.0-py3-none-any.whl")],
+                "marker_dependencies": [
+                    {"key": "uncond@1.0"},
+                    {"key": "uncond@1.0"},
+                    {"key": "uncond@1.0", "marker": "sys_platform == 'linux'"},
+                    {"key": "same_marker@1.0", "marker": "sys_platform == 'linux'"},
+                    {"key": "same_marker@1.0", "marker": "sys_platform == 'linux'"},
+                    {"key": "overlap@1.0", "marker": "sys_platform == 'linux'"},
+                    {"key": "overlap@1.0", "marker": "python_version >= '3.10'"},
+                ],
+            },
+            "uncond@1.0": {"wheel_candidates": [_whl("u_whl", "uncond-1.0-py3-none-any.whl")]},
+            "same_marker@1.0": {"wheel_candidates": [_whl("s_whl", "same_marker-1.0-py3-none-any.whl")]},
+            "overlap@1.0": {"wheel_candidates": [_whl("o_whl", "overlap-1.0-py3-none-any.whl")]},
+        },
+    }
+    res = render_lock_bzl(
+        lock,
+        {"app_whl": "@r//app:whl", "u_whl": "@r//u:whl", "s_whl": "@r//s:whl", "o_whl": "@r//o:whl"},
+        "ws__pkgs",
+    )
+
+    deps_block = res.split("_app_1_0_deps = [")[1].split("\n\n")[0]
+    env.expect.that_int(deps_block.count('":uncond@1.0"')).equals(1)
+    env.expect.that_int(deps_block.count('":same_marker@1.0"')).equals(1)
+    env.expect.that_int(deps_block.count('":overlap@1.0"')).equals(1)
+    env.expect.that_str(res).contains('name = "_dep_any_app_1_0_')
+    env.expect.that_str(res).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
+
+def _test_marker_deps_dedup(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_marker_deps_dedup_impl)
+
+# buildifier: disable=unused-variable
+def _test_epoch_and_marker_sanitization_impl(env, target):
+    """Epoch versions and colons/punctuation in markers produce valid Starlark identifiers and labels."""
+    env.expect.that_str(sanitize_name("1!2.0+a (b):c")).equals("1_2_0_a__b__c")
+    colon_eval = marker_evaluator_name("platform_version == 'Linux #1:2 (x86)'")
+    env.expect.that_bool(":" not in colon_eval).equals(True)
+    env.expect.that_bool(" " not in colon_eval).equals(True)
+    env.expect.that_bool("(" not in colon_eval and ")" not in colon_eval).equals(True)
+
+    lock = {
+        "packages": {
+            "foo@1!2.0.0": {
+                "wheel_candidates": [_whl("f_whl", "foo-1!2.0.0-py3-none-any.whl")],
+                "marker_dependencies": [
+                    {"key": "bar@1.0", "marker": "platform_version == 'Linux #1:2 (x86)'"},
+                ],
+            },
+            "bar@1.0": {"wheel_candidates": [_whl("b_whl", "bar-1.0-py3-none-any.whl")]},
+        },
+    }
+    res = render_lock_bzl(lock, {"f_whl": "@r//f:whl", "b_whl": "@r//b:whl"}, "ws__pkgs")
+    env.expect.that_str(res).contains("_foo_1_2_0_0_deps = [")
+    env.expect.that_bool("_foo_1!2_0_0_deps" in res).equals(False)
+    env.expect.that_str(res).contains('name = "{}"'.format(colon_eval))
+
+def _test_epoch_and_marker_sanitization(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_epoch_and_marker_sanitization_impl)
+
+# buildifier: disable=unused-variable
+def _test_wheel_available_always_emitted_impl(env, target):
+    """Wheel-only platform-specific packages always emit _wheel_available_<pkg> for thin-repo composition."""
+    lock = {
+        "packages": {
+            "nomarker@1.0": {
+                "wheel_candidates": [
+                    _whl("nm1", "nomarker-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
+                    _whl("nm2", "nomarker-1.0-cp312-cp312-win_amd64.whl"),
+                ],
+            },
+            "withmarker@1.0": {
+                "wheel_candidates": [
+                    _whl("wm1", "withmarker-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
+                ],
+                "availability_markers": ["sys_platform == 'linux'"],
+            },
+            "merged_sdist@1.0": {
+                "wheel_candidates": [
+                    _whl("ms1", "merged_sdist-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
+                ],
+                "sdist_file": {"key": "ms_sdist"},
+                "emit_unconditional_wheel_available": True,
+            },
+        },
+    }
+    res = render_lock_bzl(
+        lock,
+        {"nm1": "@r//nm:w1", "nm2": "@r//nm:w2", "wm1": "@r//wm:w1", "ms1": "@r//ms:w1", "ms_sdist": "@r//ms:sdist"},
+        "ws__pkgs",
+    )
+    env.expect.that_str(res).contains('name = "_wheel_available_nomarker@1.0",')
+    env.expect.that_str(res).contains('name = "_available_nomarker@1.0",\n        actual = ":_wheel_available_nomarker@1.0",')
+    env.expect.that_str(res).contains('name = "_wheel_available_withmarker@1.0",')
+    env.expect.that_str(res).contains('name = "_marker_available_withmarker@1.0",')
+    env.expect.that_str(res).contains('name = "_available_withmarker@1.0",')
+    env.expect.that_str(res).contains('name = "_wheel_available_merged_sdist@1.0",\n        actual = "@rules_pycross//pycross/private:always_true",')
+
+def _test_wheel_available_always_emitted(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_wheel_available_always_emitted_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -1237,6 +1415,10 @@ def resolved_lock_renderer_test_suite(name):
             _test_reset_gates,
             _test_reset_bzl,
             _test_scoped_variants_and_grouped_deps,
+            _test_extras_in_cycle,
+            _test_marker_deps_dedup,
+            _test_epoch_and_marker_sanitization,
+            _test_wheel_available_always_emitted,
             _test_epoch_sdist_repo_name,
             _test_cycle_group_rendering,
             _test_cycle_group_marker_specific_rendering,
