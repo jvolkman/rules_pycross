@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing")
+load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "run_package_repo_hooks_for_testing")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -22,7 +22,7 @@ load(
 )
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "coerce_transition_values", "split_setting_value")
+load("//pycross/private:util.bzl", "coerce_transition_values", "marker_evaluator_name", "split_setting_value")
 
 # ── Test: no platform → non-transitioning proxies ──────────────────
 
@@ -553,18 +553,18 @@ def _test_pin_build_multi_branch_maybe_impl(env, target):
         extras_maybe_keys = {"bar": ["foo[bar]@1.0", "foo[bar]@2.0"]},
     ).build
 
-    # Base maybe: foo@1.0 is platform-specific (uses helper _maybe_foo_1.0),
+    # Base maybe: foo@1.0 is platform-specific (uses helper _maybe_foo_1_0),
     # while foo@2.0 is unconditional (maps directly to :pkg).
-    env.expect.that_bool('name = "_maybe_foo_1.0"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_foo_1_0"' in res).equals(True)
     env.expect.that_bool('"@ws//_lock:_available_foo@1.0": ":pkg"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1.0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1_0"' in res).equals(True)
     env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":pkg"' in res).equals(True)
 
     # Extra maybe: both foo[bar]@1.0 and foo[bar]@2.0 are platform-specific.
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1.0"' in res).equals(True)
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2.0"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_extra_bar_foo_bar__1.0"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":_maybe_extra_bar_foo_bar__2.0"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1_0"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2_0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_extra_bar_foo_bar__1_0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":_maybe_extra_bar_foo_bar__2_0"' in res).equals(True)
 
 def _test_pin_build_multi_branch_maybe(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -865,13 +865,13 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
     env.expect.that_bool("testonly = True," in extra_maybe_section).equals(True)
     env.expect.that_bool('platform = "//:_internal_platform"' in extra_maybe_section).equals(True)
 
-    env.expect.that_bool('name = "_maybe_foo_1.0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_foo_1_0"' in multi.actual_build).equals(True)
     env.expect.that_bool('"@ws//_lock:_available_foo@1.0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1.0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1_0"' in multi.actual_build).equals(True)
     env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
 
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1.0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2.0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1_0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2_0"' in multi.actual_build).equals(True)
     env.expect.that_bool('"@ws//_lock:_available_foo[bar]@1.0": "//__actual/foo:extra_bar"' in multi.actual_build).equals(True)
     env.expect.that_bool('name = "extra_bar_maybe"' in multi.actual_build).equals(True)
 
@@ -1121,6 +1121,208 @@ def _test_variants_build_hidden_flags(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_variants_build_hidden_flags_impl)
 
+# buildifier: disable=unused-variable
+def _test_pin_build_member_availability_markers_impl(env, target):
+    """Thin repos compose per-member availability_markers directly instead of sharing _available_<pkg>."""
+    linux_eval = marker_evaluator_name("sys_platform == 'linux'", "")
+    darwin_eval = marker_evaluator_name("sys_platform == 'darwin'", "")
+
+    # 1. Wheel-only package without member markers references _wheel_available_<pkg>.
+    wheel_only = pin_build_for_testing(
+        target_name = "native_pkg",
+        pin_target_dict = {"": "native-pkg@1.0"},
+        package = {},
+        workspace_repo = "ws",
+        maybe_available_keys = ["native-pkg@1.0"],
+        packages = {
+            "native-pkg@1.0": {
+                "wheel_candidates": [{"filename": "native_pkg-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+            },
+        },
+    ).build
+    env.expect.that_str(wheel_only).contains('"@ws//_lock:_wheel_available_native-pkg@1.0": ":pkg"')
+    env.expect.that_bool("selects.config_setting_group(" in wheel_only).equals(False)
+
+    # 2. Pure-Python package with 1 member marker uses that marker evaluator directly.
+    marked = pin_build_for_testing(
+        target_name = "linux_only",
+        pin_target_dict = {"": "linux-only@1.0"},
+        package = {},
+        workspace_repo = "ws",
+        maybe_available_keys = ["linux-only@1.0"],
+        packages = {
+            "linux-only@1.0": {
+                "wheel_candidates": [{"filename": "linux_only-1.0-py3-none-any.whl"}],
+                "availability_markers": ["sys_platform == 'linux'"],
+            },
+        },
+    ).build
+    env.expect.that_str(marked).contains('"@ws//_lock:{}_match": ":pkg"'.format(linux_eval))
+    env.expect.that_bool("_available_linux-only" in marked).equals(False)
+
+    # 3. Wheel-only package with 2 member markers + extra with its own marker combines with match_any + match_all.
+    combined = pin_build_for_testing(
+        target_name = "combo",
+        pin_target_dict = {"": "combo@1.0"},
+        package = {},
+        workspace_repo = "ws",
+        extras_dict = {"ext": {"": "combo[ext]@1.0"}},
+        maybe_available_keys = ["combo@1.0"],
+        extras_maybe_keys = {"ext": ["combo[ext]@1.0"]},
+        target_platform = "@my//platform:linux",
+        packages = {
+            "combo@1.0": {
+                "wheel_candidates": [{"filename": "combo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+                "availability_markers": ["sys_platform == 'linux'", "sys_platform == 'darwin'"],
+            },
+            "combo[ext]@1.0": {
+                "availability_markers": ["sys_platform == 'linux'"],
+            },
+        },
+    )
+    env.expect.that_str(combined.actual_build).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
+    env.expect.that_str(combined.actual_build).contains('"@ws//_lock:_wheel_available_combo@1.0"')
+    env.expect.that_str(combined.actual_build).contains('"@ws//_lock:{}_match"'.format(linux_eval))
+    env.expect.that_str(combined.actual_build).contains('"@ws//_lock:{}_match"'.format(darwin_eval))
+    env.expect.that_str(combined.actual_build).contains("match_any = [")
+    env.expect.that_str(combined.actual_build).contains("match_all = [")
+
+    # 4. Non-transitioned multi-marker pin loads selects before package() and remaps conflicts.
+    untransitioned = pin_build_for_testing(
+        target_name = "combo",
+        pin_target_dict = {"": "combo@1.0"},
+        workspace_lock_target_dict = {"": "combo@1.0__via_app_a"},
+        package = {},
+        workspace_repo = "ws",
+        extras_dict = {"ext": {"": "combo[ext]@1.0"}},
+        maybe_available_keys = ["combo@1.0__via_app_a"],
+        extras_maybe_keys = {"ext": ["combo[ext]@1.0"]},
+        packages = {
+            "combo@1.0": {
+                "wheel_candidates": [{"filename": "combo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+                "availability_markers": ["sys_platform == 'linux'", "sys_platform == 'darwin'"],
+            },
+            "combo[ext]@1.0": {},
+        },
+        conflicts = {"combo@1.0": ["app_a", "app_b"]},
+        member_name = "app_a",
+    ).build
+    selects_idx = untransitioned.find('load("@bazel_skylib//lib:selects.bzl", "selects")')
+    pkg_idx = untransitioned.find("package(")
+    env.expect.that_bool(selects_idx > 0 and selects_idx < pkg_idx).equals(True)
+    env.expect.that_str(untransitioned).contains('"@ws//_lock:_wheel_available_combo@1.0__via_app_a"')
+
+def _test_pin_build_member_availability_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_member_availability_markers_impl)
+
+# buildifier: disable=unused-variable
+def _test_cargo_build_filters_backends_and_wildcards_impl(env, target):
+    """_cargo_build only emits aliases for cargo-hook backends and supports versioned, wildcard, and extras-only pins."""
+    packages = {
+        "c-pkg@1.0": {"sdist_file": {"key": "c_sdist"}},
+        "rust-v1@1.0": {"sdist_file": {"key": "r1_sdist"}},
+        "rust-v2@2.0": {"sdist_file": {"key": "r2_sdist"}},
+        "extra-rust@1.0": {"sdist_file": {"key": "er_sdist"}},
+        "extra-rust[all]@1.0": {},
+    }
+    grouped_pins = {
+        "c-pkg": {"base_target": {"": "c-pkg@1.0"}, "extras": {}},
+        "rust-v1": {"base_target": {"": "rust-v1@1.0"}, "extras": {}},
+        "rust-v2": {"base_target": {"": "rust-v2@2.0"}, "extras": {}},
+        "extra-rust": {"base_target": {}, "extras": {"all": {"": "extra-rust[all]@1.0"}}},
+    }
+
+    # Non-cargo backend overrides alone produce no _cargo/BUILD.bazel.
+    non_cargo = cargo_build_for_testing(
+        grouped_pins,
+        packages,
+        {"c-pkg": {"setuptools_build": {"copt": ["-O2"]}}, "rust-v1": {"cmake_build": {}}},
+        "ws",
+    )
+    env.expect.that_bool(non_cargo == None).equals(True)
+
+    # Empty cargo_backends produces None even with maturin overrides.
+    no_hook = cargo_build_for_testing(
+        grouped_pins,
+        packages,
+        {"rust-v1": {"maturin_build": {}}},
+        "ws",
+        cargo_backends = [],
+    )
+    env.expect.that_bool(no_hook == None).equals(True)
+
+    # Versioned maturin_build + setuptools_rust_build + extras-only pin emit aliases, while setuptools_build is skipped.
+    res = cargo_build_for_testing(
+        grouped_pins,
+        packages,
+        {
+            "c-pkg": {"setuptools_build": {}},
+            "rust-v1@1.0": {"maturin_build": {}},
+            "rust-v2": {"setuptools_rust_build": {}},
+            "extra-rust": {"maturin_build": {}},
+        },
+        "ws",
+    )
+    env.expect.that_bool('name = "c_pkg"' in res).equals(False)
+    env.expect.that_str(res).contains('name = "rust_v1"')
+    env.expect.that_str(res).contains('actual = "@ws//_cargo:rust-v1@1.0"')
+    env.expect.that_str(res).contains('name = "rust_v2"')
+    env.expect.that_str(res).contains('actual = "@ws//_cargo:rust-v2@2.0"')
+    env.expect.that_str(res).contains('name = "extra_rust"')
+    env.expect.that_str(res).contains('actual = "@ws//_cargo:extra-rust@1.0"')
+
+    # Wildcard "*" maturin_build override matches all sdist packages.
+    wild = cargo_build_for_testing(
+        grouped_pins,
+        packages,
+        {"*": {"maturin_build": {}}},
+        "ws",
+    )
+    env.expect.that_str(wild).contains('name = "c_pkg"')
+    env.expect.that_str(wild).contains('name = "rust_v1"')
+
+    # Multi-branch pin where only one version has a cargo override falls back to no_match_error.
+    partial_branch = cargo_build_for_testing(
+        {
+            "rust-v1": {
+                "base_target": {"res_v1": "rust-v1@1.0", "res_v2": "rust-v1@2.0"},
+                "extras": {},
+            },
+        },
+        {
+            "rust-v1@1.0": {"sdist_file": {"key": "r1_sdist"}},
+            "rust-v1@2.0": {"sdist_file": {"key": "r2_sdist"}},
+        },
+        {"rust-v1@1.0": {"maturin_build": {}}},
+        "ws",
+    )
+    env.expect.that_str(partial_branch).contains('"@ws//_lock:is_res_v1": "@ws//_cargo:rust-v1@1.0"')
+    env.expect.that_str(partial_branch).contains('"@ws//_lock:is_res_v2": "@rules_pycross//pycross/private:no_match_error"')
+
+    # Shared hook_fn across maturin_build and setuptools_rust_build runs once with merged overrides.
+    invocations = []
+
+    def _shared_hook(_packages_info, override_packages):
+        invocations.append(sorted(override_packages.keys()))
+        return [struct(dir = "_cargo", files = {"BUILD.bazel": "HEADER\n" + "\n".join(sorted(override_packages.keys()))})]
+
+    files = run_package_repo_hooks_for_testing(
+        {"maturin_build": _shared_hook, "setuptools_rust_build": _shared_hook},
+        {},
+        {
+            "jiter": {"maturin_build": {"cargo_lock": '"//:jiter.lock"'}},
+            "python-geohash": {"setuptools_rust_build": {"cargo_lock": '"//:geo.lock"'}},
+        },
+    )
+    env.expect.that_int(len(invocations)).equals(1)
+    env.expect.that_collection(invocations[0]).contains_exactly(["jiter", "python-geohash"]).in_order()
+    env.expect.that_int(files["_cargo/BUILD.bazel"].count("HEADER")).equals(1)
+
+def _test_cargo_build_filters_backends_and_wildcards(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_cargo_build_filters_backends_and_wildcards_impl)
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -1129,6 +1331,8 @@ def thin_package_repo_test_suite(name):
             _test_variants_build_repo_default,
             _test_variants_build_shared_flag_pinned,
             _test_variants_build_hidden_flags,
+            _test_pin_build_member_availability_markers,
+            _test_cargo_build_filters_backends_and_wildcards,
             _test_transition_settings,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,

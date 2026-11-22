@@ -18,7 +18,7 @@ The file structure is as follows:
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
-load(":util.bzl", "parse_package_key", "underscore_name", "variant_item_qname")
+load(":util.bzl", "is_wheel_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
@@ -100,10 +100,71 @@ def _merge_dependencies(first_data, entries):
                 seen_candidates[wc["filename"]] = wc
     merged["wheel_candidates"] = sorted(seen_candidates.values(), key = lambda w: w["filename"])
 
+    # Merge availability_markers: union across workspace members so _lock emits
+    # marker evaluators for every member's conditional root dependencies.
+    seen_avail = {m: True for m in merged.get("availability_markers", [])}
+    for _, pkg_data in entries[1:]:
+        for m in pkg_data.get("availability_markers", []):
+            seen_avail[m] = True
+    if seen_avail:
+        merged["availability_markers"] = sorted(seen_avail.keys())
+
+    # If any member considers this package wheel-only platform-specific while
+    # the merged package has an sdist or universal wheel fallback from another
+    # member, ensure _lock still emits an unconditional _wheel_available_<pkg>
+    # target so that member's thin repo never references a missing label.
+    if not is_wheel_platform_specific(merged) and any([is_wheel_platform_specific(d) for _, d in entries]):
+        merged["emit_unconditional_wheel_available"] = True
+
     return merged
 
 # Visible for testing
 merge_dependencies_for_testing = _merge_dependencies
+
+def _run_package_repo_hooks(hooks, packages_info, override_configs):
+    """Run registered package_repo hooks, deduplicating backends that share a hook function."""
+
+    # Group backends sharing the same hook function (e.g. maturin_build and
+    # setuptools_rust_build) so each hook runs once with merged overrides
+    # instead of concatenating duplicate load()/package() headers.
+    grouped_hooks = []  # list of (hook_fn, [backend_names])
+    for backend_name, hook_fn in sorted(hooks.items()):
+        found = False
+        for idx, entry in enumerate(grouped_hooks):
+            if entry[0] == hook_fn:
+                grouped_hooks[idx] = (entry[0], entry[1] + [backend_name])
+                found = True
+                break
+        if not found:
+            grouped_hooks.append((hook_fn, [backend_name]))
+
+    # Collect all hook results, merging files for the same path.
+    hook_files = {}  # "dir/filename" -> [content, ...]
+    for hook_fn, backend_names in grouped_hooks:
+        backend_overrides = {}
+        for pkg_spec, backends in override_configs.items():
+            merged_attrs = {}
+            matched = False
+            for backend_name in backend_names:
+                if backend_name in backends:
+                    matched = True
+                    merged_attrs.update(backends[backend_name])
+            if matched:
+                backend_overrides[pkg_spec] = merged_attrs
+
+        if not backend_overrides:
+            continue
+
+        results = hook_fn(packages_info, backend_overrides)
+        for result in results:
+            for filename, content in result.files.items():
+                path = "{}/{}".format(result.dir, filename)
+                hook_files.setdefault(path, []).append(content)
+
+    return {path: "\n".join(contents) for path, contents in hook_files.items()}
+
+# Visible for testing
+run_package_repo_hooks_for_testing = _run_package_repo_hooks
 
 def _package_repo_impl(rctx):
     # Workspace repos always have member_lock_files — even single-lock repos
@@ -477,26 +538,8 @@ def _package_repo_impl(rctx):
             ))
             packages_info[norm_name] = versions
 
-        # Collect all hook results, merging files for the same path.
-        hook_files = {}  # "dir/filename" -> [content, ...]
-        for backend_name, hook_fn in PACKAGE_REPO_HOOKS.items():
-            # Filter overrides for this backend.
-            backend_overrides = {}
-            for pkg_name, backends in override_configs.items():
-                if backend_name in backends:
-                    backend_overrides[pkg_name] = backends[backend_name]
-
-            if not backend_overrides:
-                continue
-
-            results = hook_fn(packages_info, backend_overrides)
-            for result in results:
-                for filename, content in result.files.items():
-                    path = "{}/{}".format(result.dir, filename)
-                    hook_files.setdefault(path, []).append(content)
-
-        for path, contents in hook_files.items():
-            rctx.file(path, "\n".join(contents))
+        for path, content in _run_package_repo_hooks(PACKAGE_REPO_HOOKS, packages_info, override_configs).items():
+            rctx.file(path, content)
 
     if hasattr(rctx, "repo_metadata"):
         return rctx.repo_metadata(reproducible = True)
