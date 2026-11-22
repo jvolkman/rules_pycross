@@ -4,6 +4,7 @@ import unittest
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_BACKEND
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_REQUIRES
@@ -1010,6 +1011,136 @@ class InspectPackageTest(unittest.TestCase):
             inspect_sdist(sdist_path, pre_build_patches=[bad_apply_patch])
         self.assertIn("failed to apply patch file", str(ctx.exception))
         self.assertIn("context mismatch", str(ctx.exception))
+
+    def test_sdist_file_only_tarball_infers_dirs_and_src_layout(self):
+        """File-only sdists (no explicit DIRTYPE entries) still infer packages and src layout."""
+        flat = self.create_tarball(
+            "flat-1.0.tar.gz",
+            {
+                "flat-1.0/pyproject.toml": '[build-system]\nrequires = ["flit_core"]\nbuild-backend = "flit_core.buildapi"\n',
+                "flat-1.0/mypkg/__init__.py": "",
+                "flat-1.0/mypkg/core.py": "",
+            },
+        )
+        self.assertEqual(inspect_sdist(flat)["site_paths"], ["mypkg"])
+
+        src_pkg = self.create_tarball(
+            "srcpkg-1.0.tar.gz",
+            {
+                "srcpkg-1.0/pyproject.toml": '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n',
+                "srcpkg-1.0/src/mypkg/__init__.py": "",
+                "srcpkg-1.0/src/mypkg/core.py": "",
+            },
+        )
+        self.assertEqual(inspect_sdist(src_pkg)["site_paths"], ["mypkg"])
+
+    def test_sdist_top_level_txt_single_file_module(self):
+        """Single-file .py modules declared in top_level.txt resolve to <name>.py."""
+        flat = self._create_tarball_with_dirs(
+            "six-1.17.0.tar.gz",
+            {
+                "six-1.17.0/six.py": "# six\n",
+                "six-1.17.0/six.egg-info/top_level.txt": "six\n",
+            },
+        )
+        self.assertEqual(inspect_sdist(flat)["site_paths"], ["six.py"])
+
+        src_single = self.create_tarball(
+            "single-1.0.tar.gz",
+            {
+                "single-1.0/src/single.py": "# single\n",
+                "single-1.0/src/single.egg-info/top_level.txt": "single\n",
+            },
+        )
+        self.assertEqual(inspect_sdist(src_single)["site_paths"], ["single.py"])
+
+        # C-only sources under src/<pkg>/ must not flip src_layout and turn a C
+        # extension in top_level.txt into a namespace dir of .c files.
+        c_only = self._create_tarball_with_dirs(
+            "cext-1.0.tar.gz",
+            {
+                "cext-1.0/src/cext/cext.c": "/* c */\n",
+                "cext-1.0/cext.egg-info/top_level.txt": "cext\n",
+            },
+        )
+        self.assertEqual(inspect_sdist(c_only)["site_paths"], ["cext"])
+
+    def test_sdist_ignores_nested_fixture_top_level_txt(self):
+        """top_level.txt outside root or src/ (e.g. under tests/) is ignored."""
+        sdist = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/tests/fixtures/fake.egg-info/top_level.txt": "wrong_pkg\n",
+                "pkg-1.0/realpkg/__init__.py": "",
+            },
+        )
+        self.assertEqual(inspect_sdist(sdist)["site_paths"], ["realpkg"])
+
+    def test_wheel_windows_pyd_and_entry_points_edge_cases(self):
+        """Wheels recognize top-level .pyd extensions and parse dist-info entry_points accurately."""
+        wheel = self.create_zip(
+            "tool-1.0-cp313-cp313-win_amd64.whl",
+            {
+                "_ext.cp313-win_amd64.pyd": b"",
+                "tool/__init__.py": "",
+                "tool/entry_points.txt": "[console_scripts]\nwrong = tool:bad\n",
+                "tool-1.0.dist-info/entry_points.txt": (
+                    "[console_scripts]\n"
+                    "MyCLI = tool.cli:main\n"
+                    "pct = tool.cli:main_100%\n"
+                    "[gui_scripts]\n"
+                    "MyGui = tool.gui:run\n"
+                    "[custom.group]\n"
+                    "urn:a = tool:a\n"
+                    "urn:b = tool:b\n"
+                ),
+            },
+        )
+        result = inspect_wheel(wheel)
+        self.assertEqual(result["site_paths"], ["_ext.cp313-win_amd64.pyd", "tool"])
+        self.assertEqual(result["bin_paths"], ["MyCLI", "MyGui", "pct"])
+
+    def test_sdist_extracts_pyproject_scripts(self):
+        """inspect_sdist extracts [project.scripts] and [project.gui-scripts] into bin_paths."""
+        sdist = self.create_tarball(
+            "cli-1.0.tar.gz",
+            {
+                "cli-1.0/pyproject.toml": (
+                    '[project]\nname = "cli"\n'
+                    '[project.scripts]\nMyTool = "cli:main"\n'
+                    '[project.gui-scripts]\nMyGui = "cli:gui"\n'
+                ),
+                "cli-1.0/cli/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist)
+        self.assertEqual(result["bin_paths"], ["MyGui", "MyTool"])
+
+    def test_single_pass_archive_opens(self):
+        """Unpatched tar.gz sdists and .whl zips are opened only once during inspection."""
+        sdist = self.create_tarball(
+            "singlepass-1.0.tar.gz",
+            {
+                "singlepass-1.0/pyproject.toml": '[build-system]\nrequires = ["flit_core"]\n',
+                "singlepass-1.0/pkg/__init__.py": "",
+            },
+        )
+        with mock.patch("pycross.private.tools.inspect_package.tarfile.open", wraps=tarfile.open) as open_spy:
+            result = inspect_sdist(sdist)
+        self.assertEqual(open_spy.call_count, 1)
+        self.assertEqual(result["site_paths"], ["pkg"])
+
+        wheel = self.create_zip(
+            "singlepass-1.0-py3-none-any.whl",
+            {
+                "pkg/__init__.py": "",
+                "singlepass-1.0.dist-info/entry_points.txt": "[console_scripts]\nrun = pkg:main\n",
+            },
+        )
+        with mock.patch("pycross.private.tools.inspect_package.zipfile.ZipFile", wraps=zipfile.ZipFile) as zip_spy:
+            wres = inspect_wheel(wheel)
+        self.assertEqual(zip_spy.call_count, 1)
+        self.assertEqual(wres["bin_paths"], ["run"])
 
 
 if __name__ == "__main__":

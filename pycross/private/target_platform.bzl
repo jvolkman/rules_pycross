@@ -48,11 +48,14 @@ def _pycross_target_platform_impl(ctx):
     platform_machine = markers["platform_machine"]
 
     # Map architecture if needed
-    arch = platform_machine
+    arch = platform_machine.lower()
     if sys_platform == "darwin" and arch == "aarch64":
         arch = "arm64"
-    elif sys_platform == "linux" and arch == "arm64":
-        arch = "aarch64"
+    elif sys_platform == "linux":
+        if arch == "arm64":
+            arch = "aarch64"
+        elif arch in ("x86_32", "i386"):
+            arch = "i686"
 
     platforms = ctx.attr.platforms
     if not platforms:
@@ -84,9 +87,9 @@ def _pycross_target_platform_impl(ctx):
         elif sys_platform == "win32":
             if arch in ("x86_64", "amd64"):
                 platforms.append("win_amd64")
-            elif arch in ("x86", "i386", "i686"):
+            elif arch in ("x86", "x86_32", "i386", "i686"):
                 platforms.append("win32")
-            elif arch == "arm64":
+            elif arch in ("arm64", "aarch64"):
                 platforms.append("win_arm64")
             else:
                 platforms.append(arch)

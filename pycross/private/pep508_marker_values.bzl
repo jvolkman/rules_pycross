@@ -64,6 +64,8 @@ PLATFORM_MACHINE_VALUES = {
     "@rules_pycross//pycross/private:is_linux_aarch64": "aarch64",
     "@rules_pycross//pycross/private:is_macos_aarch64": "arm64",
     "@rules_pycross//pycross/private:is_windows_aarch64": "ARM64",
+    # Fallback for other OSes on aarch64 (e.g., FreeBSD, Android, iOS).
+    "@platforms//cpu:aarch64": "aarch64",
     # All other CPUs.
     "@platforms//cpu:aarch32": "aarch32",
     "@platforms//cpu:armv7": "armv7",
@@ -117,18 +119,22 @@ def flag_value(target):
         return target[BuildSettingInfo].value
     return ""
 
-def _format_full_version(version_info):
-    """Format a full version string from interpreter_version_info.
+_RELEASE_LEVEL_MAP = {
+    "alpha": "a",
+    "beta": "b",
+    "candidate": "rc",
+    "final": "",
+}
 
-    Follows the same logic as rules_python's env_marker_setting.
-    """
-    kind = version_info.releaselevel
-    if kind == "final":
+def _format_full_version(version_info):
+    """Format a full version string from interpreter_version_info (PEP 508)."""
+    releaselevel = version_info.releaselevel
+    if not releaselevel or releaselevel == "final":
         kind = ""
         serial = ""
     else:
-        kind = kind[0] if kind else ""
-        serial = str(version_info.serial) if version_info.serial else ""
+        kind = _RELEASE_LEVEL_MAP.get(releaselevel, releaselevel[0])
+        serial = str(version_info.serial) if version_info.serial != None else ""
 
     return "{major}.{minor}.{micro}{kind}{serial}".format(
         major = version_info.major,
@@ -223,19 +229,29 @@ def collect_markers(ctx):
     implementation_version = ctx.attr.implementation_version
     platform_python_implementation = ctx.attr.platform_python_implementation
 
+    # Keep explicit python_version / python_full_version consistent with each
+    # other instead of mixing an explicit attr with the host toolchain version.
+    has_explicit_py_version = bool(python_version or python_full_version)
+    if python_full_version and not python_version:
+        python_version = ".".join(python_full_version.split(".")[:2])
+    elif python_version and not python_full_version:
+        if python_version.count(".") >= 2:
+            python_full_version = python_version
+            python_version = ".".join(python_version.split(".")[:2])
+        else:
+            python_full_version = python_version + ".0"
+
     # Try PyRuntimeInfo from the toolchain first (most accurate).
-    runtime = _toolchain_py3_runtime(ctx) if (not python_version or not python_full_version or not implementation_name) else None
+    runtime = _toolchain_py3_runtime(ctx) if (not has_explicit_py_version or not implementation_name) else None
     if runtime:
         if not implementation_name and hasattr(runtime, "implementation_name") and runtime.implementation_name:
             implementation_name = runtime.implementation_name
 
-        vi = runtime.interpreter_version_info if hasattr(runtime, "interpreter_version_info") else None
+        vi = runtime.interpreter_version_info if (not has_explicit_py_version and hasattr(runtime, "interpreter_version_info")) else None
         if vi:
-            if not python_version:
-                python_version = "{}.{}".format(vi.major, vi.minor)
+            python_version = "{}.{}".format(vi.major, vi.minor)
             full_ver = _format_full_version(vi)
-            if not python_full_version:
-                python_full_version = full_ver
+            python_full_version = full_ver
             if not implementation_version:
                 implementation_version = full_ver
 
@@ -246,10 +262,12 @@ def collect_markers(ctx):
         python_full_version = flag_value(ctx.attr._python_full_version_target)
     if not implementation_name:
         implementation_name = flag_value(ctx.attr._implementation_name_target)
-    if not implementation_version:
+    if not implementation_version and not has_explicit_py_version:
         implementation_version = flag_value(ctx.attr._implementation_version_target)
     if not platform_python_implementation:
-        platform_python_implementation = flag_value(ctx.attr._platform_python_implementation_target)
+        flag_ppi = flag_value(ctx.attr._platform_python_implementation_target)
+        if flag_ppi and (flag_ppi != DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION or implementation_name in ("", DEFAULT_PEP508_IMPLEMENTATION_NAME)):
+            platform_python_implementation = flag_ppi
 
     # Defaults (matching rules_python's pep508_env.bzl behavior) if still empty.
     if not implementation_name:
@@ -298,3 +316,6 @@ marker_value = rule(
     },
     doc = """Converts a string (possibly configurable via select()) into a FeatureFlagInfo provider.""",
 )
+
+# Visible for testing
+format_full_version_for_testing = _format_full_version

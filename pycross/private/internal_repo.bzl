@@ -91,7 +91,7 @@ runpy.run_path(tool_path, run_name="__main__")
     ))
 
     result = rctx.execute(
-        [python_exe, str(wrapper_file)] + args,
+        [python_exe, "-I", str(wrapper_file)] + args,
         quiet = quiet,
     )
 
@@ -123,6 +123,7 @@ def _interpreter_identity(rctx, python_executable):
     # The label does not change across patch releases, so include the version.
     result = rctx.execute([
         python_executable,
+        "-I",
         "-c",
         "import sys; print(sys.implementation.name, *sys.version_info)",
     ])

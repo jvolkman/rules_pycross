@@ -10,6 +10,9 @@ load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:pep508_marker_values.bzl", "format_full_version_for_testing")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:target_platform.bzl", "PycrossTargetPlatformInfo", "pycross_target_platform")
 
 # buildifier: disable=bzl-visibility
@@ -442,6 +445,89 @@ def _test_cycle_multi_hop_marker(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_cycle_multi_hop_marker_impl)
 
+# ── Test: target_platform Windows ARM64/x86_32 and marker edge cases ─
+
+def _test_target_platform_win_arm64_impl(env, target):
+    info = target[PycrossTargetPlatformInfo]
+    env.expect.that_collection(info.platforms).contains_exactly(["win_arm64"])
+    env.expect.that_str(info.markers["python_version"]).equals("3.12")
+    env.expect.that_str(info.markers["python_full_version"]).equals("3.12.0")
+    env.expect.that_str(info.markers["implementation_version"]).equals("3.12.0")
+
+def _test_target_platform_win_arm64(name):
+    pycross_target_platform(
+        name = name + "_plat",
+        os_name = "nt",
+        sys_platform = "win32",
+        platform_machine = "ARM64",
+        python_version = "3.12",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_plat",
+        impl = _test_target_platform_win_arm64_impl,
+    )
+
+def _test_target_platform_win_x86_32_impl(env, target):
+    info = target[PycrossTargetPlatformInfo]
+    env.expect.that_collection(info.platforms).contains_exactly(["win32"])
+    env.expect.that_str(info.markers["python_version"]).equals("3.11")
+    env.expect.that_str(info.markers["python_full_version"]).equals("3.11.5")
+
+def _test_target_platform_win_x86_32(name):
+    pycross_target_platform(
+        name = name + "_plat",
+        os_name = "nt",
+        sys_platform = "win32",
+        platform_machine = "x86_32",
+        python_full_version = "3.11.5",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_plat",
+        impl = _test_target_platform_win_x86_32_impl,
+    )
+
+def _test_target_platform_linux_x86_32_and_pypy_impl(env, target):
+    info = target[PycrossTargetPlatformInfo]
+    env.expect.that_collection(info.platforms).contains_exactly(["manylinux_2_28_i686"])
+    env.expect.that_str(info.implementation).equals("pp")
+    env.expect.that_str(info.markers["implementation_name"]).equals("pypy")
+    env.expect.that_str(info.markers["platform_python_implementation"]).equals("PyPy")
+
+def _test_target_platform_linux_x86_32_and_pypy(name):
+    pycross_target_platform(
+        name = name + "_plat",
+        os_name = "posix",
+        sys_platform = "linux",
+        platform_machine = "x86_32",
+        libc = "glibc",
+        python_version = "3.11",
+        implementation_name = "pypy",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_plat",
+        impl = _test_target_platform_linux_x86_32_and_pypy_impl,
+    )
+
+def _test_format_full_version_impl(env, _target):
+    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 14, micro = 2, releaselevel = "final", serial = 0))).equals("3.14.2")
+    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 14, micro = 0, releaselevel = "candidate", serial = 1))).equals("3.14.0rc1")
+    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 15, micro = 0, releaselevel = "alpha", serial = 0))).equals("3.15.0a0")
+    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 14, micro = 0, releaselevel = "beta", serial = 2))).equals("3.14.0b2")
+
+def _test_format_full_version(name):
+    util.helper_target(native.filegroup, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_format_full_version_impl,
+    )
+
 # ============================================================================
 # Test suite
 # ============================================================================
@@ -461,6 +547,10 @@ def pep508_test_suite(name):
             _test_wheel_priority_map,
             _test_wheel_matched_true,
             _test_wheel_matched_false,
+            _test_target_platform_win_arm64,
+            _test_target_platform_win_x86_32,
+            _test_target_platform_linux_x86_32_and_pypy,
+            _test_format_full_version,
             _test_cycle_reachable,
             _test_cycle_marker_gated,
             _test_cycle_self_reachable,
