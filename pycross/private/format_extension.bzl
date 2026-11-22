@@ -12,6 +12,7 @@ for backend extensions.
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")
+load("@pypackaging.bzl", "pypackaging")
 load(":json_file_repo.bzl", "json_file_repo")
 load(
     ":lock_common.bzl",
@@ -21,6 +22,7 @@ load(
 )
 load(":lock_repo_creation.bzl", "create_repos")
 load(":lock_resolver.bzl", "resolve")
+load(":util.bzl", "parse_package_key")
 
 # Shared attrs for workspace tags.
 WORKSPACE_COMMON_ATTRS = dict(
@@ -230,18 +232,35 @@ def _normalize_flag(flag, is_root):
             name = name + ":" + leaf
     return "--" + name + sep + value
 
+def _canonicalize_package_tag_name(name):
+    """Canonicalize a package() tag name ('*', 'name', 'name[extra]', 'name@ver', 'name[extra]@ver')."""
+    if name == "*":
+        return name
+    parts = parse_package_key(name)
+    norm_name = pypackaging.utils.canonicalize_name(parts.name)
+    norm_extra = pypackaging.utils.canonicalize_name(parts.extra) if parts.extra else ""
+    base = "{}[{}]".format(norm_name, norm_extra) if norm_extra else norm_name
+    if "@" in name:
+        return "{}@{}".format(base, parts.version)
+    return base
+
 def _normalize_settings(settings, flags):
     """Stringify `settings` labels, rejecting built-in options and settings also set in `flags`."""
-    flag_labels = {f[2:].partition("=")[0]: True for f in flags}
+    flag_labels = {}
+    for f in flags:
+        flag_label = f[2:].partition("=")[0]
+        if flag_label.startswith("@"):
+            flag_labels[Label(flag_label)] = True
     result = {}
     for label, value in settings.items():
         if label.package == "command_line_option":
             fail("repo settings key {} is a built-in option; use flags = [\"--{}=...\"] instead".format(label, label.name))
-        key = str(label)
-        if key in flag_labels:
-            fail("Build setting {} is set in both flags and settings".format(key))
-        result[key] = value
+        if label in flag_labels:
+            fail("Build setting {} is set in both flags and settings".format(label))
+        result[str(label)] = value
     return result
+
+canonicalize_package_tag_name_for_testing = _canonicalize_package_tag_name
 
 def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, repo_create_model_fn, toml_cache = None):
     """Run translator + resolver inline within module_ctx.
@@ -334,6 +353,7 @@ def make_format_extension(
         lock_owners = {}
         lock_repos = {}
         root_direct_deps = []
+        root_direct_dev_deps = []
         lock_model_structs = {}
 
         # Collect tags per module.
@@ -343,11 +363,18 @@ def make_format_extension(
         # Track per-workspace pypi_indexes (from workspace or standalone project tags).
         workspace_pypi_indexes = {}
 
+        has_is_dev_dep = hasattr(module_ctx, "is_dev_dependency")
+
         for module in module_ctx.modules:
             # 1. Process workspace tags.
             for tag in module.tags.workspace:
                 ws_name = tag.name
-                workspace_tags.append(struct(tag = tag, module = module, ws_name = ws_name))
+                workspace_tags.append(struct(
+                    tag = tag,
+                    module = module,
+                    ws_name = ws_name,
+                    is_dev_dependency = module_ctx.is_dev_dependency(tag) if has_is_dev_dep else False,
+                ))
                 if tag.pypi_indexes:
                     workspace_pypi_indexes[ws_name] = tag.pypi_indexes
 
@@ -365,7 +392,11 @@ def make_format_extension(
                     constraint_values = getattr(tag, "constraint_values", []),
                     platform = getattr(tag, "platform", None),
                 )
-                member_tags.append(struct(tag = member_tag, module = module))
+                member_tags.append(struct(
+                    tag = member_tag,
+                    module = module,
+                    is_dev_dependency = module_ctx.is_dev_dependency(tag) if has_is_dev_dep else False,
+                ))
 
         toml_cache = {}
         process_workspaces(
@@ -379,6 +410,7 @@ def make_format_extension(
             model_type,
             root_direct_deps,
             toml_cache = toml_cache,
+            root_direct_dev_deps = root_direct_dev_deps,
         )
 
         # Track which workspaces each module declares for validation
@@ -411,10 +443,11 @@ def make_format_extension(
                     fail("Package override specifies workspace '{}' which does not exist".format(ws_name))
 
                 normalized = normalize_package_tag(tag)
+                pkg_key = _canonicalize_package_tag_name(tag.name)
                 ws_pkgs = workspace_packages.setdefault(ws_name, {})
-                if tag.name in ws_pkgs:
+                if pkg_key in ws_pkgs:
                     fail("Multiple package entries for package '{}' in workspace '{}'".format(tag.name, ws_name))
-                ws_pkgs[tag.name] = normalized
+                ws_pkgs[pkg_key] = normalized
 
         if not lock_repos:
             if bazel_features.external_deps.extension_metadata_has_reproducible:
@@ -490,12 +523,12 @@ def make_format_extension(
         if bazel_features.external_deps.extension_metadata_has_reproducible:
             return module_ctx.extension_metadata(
                 root_module_direct_deps = root_direct_deps,
-                root_module_direct_dev_deps = [],
+                root_module_direct_dev_deps = root_direct_dev_deps,
                 reproducible = True,
             )
         return module_ctx.extension_metadata(
             root_module_direct_deps = root_direct_deps,
-            root_module_direct_dev_deps = [],
+            root_module_direct_dev_deps = root_direct_dev_deps,
         )
 
     # Build the repo tag_class by merging shared and transition attrs.

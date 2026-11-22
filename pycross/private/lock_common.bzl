@@ -214,7 +214,9 @@ def register_workspace_repo(
         transition_attrs,
         lock_module,
         extra_project_files,
-        is_auto_build_repo = False):
+        is_auto_build_repo = False,
+        root_direct_dev_deps = None,
+        is_dev_dependency = False):
     """Register a workspace lock repo.
 
     Args:
@@ -234,6 +236,8 @@ def register_workspace_repo(
         extra_project_files: List of extra pyproject.toml files.
         is_auto_build_repo: Whether this repo is the auto-generated `<ws>__build`
             build-tools repo (not declared explicitly by the user).
+        root_direct_dev_deps: Optional list to store root direct dev dependencies.
+        is_dev_dependency: Whether the tag declaring this repo was on a `dev_dependency = True` extension proxy.
     """
     check_unique_repo_name(lock_owners, lock_module.name, repo_name)
     lock_repos[repo_name] = workspace_lock_struct(
@@ -244,7 +248,10 @@ def register_workspace_repo(
         is_auto_build_repo = is_auto_build_repo,
     )
     if lock_module.is_root:
-        root_direct_deps.append(repo_name)
+        if is_dev_dependency and root_direct_dev_deps != None:
+            root_direct_dev_deps.append(repo_name)
+        else:
+            root_direct_deps.append(repo_name)
 
     parsed = parse_dependency_group_entries(raw_dependency_groups)
 
@@ -305,6 +312,15 @@ def parse_dependency_group_entries(raw_groups):
             wildcard_testonly = is_testonly
             testonly_overrides = {}  # Reset: * supersedes earlier entries
             parsed_groups.append(spec)
+        elif spec.endswith(":*"):
+            prefix = spec[:-1]
+            testonly_overrides = {
+                k: v
+                for k, v in testonly_overrides.items()
+                if not k.startswith(prefix)
+            }
+            testonly_overrides[spec] = is_testonly
+            parsed_groups.append(spec)
         else:
             testonly_overrides[spec] = is_testonly
             parsed_groups.append(spec)
@@ -330,7 +346,8 @@ def process_repo(
         ws_name,
         tag_info,
         model_type,
-        extra_project_files):
+        extra_project_files,
+        root_direct_dev_deps = None):
     """Processes a single repo tag.
 
     Args:
@@ -343,21 +360,28 @@ def process_repo(
         tag_info: The repo tag info.
         model_type: The lock model type.
         extra_project_files: List of extra pyproject.toml files.
+        root_direct_dev_deps: Optional list to store root direct dev dependencies.
     """
     tag = tag_info.tag
 
     raw_groups = tag.dependency_groups
 
     has_wildcard = False
-    has_specific = False
+    wildcard_is_testonly = False
+    redundant_specific = False
     for entry in raw_groups:
-        spec = entry.split(";")[0]
+        parts = entry.split(";")
+        spec = parts[0]
+        entry_is_testonly = "testonly" in parts[1:]
         if spec == "*":
             has_wildcard = True
+            wildcard_is_testonly = entry_is_testonly
         elif spec not in ("default", "transitive"):
-            has_specific = True
+            # Entries that toggle ;testonly after '*' are meaningful overrides, not redundant.
+            if not has_wildcard or entry_is_testonly == wildcard_is_testonly:
+                redundant_specific = True
 
-    if has_wildcard and has_specific:
+    if has_wildcard and redundant_specific:
         # buildifier: disable=print
         print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, raw_groups))
 
@@ -378,6 +402,8 @@ def process_repo(
         transition_attrs,
         tag_info.module,
         extra_project_files,
+        root_direct_dev_deps = root_direct_dev_deps,
+        is_dev_dependency = getattr(tag_info, "is_dev_dependency", False),
     )
 
 def process_workspaces(
@@ -390,7 +416,8 @@ def process_workspaces(
         discover_members_fn,
         model_type,
         root_direct_deps,
-        toml_cache = None):
+        toml_cache = None,
+        root_direct_dev_deps = None):
     """Processes workspace definitions, discovers members, and processes them.
 
     Args:
@@ -404,6 +431,7 @@ def process_workspaces(
         model_type: The lock model type.
         root_direct_deps: List to store root direct dependencies.
         toml_cache: Optional dict caching decoded TOML files by label.
+        root_direct_dev_deps: Optional list to store root direct dev dependencies.
     """
 
     # Collect workspace definitions
@@ -479,7 +507,11 @@ def process_workspaces(
             constraint_values = [],
             platform = None,
         )
-        member_tags.append(struct(tag = implicit_tag, module = ws_info.module))
+        member_tags.append(struct(
+            tag = implicit_tag,
+            module = ws_info.module,
+            is_dev_dependency = getattr(ws_info, "is_dev_dependency", False),
+        ))
         workspace_repo_count[ws_name] += 1
 
     for tag_info in member_tags:
@@ -511,7 +543,11 @@ def process_workspaces(
             constraint_values = getattr(tag, "constraint_values", []),
             platform = getattr(tag, "platform", None),
         )
-        new_tag_info = struct(tag = new_tag, module = tag_info.module)
+        new_tag_info = struct(
+            tag = new_tag,
+            module = tag_info.module,
+            is_dev_dependency = getattr(tag_info, "is_dev_dependency", False),
+        )
 
         process_repo(
             lock_owners,
@@ -523,6 +559,7 @@ def process_workspaces(
             new_tag_info,
             model_type,
             workspace_extra_project_files[ws_name],
+            root_direct_dev_deps = root_direct_dev_deps,
         )
 
     # Auto-generate the __build thin repo for this workspace.

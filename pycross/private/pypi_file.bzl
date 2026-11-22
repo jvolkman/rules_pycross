@@ -43,19 +43,55 @@ def _sha256_from_fragment(url):
             return part[len("sha256="):].lower()
     return None
 
+def _find_tag_end(content, pos):
+    """Find the closing '>' of an HTML start tag, ignoring '>' inside quoted attribute values."""
+    gt = content.find(">", pos)
+    if gt < 0:
+        return -1
+    dq = content.find("\"", pos, gt)
+    sq = content.find("'", pos, gt)
+    if dq < 0 and sq < 0:
+        return gt
+    quote = None
+    for i in range(pos, len(content)):
+        c = content[i]
+        if quote:
+            if c == quote:
+                quote = None
+        elif c == "\"" or c == "'":
+            quote = c
+        elif c == ">":
+            return i
+    return -1
+
 def _extract_href(tag):
-    tag_lower = tag.lower()
-    idx = tag_lower.find("href")
-    for _attempt in range(len(tag)):
-        if idx < 0:
+    """Extract the href attribute value from an HTML tag body, ignoring quoted values."""
+    rest = tag.lstrip()
+    for _ in range(len(tag)):
+        if not rest:
             return None
-        rest = tag[idx + 4:].lstrip()
-        if (idx == 0 or tag[idx - 1] in " \t\r\n") and rest.startswith("="):
+        token = rest.replace("\t", " ").replace("\r", " ").replace("\n", " ").split(" ", 1)[0]
+        name, has_eq, _ = token.partition("=")
+        if has_eq:
+            attr_name = name.lower()
+            rest = rest[len(name) + 1:].lstrip()
+        else:
+            attr_name = token.lower()
+            rest = rest[len(token):].lstrip()
+            if not rest.startswith("="):
+                continue
             rest = rest[1:].lstrip()
-            if rest[:1] in ("\"", "'"):
-                return rest[1:].split(rest[0], 1)[0]
-            return rest.replace("\t", " ").replace("\r", " ").replace("\n", " ").split(" ", 1)[0]
-        idx = tag_lower.find("href", idx + 4)
+
+        if not rest:
+            return None
+        if rest[0] in ("\"", "'"):
+            val, _, rest = rest[1:].partition(rest[0])
+        else:
+            val = rest.replace("\t", " ").replace("\r", " ").replace("\n", " ").split(" ", 1)[0]
+            rest = rest[len(val):]
+        if attr_name == "href":
+            return val
+        rest = rest.lstrip()
     return None
 
 def _parse_simple_html(content):
@@ -70,7 +106,7 @@ def _parse_simple_html(content):
         pos = start + 2
         if pos >= len(content) or lower[pos] not in " \t\r\n>":
             continue
-        end = lower.find(">", pos)
+        end = _find_tag_end(content, pos)
         if end < 0:
             break
         close = lower.find("</a>", end)
@@ -95,7 +131,7 @@ def _parse_simple_json(content):
     """Parses a PEP 691 project page into a list of file dicts."""
     files = []
     for f in json.decode(content).get("files", []):
-        sha256 = f.get("hashes", {}).get("sha256")
+        sha256 = (f.get("hashes") or {}).get("sha256")
         files.append({
             "filename": f["filename"],
             "url": f["url"],
@@ -117,6 +153,19 @@ def parse_simple_index(content):
         return _parse_simple_json(content)
     return _parse_simple_html(content)
 
+def _has_url_scheme(ref):
+    """Return True if `ref` starts with a valid RFC 3986 URI scheme (`ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ':'`)."""
+    colon = ref.find(":")
+    if colon <= 0:
+        return False
+    scheme = ref[:colon]
+    if not scheme[0].isalpha():
+        return False
+    for ch in scheme.elems():
+        if not (ch.isalnum() or ch in "+-."):
+            return False
+    return True
+
 def resolve_url(base, ref):
     """Resolves a possibly-relative URL against a base URL, dropping any fragment.
 
@@ -128,9 +177,7 @@ def resolve_url(base, ref):
         The absolute URL.
     """
     ref = ref.split("#", 1)[0]
-    colon = ref.find(":")
-    slash = ref.find("/")
-    if colon > 0 and (slash < 0 or colon < slash):
+    if _has_url_scheme(ref):
         return ref
 
     scheme, _, rest = base.partition("://")

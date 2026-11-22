@@ -23,7 +23,7 @@ def _parse_backend_spec(spec):
         return (spec, [])
     backend_name = spec[:bracket]
     requires_str = spec[bracket + 1:-1]  # strip [ and ]
-    required = [r.strip() for r in requires_str.split(",") if r.strip()]
+    required = [extract_pep508_name(r.strip()) for r in requires_str.split(",") if r.strip()]
     return (backend_name, required)
 
 def _resolve_backend(backend_to_rule, default_backend, pyproject_backend, build_requires_names):
@@ -132,7 +132,11 @@ def _validate_build_backend(attr):
     if not attr.build_backend:
         return
     known_backends = {v: True for v in attr.backend_to_rule.values()}
-    if attr.build_backend not in known_backends and attr.build_backend != attr.default_backend:
+    for name in (getattr(attr, "backend_tool_packages", None) or {}).keys():
+        known_backends[name] = True
+    if attr.default_backend:
+        known_backends[attr.default_backend] = True
+    if attr.build_backend not in known_backends:
         fail("Unknown build backend: " + attr.build_backend +
              ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
 
@@ -175,16 +179,16 @@ def _compute_sdist_build_config(attr, metadata):
     default_backend = attr.default_backend
 
     macro_attrs = {
-        "name": "\"wheel_build\"",
-        "sdist": "\"{}\"".format(attr.sdist),
+        "name": repr("wheel_build"),
+        "sdist": repr(str(attr.sdist)),
         "deps": str(attr.deps),
     }
 
     if attr.whldir_name:
-        macro_attrs["whldir_name"] = "\"{}\"".format(attr.whldir_name)
+        macro_attrs["whldir_name"] = repr(attr.whldir_name)
 
     if attr.source_dir:
-        macro_attrs["source_dir"] = "\"{}\"".format(attr.source_dir)
+        macro_attrs["source_dir"] = repr(attr.source_dir)
 
     backend = metadata.get("build_backend", "")
     requires = metadata.get("build_requires", [])
@@ -255,7 +259,7 @@ def _compute_sdist_build_config(attr, metadata):
             if attr_name == "tool_deps":
                 _merge_tool_deps_override(tool_deps, decoded, tool_packages, backend_macro, attr.sdist)
             elif type(decoded) == "string":
-                macro_attrs[attr_name] = "\"{}\"".format(decoded)
+                macro_attrs[attr_name] = repr(decoded)
             else:
                 macro_attrs[attr_name] = str(decoded)
         if all_configs:
@@ -306,7 +310,7 @@ def _validate_requirements(requires, pin_versions, pkg_name):
 
     for req_str in requires:
         req = pypackaging.requirements.parse(req_str)
-        if not req.specifier:
+        if req.marker or not req.specifier:
             continue
 
         req_name = req.name

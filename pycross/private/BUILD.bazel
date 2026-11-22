@@ -317,7 +317,10 @@ bzl_library(
 bzl_library(
     name = "override_helpers",
     srcs = ["override_helpers.bzl"],
-    deps = ["@bazel_features//:features"],
+    deps = [
+        "@bazel_features//:features",
+        "@pypackaging.bzl//:pypackaging",
+    ],
 )
 
 bzl_library(
@@ -438,7 +441,9 @@ bzl_library(
         ":lock_common",
         ":lock_repo_creation",
         ":lock_resolver",
+        ":util",
         "@bazel_features//:features",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 

@@ -56,6 +56,25 @@ def _test_parse_html_impl(env, target):
         },
     ]).in_order()
 
+    # Unescaped '>' inside quoted data-requires-python before href, boolean attr, single-quoted attrs, and 'href=' inside another attr.
+    quoted_html = (
+        '<a data-yanked data-requires-python=">=3.8" data-note="not href=bad" ' +
+        'href="https://files.example.com/bar-1.0.whl#sha256=' + _SHA_A + '">bar-1.0.whl</a>' +
+        "<a data-requires-python='>=3.9' data-note='href=bad' href='baz-1.0.whl'>baz-1.0.whl</a>"
+    )
+    env.expect.that_collection(parse_simple_index(quoted_html)).contains_exactly([
+        {
+            "filename": "bar-1.0.whl",
+            "url": "https://files.example.com/bar-1.0.whl#sha256=" + _SHA_A,
+            "sha256": _SHA_A,
+        },
+        {
+            "filename": "baz-1.0.whl",
+            "url": "baz-1.0.whl",
+            "sha256": None,
+        },
+    ]).in_order()
+
 def _test_parse_html(name):
     _unit_test(name, _test_parse_html_impl)
 
@@ -66,6 +85,15 @@ def _test_parse_json_impl(env, target):
         {"filename": "foo-1.0.tar.gz", "url": "https://files.example.com/foo-1.0.tar.gz", "sha256": _SHA_A},
         {"filename": "foo-1.0-py3-none-any.whl", "url": "../../packages/foo-1.0-py3-none-any.whl", "sha256": None},
     ]).in_order()
+
+    null_hashes_json = json.encode({
+        "files": [
+            {"filename": "baz-1.0.tar.gz", "url": "https://files.example.com/baz-1.0.tar.gz", "hashes": None},
+        ],
+    })
+    env.expect.that_collection(parse_simple_index(null_hashes_json)).contains_exactly([
+        {"filename": "baz-1.0.tar.gz", "url": "https://files.example.com/baz-1.0.tar.gz", "sha256": None},
+    ])
 
 def _test_parse_json(name):
     _unit_test(name, _test_parse_json_impl)
@@ -78,6 +106,7 @@ def _test_resolve_url_impl(env, target):
         "//cdn.example.com/a.whl": "https://cdn.example.com/a.whl",
         "/packages/a.whl": "https://example.com/packages/a.whl",
         "a.whl": "https://example.com/simple/foo/a.whl",
+        "a.whl?se=2026-01-01T00:00:00Z": "https://example.com/simple/foo/a.whl?se=2026-01-01T00:00:00Z",
         "./a.whl": "https://example.com/simple/foo/a.whl",
         "../../packages/x/a.whl?q=1#sha256=x": "https://example.com/packages/x/a.whl?q=1",
         "../../../../a.whl": "https://example.com/a.whl",
