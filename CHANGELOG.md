@@ -2,6 +2,105 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0]
+
+### Added
+
+- **`//pycross/settings:precompile_invalidation_mode` flag.** Controls PEP 552
+  `.pyc` invalidation (`"auto"`, `"checked_hash"`, or `"unchecked_hash"`) so
+  target fastbuild and exec opt installs can share one cache entry under path
+  mapping.
+- **Custom backend override helpers.** `pycross/backend.bzl` exports
+  `CORE_OVERRIDE_ATTRS` and `CC_OVERRIDE_ATTRS`, and `encode_build_system_attrs`
+  now forwards custom override attributes dynamically.
+- **`config_settings` on `pep517_build`.** Moved into common build attributes so
+  `pep517_build` accepts `config_settings` alongside specialized backends.
+- **`PycrossBuildExecRuntimeInfo.bytecode_cache_tag`** exposes the target
+  interpreter's PEP 3147 bytecode cache tag (e.g. `cpython-314`).
+- **Lock translator features.** Added transitive PEP 735 `{include-group = ...}`
+  expansion across translators, `[tool.poetry.extras]` support in Poetry, and
+  multi-project `projects = ["*"]` merging in PDM.
+- **`null` key deletion in `PYCROSS_ENV_VARS_FILE`.** Pre-build hooks can set a
+  key to `null` to delete it from the build environment without dropping
+  unrelated keys.
+- **Optional `rules_rust` toolchain in `pycross_generate_cargo_lock`.** Also
+  adds `setuptools-rust` and `.zip` sdist support.
+
+### Changed
+
+- **Testonly propagation for local workspace members.** Third-party dependencies
+  reached only through a testonly local member or path dependency now become
+  testonly pins (moving from `all_requirements` to `all_testonly_requirements`),
+  and `["*", "group:*;testonly"]` now honors `;testonly`.
+- **PDM bare package targets exclude extras.** `@repo//pkg` no longer pulls in
+  `pkg[extra]` dependencies when a root pins `pkg[extra]`; depend on
+  `@repo//pkg:[extra]`, matching `uv` and Poetry.
+- **Native `linux_<arch>` wheel preference (`pypackaging.bzl` 0.4.0).**
+  `linux_<arch>` wheels now rank ahead of `manylinux_*` and `musllinux_*` tags
+  (matching `pypa/packaging` 26.3). Also bumped `toml.bzl` to `0.6.0`.
+- **Stricter override precedence and validation.** Root-module backend overrides
+  now win over dependency modules, duplicate overrides in the same module fail,
+  and `ignore_dependencies`, `package()`, `--@repo//_variants` (including on
+  pinned or unusable repos), and `precompile_optimize_level` (`[0, 1, 2]`) are
+  validated more strictly.
+- **Custom backend override defaults.** Because `encode_build_system_attrs`
+  forwards every truthy attribute, custom backend override attributes must
+  default to falsy values (`""`, `[]`, `{}`, `None`, `False`, `0`).
+- **`pycross_generate_cargo_lock` prefers registered `rules_rust` `cargo`.**
+  Pass `-- --cargo cargo` to invoke `cargo` from `PATH` instead.
+- **`dev_dependency = True` lock repos** now register in
+  `root_module_direct_dev_deps` so `bazel mod tidy` places them under dev
+  dependencies.
+- **Repo, analysis, and build execution performance.** Lockfiles and
+  `pyproject.toml` files parse once per workspace, pure repo rules mark
+  themselves `reproducible = True`, universal `py3-none-any` wheels skip wheel
+  chooser targets, `PycrossRepairWheel` enables `supports-path-mapping` and
+  fast-paths pure-Python wheels, extracted build tools are shared across sdist
+  targets, and POSIX `/bin/sh` wrappers replace per-compile Python wrappers.
+- **Trimmed internal lock metadata.** Auto-generated `<workspace>__build` repos
+  no longer expose `//_variants` unless explicitly declared, and
+  `@<repo>_lock_json//:data.json` omits unused `files` and `remote_files`
+  fields.
+
+### Fixed
+
+- **Sdist build pipeline and CC layer.** Fixed `copts` shadowing in `CXXFLAGS`,
+  `native_deps` defines, PIC static library preference, `PKG_CONFIG_PATH`
+  materialization across all builders, main-repo `.pc` paths, compiler wrapper
+  probes and linker flags, `TemplateVariableInfo` expansion, `build_env`
+  preservation (including `MACOSX_DEPLOYMENT_TARGET`, `_PYTHON_HOST_PLATFORM`,
+  and rule `RUSTFLAGS` while stripping inherited `RUSTFLAGS`), `crossenv`
+  `site_hooks`, `RECORD` hash updates after path scrubbing, `pycross_path_tool`
+  runfiles, `meson`/`cmake` builder edge cases, non-`x86_64` platform overrides,
+  and native musl builds.
+- **Maturin and `setuptools-rust` builds.** Fixed `rustc` wrapper metadata
+  hashes for multi-version crate graphs, probe detection with `--print` flags,
+  host/target `rustlib` and `vendored_crates` paths, and workspace/subdirectory
+  `Cargo.lock` handling.
+- **Generated repos, variants, and cycles.** Fixed multi-member
+  `availability_markers`, extras targets in dependency cycles, duplicate wheel
+  library deps, `_cargo` alias filtering, `modules_mapping` fork selection,
+  overlapping `uv` conflict defaults and edge narrowing, `NAME_MAX` hashing on
+  `pycross_no_variant_selected`, PEP 440 epoch sanitization, and extras
+  canonicalization.
+- **Lock translators, resolver, and inspection.** Fixed sdist `deps` marker
+  gating via an exec-transitioned proxy, Windows `ARM64`/`x86_32`/PyPy markers
+  and wheel tags, `inspect_package` single-file modules/Windows `.pyd`/entry
+  points/`pyproject.toml` scripts/file-only sdists, `lock_resolver` queue
+  deduplication and cycle grouping, `pylock` selection marker pruning and
+  fork/target-package edge markers, Poetry caret/tilde epochs and URL decoding,
+  quote-aware PEP 503 HTML parsing, and `-I` isolation for repo-time tools.
+- **Wheel rules, installer, and patching.** Fixed single-file `.pyc` symlinks
+  under `venvs_site_packages=yes`, plain `.whl` inputs to
+  `pycross_wheel_transform`, Windows relative POSIX `RECORD` paths,
+  `modules_mapping` Windows/PyPy ABI stripping, `bin`/`data`/`include` symlinks
+  when `site_paths` is empty, atomic patching of read-only files, and `#!python`
+  shebang rewriting in `extract_wheel_bin`.
+- **Diagnostics.** Preserved `build_failed.log` on PEP 517 build failures (with
+  live streaming under `RULES_PYCROSS_DEBUG=1`), included package names on
+  thin-repo `no_match_error` failures under `fail_at_execution`, and fixed
+  `_variants` error messages and false-positive `lock_common` warnings.
+
 ## [2.2.0]
 
 ### Added
