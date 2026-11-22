@@ -27,8 +27,8 @@ class CmakeBuilderTest(unittest.TestCase):
         libcxx_inc = (self.temp_path / "libcxx" / "include").absolute()
         ctx = self._ctx(
             {
-                "CC": 'C:\\tools\\clang;cc.exe',
-                "CXX": 'C:\\tools\\clang++;cxx.exe',
+                "CC": "C:\\tools\\clang;cc.exe",
+                "CXX": "C:\\tools\\clang++;cxx.exe",
                 "CFLAGS": "-nostdlibinc -O2",
                 "CXXFLAGS": "-nostdlibinc -O2 -std=c++17",
                 "LDFLAGS": "-L/some/lib",
@@ -56,7 +56,7 @@ class CmakeBuilderTest(unittest.TestCase):
         self.assertIn('set(CMAKE_EXE_LINKER_FLAGS_INIT "-L/some/lib")', content)
         self.assertIn('set(CMAKE_SHARED_LINKER_FLAGS_INIT "-L/some/lib")', content)
         self.assertIn('set(CMAKE_MODULE_LINKER_FLAGS_INIT "-L/some/lib")', content)
-        self.assertNotIn('set(CMAKE_C_FLAGS ', content)
+        self.assertNotIn("set(CMAKE_C_FLAGS ", content)
 
         # Populates library and filtered include search paths.
         layer_lib = (self.temp_path / "cc_layer" / "lib").absolute().as_posix()

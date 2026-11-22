@@ -79,8 +79,7 @@ class ScrubBuildPathsTest(unittest.TestCase):
 
             orig_cfg = b'ROOT = "/tmp/sandbox/external/dep/lib"\n'
             record_content = (
-                f"demo/__config__.py,{_expected_hash(orig_cfg)},{len(orig_cfg)}\r\n"
-                "demo-1.0.dist-info/RECORD,,\r\n"
+                f"demo/__config__.py,{_expected_hash(orig_cfg)},{len(orig_cfg)}\r\ndemo-1.0.dist-info/RECORD,,\r\n"
             ).encode("utf-8")
 
             with zipfile.ZipFile(in_whl, "w") as zf:
