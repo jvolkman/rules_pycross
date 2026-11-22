@@ -318,6 +318,29 @@ def _test_no_variant_selected_deferred_impl(env, target):
     runfile_names = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
     env.expect.that_collection(runfile_names).contains(whl.basename)
 
+def _test_no_variant_selected_long_name_deferred(name):
+    long_target = name + "_" + "_".join(["extra_long_package_name_variant_%d" % i for i in range(10)])
+    util.helper_target(
+        pycross_no_variant_selected,
+        name = long_target,
+        message = "No uv conflict variant selected",
+    )
+    analysis_test(
+        name = name,
+        target = long_target,
+        config_settings = {
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
+        },
+        impl = _test_no_variant_selected_long_name_deferred_impl,
+    )
+
+# buildifier: disable=unused-variable
+def _test_no_variant_selected_long_name_deferred_impl(env, target):
+    whl = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(len(whl.basename) < 64).equals(True)
+    env.expect.that_str(whl.basename).contains("_no_variant_")
+    env.expect.that_bool(whl.basename.endswith(".whl")).equals(True)
+
 def _define_precompile_subject(name, **kwargs):
     util.helper_target(
         native.filegroup,
@@ -711,6 +734,7 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_library_proxy_no_match_deferred,
             _test_no_variant_selected_fails_by_default,
             _test_no_variant_selected_deferred,
+            _test_no_variant_selected_long_name_deferred,
             _test_pycross_wheel_library_precompile_auto,
             _test_pycross_wheel_library_precompile_disabled,
             _test_pycross_wheel_library_precompile_force_disabled,

@@ -746,6 +746,64 @@ def _test_string_flag_usable_filters(name):
         },
     )
 
+def _overlapping_rival_resolver(name, other_usable = "*"):
+    """Helper for overlapping sets S1=[a, b] and S2=[a, c] where S2 defaults to a."""
+    flag_refs = _setup_flags(name, ["a", "b", "c"])
+    string_flag = _setup_string(name + "_variants", "")
+    other_usable_flag = _setup_string(name + "_usable_s1", other_usable)
+    spec = {
+        "display": "@repo//_variants",
+        "valid": ["a", "b", "c"],
+        "map": {"a": ["a"], "c": ["c"]},
+        "rivals": {"b": [["a", "b", "a_b"]]},
+    }
+    variant_resolver(
+        name = name + "_resolver_s2",
+        items = ["a", "c"],
+        default_setting = _setup_string(name + "_default_s2", "a"),
+        flags = {flag_refs[0]: "a", flag_refs[2]: "c"},
+        rival_flags = {flag_refs[1]: json.encode([["a", "b", "a_b"]])},
+        rival_usables = {other_usable_flag: "a_b"},
+        string_flags = {string_flag: json.encode(spec)},
+        tags = ["manual"],
+    )
+
+def _test_overlapping_rival_bool_flag_suppresses_default(name):
+    """Activating rival b via bool_flag suppresses S2's default a."""
+    _overlapping_rival_resolver(name)
+    analysis_test(
+        name = name,
+        target = name + "_resolver_s2",
+        impl = _expect_value(""),
+        config_settings = {
+            str(Label(":" + name + "_flag_b")): True,
+        },
+    )
+
+def _test_overlapping_rival_string_flag_suppresses_default(name):
+    """Activating rival b via //_variants string_flag suppresses S2's default a."""
+    _overlapping_rival_resolver(name)
+    analysis_test(
+        name = name,
+        target = name + "_resolver_s2",
+        impl = _expect_value(""),
+        config_settings = {
+            str(Label(":" + name + "_variants")): "b",
+        },
+    )
+
+def _test_overlapping_rival_ignored_when_not_usable(name):
+    """Rival b does not suppress S2's default when S1's usable setting excludes b."""
+    _overlapping_rival_resolver(name, other_usable = "a")
+    analysis_test(
+        name = name,
+        target = name + "_resolver_s2",
+        impl = _expect_value("a"),
+        config_settings = {
+            str(Label(":" + name + "_flag_b")): True,
+        },
+    )
+
 # ── Suite ────────────────────────────────────────────────────────────
 
 def variant_resolver_test_suite(name):
@@ -779,5 +837,8 @@ def variant_resolver_test_suite(name):
             _test_string_and_bool_flag_conflict_fails,
             _test_string_and_bool_flag_agree,
             _test_string_flag_usable_filters,
+            _test_overlapping_rival_bool_flag_suppresses_default,
+            _test_overlapping_rival_string_flag_suppresses_default,
+            _test_overlapping_rival_ignored_when_not_usable,
         ],
     )

@@ -652,14 +652,19 @@ def translate_uv(project_dict, lock_dict, lock_model):
             guards = []
             drop = False
             for qnames in set_qnames:
-                if not [q for q in qnames if "'__variant_{}'".format(q) in expr]:
+                if not [
+                    q
+                    for q in qnames
+                    if "'__variant_{}'".format(q) in expr or '"__variant_{}"'.format(q) in expr
+                ]:
                     continue
                 if not [q for q in qnames if q in variant_qnames]:
                     continue
-                if all([q in specs for q in qnames]):
+                uncovered = [q for q in qnames if q not in specs]
+                if not uncovered:
                     drop = True
                     break
-                guards.append("(" + " or ".join(["extra == '__variant_{}'".format(q) for q in qnames]) + ")")
+                guards.append("(" + " or ".join(["extra == '__variant_{}'".format(q) for q in uncovered]) + ")")
             if drop:
                 specs.pop(key)
             elif guards:

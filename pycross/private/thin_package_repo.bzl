@@ -23,7 +23,7 @@ def requirement(pkg):
     extra = None
     if "[" in pkg:
         pkg, extra = pkg.split("[", 1)
-        extra = extra.rstrip("]")
+        extra = pypackaging.utils.canonicalize_name(extra.rstrip("]"))
 
     pkg = pypackaging.utils.canonicalize_name(pkg)
     pkg_dir = pkg.replace("-", "_")
@@ -48,12 +48,15 @@ def _requirements_bzl(rctx, pins, packages, testonly_pins = {}):
         pin_target_dict = pins[pin]
         pin_parts = parse_package_key(pin)
 
-        # Check if ANY variant of this pin is platform-specific.
-        is_conditional = False
-        for pkg_key in pin_target_dict.values():
-            if _is_key_platform_specific(packages, pkg_key):
-                is_conditional = True
-                break
+        # Route through :maybe when any variant of this pin is platform-specific
+        # OR when the pin has no unconditional branch (variant-only / partial fork),
+        # so inactive variants/forks become _empty_library instead of no_match_error.
+        is_conditional = "" not in pin_target_dict
+        if not is_conditional:
+            for pkg_key in pin_target_dict.values():
+                if _is_key_platform_specific(packages, pkg_key):
+                    is_conditional = True
+                    break
 
         us_pin = underscore_name(pin_parts.name)
         if pin_parts.extra:
@@ -328,10 +331,10 @@ def _availability_condition(lines, helper_prefix, lock_key, packages, workspace_
     ])
     return ":{}".format(combined_name)
 
-def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = None, helper_prefix = "_maybe", packages = None, conflicts = None, member_name = None):
+def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = None, helper_prefix = "_maybe", packages = None, conflicts = None, member_name = None, is_testonly = False):
     """Emit a `:maybe` or `:[extra]_maybe` alias supporting both single-branch and multi-branch pins."""
     available_set = {k: True for k in (available_keys or [])}
-    if not available_set or not target_dict:
+    if not target_dict or (not available_set and "" in target_dict):
         return
 
     if len(target_dict) == 1 and "" in target_dict:
@@ -346,9 +349,10 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
             '        "{}": "{}",'.format(avail_cond, pkg_target),
             '        "//conditions:default": "//:_empty_library",',
             "    }),",
-            ")",
-            "",
         ])
+        if is_testonly:
+            lines.append("    testonly = True,")
+        lines.extend([")", ""])
         return
 
     emitted_helpers = {}
@@ -371,9 +375,10 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
                 '        "{}": "{}",'.format(avail_cond, pkg_target),
                 '        "//conditions:default": "//:_empty_library",',
                 "    }),",
-                ")",
-                "",
             ])
+            if is_testonly:
+                lines.append("    testonly = True,")
+            lines.extend([")", ""])
         branch_targets[constraint] = ":{}".format(emitted_helpers[pkg_key])
 
     lines.extend([
@@ -393,11 +398,10 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
             lines.append('        "{}": "{}{}",'.format(unselected[0], _NO_VARIANT_PREFIX, unselected[1]))
         lines.append('        "//conditions:default": "//:_empty_library",')
 
-    lines.extend([
-        "    }),",
-        ")",
-        "",
-    ])
+    lines.append("    }),")
+    if is_testonly:
+        lines.append("    testonly = True,")
+    lines.extend([")", ""])
 
 def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, no_variant_fallbacks = None, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None, packages = None, conflicts = None, member_name = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
@@ -502,7 +506,8 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
         actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(lib_rule, "[{}]".format(extra_name), actual_extra, is_testonly = testonly)
-        if extra_name in extras_maybe_keys and extras_maybe_keys[extra_name] and extra_target_dict:
+        extra_maybe = extras_maybe_keys.get(extra_name)
+        if extra_target_dict and (extra_maybe or "" not in extra_target_dict):
             if has_transition:
                 actual_extra_maybe = "extra_{}_maybe".format(extra_name)
                 _emit_maybe_alias(
@@ -510,7 +515,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     actual_extra_maybe,
                     actual_extra.rstrip(",").strip('"'),
                     extra_target_dict,
-                    extras_maybe_keys[extra_name],
+                    extra_maybe,
                     workspace_repo,
                     no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
@@ -525,16 +530,17 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     "[{}]_maybe".format(extra_name),
                     ":[{}]".format(extra_name),
                     extra_target_dict,
-                    extras_maybe_keys[extra_name],
+                    extra_maybe,
                     workspace_repo,
                     no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                     packages = packages,
                     conflicts = conflicts,
                     member_name = member_name,
+                    is_testonly = testonly,
                 )
 
-    if maybe_available_keys and lock_target_dict:
+    if lock_target_dict and (maybe_available_keys or "" not in lock_target_dict):
         maybe_name = _safe_name(target_name, "maybe")
         pkg_name = _safe_name(target_name, "pkg")
         if has_transition:
@@ -565,6 +571,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 packages = packages,
                 conflicts = conflicts,
                 member_name = member_name,
+                is_testonly = testonly,
             )
 
     header_lines = [proxy_load]
@@ -758,14 +765,21 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
 
     pins_by_set = pins_by_set or {}
     excluded = excluded or {}
-    defaults = {}  # qname -> [set suffixes where this repo selects it by default or pins it]
+    defaults = {}  # qname -> [all set suffixes containing qname] for repo defaults/pins
     if expose_variant_flags:
+        default_qnames = {}
         for set_suffix, vset in variant_info.sets.items():
-            selected = pins_by_set.get(set_suffix) or vset.pin
-            if not selected and vset.default not in excluded:
-                selected = vset.default
-            if selected:
-                defaults.setdefault(selected, []).append(set_suffix)
+            sel = pins_by_set.get(set_suffix) or vset.pin
+            if not sel and vset.default not in excluded:
+                sel = vset.default
+            if sel:
+                default_qnames[sel] = True
+        for qname in default_qnames.keys():
+            defaults[qname] = [
+                set_suffix
+                for set_suffix, vset in variant_info.sets.items()
+                if qname in vset.qnames
+            ]
 
     body = []
     needs_selects = False
@@ -1090,8 +1104,22 @@ pycross_transitioning_file_proxy = rule(
         )
         rctx.file("_transition.bzl", transition_bzl)
 
-    # Collect platform-specific packages for _maybe_ aliases.
-    maybe_mapping_targets = {}  # maybe_name -> (pkg_key, lock_label)
+    # Collect conditional deps and platform-specific packages for modules_mapping.
+    mm = _modules_mapping_deps(
+        pins,
+        packages,
+        workspace_repo,
+        conflicts = conflicts,
+        member_name = rctx.attr.member_name,
+        variant_info = variant_info,
+        no_variant_fallbacks = no_variant_fallbacks,
+        pins_by_set = pins_by_set,
+        excluded = excluded,
+        resolution_marker_exprs = lock.get("resolution_marker_exprs", {}),
+    )
+    maybe_mapping_targets = mm.maybe_mapping_targets
+    if mm.needs_selects:
+        root_build_lines.insert(0, 'load("@bazel_skylib//lib:selects.bzl", "selects")')
 
     # When the repo has a transition, the mapping (and the selects behind its
     # deps) must be analyzed under it, so wrap it in a transitioning proxy.
@@ -1116,35 +1144,14 @@ pycross_transitioning_file_proxy = rule(
     root_build_lines.extend([
         'exports_files(["requirements.bzl", "_packages.bzl"])',
         "",
+    ])
+    root_build_lines.extend(mm.extra_target_lines)
+    root_build_lines.extend([
         "pycross_modules_mapping(",
         '    name = "{}",'.format(mapping_name),
-        "    deps = [",
     ])
-    seen_mapping_targets = {}
-    for pin_name in sorted(pins.keys()):
-        pin_target_dict = pins[pin_name]
-        for pin_target in sorted(pin_target_dict.values()):
-            if pin_target in seen_mapping_targets:
-                continue
-            seen_mapping_targets[pin_target] = True
-            package = packages.get(pin_target, {})
-
-            # Determine the lock-level label for this package.
-            lock_key = "{}__via_{}".format(pin_target, rctx.attr.member_name) if pin_target in conflicts else pin_target
-            if package.get("cycle_group"):
-                lock_label = "@%s//_lock:_raw_%s" % (workspace_repo, lock_key)
-            else:
-                lock_label = "@%s//_lock:%s" % (workspace_repo, lock_key)
-
-            if _is_key_platform_specific(packages, pin_target):
-                maybe_name = sanitize_name(pin_target)
-                maybe_mapping_targets[maybe_name] = (lock_key, lock_label)
-                root_build_lines.append('        "//__maybe:%s",' % maybe_name)
-            else:
-                root_build_lines.append('        "%s",' % lock_label)
-
+    root_build_lines.extend(mm.deps_lines)
     root_build_lines.extend([
-        "    ],",
         ")",
         "",
     ])
@@ -1210,7 +1217,7 @@ pycross_transitioning_file_proxy = rule(
                     "",
                 ])
 
-            for extra_name, extra_target in sorted(group["extras"].items()):
+            for extra_name, _extra_target in sorted(group["extras"].items()):
                 root_build_lines.extend([
                     "alias(",
                     '    name = "{}[{}]",'.format(base_pin_name, extra_name),
@@ -1229,15 +1236,7 @@ pycross_transitioning_file_proxy = rule(
 
     # Pin directories: proxies pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):
-        base_target_dict = group["base_target"]
-        if not base_target_dict and group["extras"]:
-            # If the user only pinned extras, derive the base target from an extra's lock key.
-            first_extra_target_dict = list(group["extras"].values())[0]
-            base_target_dict = {}
-            for constraint, extra_target in first_extra_target_dict.items():
-                parts = parse_package_key(extra_target)
-                if parts.extra:
-                    base_target_dict[constraint] = "{}@{}".format(parts.name, parts.version)
+        base_target_dict = _effective_base_target_dict(group)
 
         package = {}
         if base_target_dict:
@@ -1371,31 +1370,198 @@ pycross_transitioning_file_proxy = rule(
 
     # Generate pin_versions.json: a manifest of what each //dep:pkg pin resolves to.
     # Simple pins: name -> version string. Variant pins: name -> {variant -> version}.
+    rctx.file("pin_versions.json", json.encode(_pin_versions(grouped_pins)))
+
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
+
+def _effective_base_target_dict(group):
+    """Return group['base_target'], or derive base lock keys from extras for extras-only pins."""
+    base_target_dict = group["base_target"]
+    if base_target_dict or not group["extras"]:
+        return base_target_dict
+    derived = {}
+    for _extra_name, extra_target_dict in sorted(group["extras"].items()):
+        for constraint, extra_target in extra_target_dict.items():
+            parts = parse_package_key(extra_target)
+            derived.setdefault(constraint, "{}@{}".format(parts.name, parts.version))
+    return derived
+
+def _modules_mapping_deps(pins, packages, workspace_repo, conflicts = None, member_name = "", variant_info = None, no_variant_fallbacks = None, pins_by_set = None, excluded = None, resolution_marker_exprs = None):
+    """Compute conditional `deps` lines and helper config_setting_groups for `pycross_modules_mapping`.
+
+    Resolution-marker forks and pinned/defaulted repo variants are selected on
+    their active condition so inactive forks are never analyzed or fetched.
+    Unpinned conflict variants without a repo default remain unioned when no
+    variant flag is set (via `_unselected_<set>`), while narrowing to the active
+    variant when a flag is set.
+    """
+    conflicts = conflicts or {}
+    pins_by_set = pins_by_set or {}
+    excluded = excluded or {}
+    resolution_marker_exprs = resolution_marker_exprs or {}
+    variant_sets = variant_info.sets if variant_info else {}
+    sets_by_constraint = no_variant_fallbacks.sets if no_variant_fallbacks else {}
+
+    maybe_mapping_targets = {}  # maybe_name -> (lock_key, lock_label)
+    unconditional = {}  # dep_label -> True
+    conditional = {}  # dep_label -> {constraint: True}
+
+    for pin_name in sorted(pins.keys()):
+        pin_target_dict = pins[pin_name]
+        for constraint, pin_target in sorted(pin_target_dict.items()):
+            package = packages.get(pin_target, {})
+            lock_key = "{}__via_{}".format(pin_target, member_name) if pin_target in conflicts else pin_target
+            if package.get("cycle_group"):
+                lock_label = "@%s//_lock:_raw_%s" % (workspace_repo, lock_key)
+            else:
+                lock_label = "@%s//_lock:%s" % (workspace_repo, lock_key)
+
+            if _is_key_platform_specific(packages, pin_target):
+                maybe_name = sanitize_name(pin_target)
+                maybe_mapping_targets[maybe_name] = (lock_key, lock_label)
+                dep_label = "//__maybe:%s" % maybe_name
+            else:
+                dep_label = lock_label
+
+            if constraint == "":
+                unconditional[dep_label] = True
+            else:
+                conditional.setdefault(dep_label, {})[constraint] = True
+
+    extra_target_lines = []
+    emitted_unselected_compounds = {}
+    emitted_any_groups = {}
+    by_cond = {}  # condition_label -> [dep_label, ...]
+
+    for dep_label in sorted(conditional.keys()):
+        if dep_label in unconditional:
+            continue
+        conds_set = {}
+        for constraint in sorted(conditional[dep_label].keys()):
+            conds_set["@{}//_lock:is_{}".format(workspace_repo, constraint)] = True
+
+            # Check whether this constraint belongs to an unpinned conflict variant
+            # (either bare variant qname or compound {variant, marker}).
+            expr = resolution_marker_exprs.get(constraint)
+            if type(expr) == "dict" and expr.get("variant"):
+                variant_qname = expr["variant"]
+                marker_cname = expr.get("marker")
+            else:
+                variant_qname = constraint
+                marker_cname = None
+
+            v_sets = sets_by_constraint.get(variant_qname, [])
+            if not v_sets or variant_qname in excluded:
+                continue
+
+            # If any set containing this variant has a pin or non-excluded
+            # default, do not union it via _unselected_: when pinned/defaulted
+            # to this variant, @ws//_lock:is_<v> already activates under the
+            # repo's transition; when pinned/defaulted to a rival (or when a
+            # rival CLI flag is passed in that set), unioning an unselected
+            # sibling set would falsely pull this variant in.
+            has_pin_or_default = False
+            for s in v_sets:
+                if s in pins_by_set:
+                    has_pin_or_default = True
+                    break
+                vset = variant_sets.get(s)
+                if vset and vset.default and vset.default not in excluded:
+                    has_pin_or_default = True
+                    break
+            if has_pin_or_default:
+                continue
+
+            unpinned_sets = sorted(v_sets)
+            if len(unpinned_sets) == 1:
+                unselected_cond = "@{}//_lock:_unselected_{}".format(workspace_repo, unpinned_sets[0])
+            else:
+                group_name = _unselected_all_name(unpinned_sets)
+                no_variant_fallbacks.groups[group_name] = unpinned_sets
+                unselected_cond = "//_variants:{}".format(group_name)
+
+            if marker_cname:
+                comp_name = "_mm_unselected_{}".format(sanitize_name(constraint))
+                if comp_name not in emitted_unselected_compounds:
+                    emitted_unselected_compounds[comp_name] = True
+                    extra_target_lines.extend([
+                        "selects.config_setting_group(",
+                        '    name = "{}",'.format(comp_name),
+                        "    match_all = [",
+                        '        "{}",'.format(unselected_cond),
+                        '        "@{}//_lock:is_{}",'.format(workspace_repo, marker_cname),
+                        "    ],",
+                        ")",
+                        "",
+                    ])
+                conds_set[":{}".format(comp_name)] = True
+            else:
+                conds_set[unselected_cond] = True
+
+        conds = sorted(conds_set.keys())
+        if len(conds) == 1:
+            group_cond = conds[0]
+        else:
+            conds_key = tuple(conds)
+            if conds_key not in emitted_any_groups:
+                any_name = "_mm_any_%x" % (hash("|".join(conds)) & 0xffffffff)
+                emitted_any_groups[conds_key] = any_name
+                extra_target_lines.extend([
+                    "selects.config_setting_group(",
+                    '    name = "{}",'.format(any_name),
+                    "    match_any = [",
+                ])
+                for cond in conds:
+                    extra_target_lines.append('        "{}",'.format(cond))
+                extra_target_lines.extend([
+                    "    ],",
+                    ")",
+                    "",
+                ])
+            group_cond = ":{}".format(emitted_any_groups[conds_key])
+        by_cond.setdefault(group_cond, []).append(dep_label)
+
+    deps_lines = ["    deps = ["]
+    for dep_label in sorted(unconditional.keys()):
+        deps_lines.append('        "{}",'.format(dep_label))
+    deps_lines.append("    ]")
+    for cond in sorted(by_cond.keys()):
+        deps_lines[-1] = deps_lines[-1] + " + select({"
+        deps_lines.append('        "{}": ['.format(cond))
+        for dep_label in sorted(by_cond[cond]):
+            deps_lines.append('            "{}",'.format(dep_label))
+        deps_lines.append("        ],")
+        deps_lines.append('        "//conditions:default": [],')
+        deps_lines.append("    })")
+    deps_lines[-1] = deps_lines[-1] + ","
+
+    return struct(
+        deps_lines = deps_lines,
+        extra_target_lines = extra_target_lines,
+        maybe_mapping_targets = maybe_mapping_targets,
+        needs_selects = bool(extra_target_lines),
+    )
+
+def _pin_versions(grouped_pins):
+    """Build pin_versions.json mapping from grouped pins (including extras-only pins)."""
     pin_versions = {}
     for base_pin_name in sorted(grouped_pins.keys()):
-        group = grouped_pins[base_pin_name]
-        base_target_dict = group["base_target"]
+        base_target_dict = _effective_base_target_dict(grouped_pins[base_pin_name])
         if not base_target_dict:
             continue
 
         if len(base_target_dict) == 1 and "" in base_target_dict:
-            # Simple (unconditional) pin
-            pkg_key = base_target_dict[""]
-            parts = parse_package_key(pkg_key)
+            parts = parse_package_key(base_target_dict[""])
             pin_versions[base_pin_name] = parts.version
         else:
-            # Variant pin: {variant_name -> version}
             variant_versions = {}
             for variant_name, pkg_key in sorted(base_target_dict.items()):
                 parts = parse_package_key(pkg_key)
                 variant_versions[variant_name] = parts.version
             pin_versions[base_pin_name] = variant_versions
-
-    rctx.file("pin_versions.json", json.encode(pin_versions))
-
-    if hasattr(rctx, "repo_metadata"):
-        return rctx.repo_metadata(reproducible = True)
-    return None
+    return pin_versions
 
 def _packages_bzl(grouped_pins, packages):
     """Render `_packages.bzl` metadata for all packages in a thin repo."""
@@ -1408,7 +1574,7 @@ def _packages_bzl(grouped_pins, packages):
         group = grouped_pins[base_pin_name]
         us_name = underscore_name(base_pin_name)
 
-        base_target_dict = group["base_target"]
+        base_target_dict = _effective_base_target_dict(group)
         has_sdist = False
         if base_target_dict:
             for pkg_key in base_target_dict.values():
@@ -1443,16 +1609,7 @@ def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_va
     has_cargo_targets = False
     for base_pin_name in sorted(grouped_pins.keys()):
         us_name = underscore_name(base_pin_name)
-        group = grouped_pins[base_pin_name]
-        target_dict = group["base_target"]
-        if not target_dict and group["extras"]:
-            # Extras-only pin: derive base version branches from the extras pins.
-            target_dict = {}
-            for _extra_name, extra_dict in sorted(group["extras"].items()):
-                for constraint, pkg_key in extra_dict.items():
-                    parts = parse_package_key(pkg_key)
-                    base_key = "{}@{}".format(parts.name, parts.version)
-                    target_dict.setdefault(constraint, base_key)
+        target_dict = _effective_base_target_dict(grouped_pins[base_pin_name])
         if not target_dict:
             continue
 
@@ -1550,4 +1707,6 @@ flag_values_for_testing = _flag_values
 is_platform_specific_for_testing = is_platform_specific
 requirements_bzl_for_testing = _requirements_bzl
 packages_bzl_for_testing = _packages_bzl
+pin_versions_for_testing = _pin_versions
+modules_mapping_deps_for_testing = _modules_mapping_deps
 cargo_build_for_testing = _cargo_build
