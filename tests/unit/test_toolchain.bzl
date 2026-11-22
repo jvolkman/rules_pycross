@@ -4,9 +4,6 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 load("//pycross:toolchain.bzl", "is_compile_interpreter_path_for_testing")
 
-# buildifier: disable=bzl-visibility
-load("//pycross/private:toolchain_helpers.bzl", "parse_registered_python_versions_for_testing")
-
 def _subject(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
 
@@ -54,43 +51,10 @@ def _test_compile_interpreter_path_filter(name):
     _subject(name)
     analysis_test(name = name, target = name + "_subject", impl = _test_compile_interpreter_path_filter_impl)
 
-# buildifier: disable=unused-variable
-def _test_parse_registered_python_versions_impl(env, target):
-    parse = parse_registered_python_versions_for_testing
-
-    # Single-line with and without trailing comma.
-    env.expect.that_collection(parse('    python_versions = ["3.11.6", "3.12.0"],\n')).contains_exactly(["3.11.6", "3.12.0"]).in_order()
-    env.expect.that_collection(parse("python_versions = ['3.11.6', '3.12.0',]\n")).contains_exactly(["3.11.6", "3.12.0"]).in_order()
-
-    # Multiline list with trailing comma, inline comments, and decoys (including subscript rhs).
-    multiline = """\
-# python_versions = ["2.7.0"]
-python_versions_other = ["9.9.9"]
-python_versions = kwargs["versions"]
-pip_hub(
-    python_versions = [
-        "3.11.6",
-        "3.12.0",  # default
-        "3.13.1",
-    ],
-)
-"""
-    env.expect.that_collection(parse(multiline)).contains_exactly(["3.11.6", "3.12.0", "3.13.1"]).in_order()
-
-    # Empty, missing, or unterminated lists return [].
-    env.expect.that_collection(parse("python_versions = []\n")).contains_exactly([])
-    env.expect.that_collection(parse("other = ['3.12.0']\n")).contains_exactly([])
-    env.expect.that_collection(parse('python_versions = [\n    "3.12.0",\n')).contains_exactly([])
-
-def _test_parse_registered_python_versions(name):
-    _subject(name)
-    analysis_test(name = name, target = name + "_subject", impl = _test_parse_registered_python_versions_impl)
-
 def toolchain_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_compile_interpreter_path_filter,
-            _test_parse_registered_python_versions,
         ],
     )
