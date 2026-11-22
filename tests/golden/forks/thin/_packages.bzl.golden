@@ -1,0 +1,10 @@
+"""Generated package metadata. Do not edit."""
+
+PACKAGES = {
+    "app_lib": struct(
+        has_sdist = False,
+    ),
+    "forked_lib": struct(
+        has_sdist = False,
+    ),
+}

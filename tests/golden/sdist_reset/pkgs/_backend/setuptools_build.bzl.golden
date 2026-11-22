@@ -1,0 +1,6 @@
+"""Backend macro with pre-configured tool defaults for this lock repo."""
+
+load("@rules_pycross//pycross/backends:setuptools.bzl", _setuptools_build = "setuptools_build")
+
+def setuptools_build(name, **kwargs):
+    _setuptools_build(name = name, **kwargs)

@@ -1,0 +1,31 @@
+load("//:_transition.bzl", "pycross_transitioning_file_proxy")
+load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_library")
+package(default_visibility = ["//visibility:public"])
+
+# Empty library for _maybe_ targets on incompatible platforms.
+py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
+
+pycross_transitioning_file_proxy(
+    name = "modules_mapping",
+    actual = ":_modules_mapping",
+)
+
+exports_files(["requirements.bzl", "_packages.bzl"])
+
+pycross_modules_mapping(
+    name = "_modules_mapping",
+    deps = [
+        "//__maybe:merged_pkg_1_0_0",
+        "@golden_sdist_reset__pkgs//_lock:pure-leaf@1.0.0",
+    ],
+)
+
+alias(
+    name = "merged-pkg",
+    actual = "//merged_pkg:pkg",
+)
+alias(
+    name = "pure-leaf",
+    actual = "//pure_leaf:pkg",
+)

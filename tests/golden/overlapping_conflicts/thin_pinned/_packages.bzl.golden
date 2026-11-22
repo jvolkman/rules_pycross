@@ -1,0 +1,13 @@
+"""Generated package metadata. Do not edit."""
+
+PACKAGES = {
+    "iniconfig": struct(
+        has_sdist = False,
+    ),
+    "pytest": struct(
+        has_sdist = False,
+    ),
+    "typing_extensions": struct(
+        has_sdist = False,
+    ),
+}

@@ -1,0 +1,10 @@
+"""Generated package metadata. Do not edit."""
+
+PACKAGES = {
+    "merged_pkg": struct(
+        has_sdist = False,
+    ),
+    "pure_leaf": struct(
+        has_sdist = False,
+    ),
+}

@@ -1,0 +1,71 @@
+load("//:_transition.bzl", "pycross_transitioning_file_proxy")
+load("@bazel_skylib//lib:selects.bzl", "selects")
+load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_library")
+package(default_visibility = ["//visibility:public"])
+
+# Empty library for _maybe_ targets on incompatible platforms.
+py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
+
+pycross_transitioning_file_proxy(
+    name = "modules_mapping",
+    actual = ":_modules_mapping",
+)
+
+exports_files(["requirements.bzl", "_packages.bzl"])
+
+selects.config_setting_group(
+    name = "_mm_any_a6966f9b",
+    match_any = [
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b",
+    ],
+)
+
+selects.config_setting_group(
+    name = "_mm_any_93f03f07",
+    match_any = [
+        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_extra_app_y",
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y",
+    ],
+)
+
+pycross_modules_mapping(
+    name = "_modules_mapping",
+    deps = [
+        "@golden_overlapping_conflicts__pkgs//_lock:pytest@7.4.4",
+    ] + select({
+        ":_mm_any_93f03f07": [
+            "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.12.2",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        ":_mm_any_a6966f9b": [
+            "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@2.0.0",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x_res_py312": [
+            "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.11.0",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a": [
+            "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@1.1.1",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+alias(
+    name = "iniconfig",
+    actual = "//iniconfig:pkg",
+)
+alias(
+    name = "pytest",
+    actual = "//pytest:pkg",
+)
+alias(
+    name = "typing-extensions",
+    actual = "//typing_extensions:pkg",
+)

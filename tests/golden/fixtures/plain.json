@@ -1,0 +1,95 @@
+{
+  "packages": {
+    "alpha@1.0.0": {
+      "bin_paths": [
+        "bin/alpha"
+      ],
+      "precompile": "enabled",
+      "site_paths": [
+        "alpha"
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "alpha_1_0_0_whl"
+          },
+          "filename": "alpha-1.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "beta@2.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "beta_2_0_0_linux"
+          },
+          "filename": "beta-2.0.0-cp312-cp312-manylinux_2_17_x86_64.whl"
+        },
+        {
+          "file_reference": {
+            "key": "beta_2_0_0_macos"
+          },
+          "filename": "beta-2.0.0-cp312-cp312-macosx_14_0_arm64.whl"
+        },
+        {
+          "file_reference": {
+            "key": "beta_2_0_0_win"
+          },
+          "filename": "beta-2.0.0-cp312-cp312-win_amd64.whl"
+        }
+      ]
+    },
+    "devtool@0.1.0": {
+      "marker_dependencies": [
+        {
+          "key": "alpha@1.0.0",
+          "marker": null
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "devtool_0_1_0_whl"
+          },
+          "filename": "devtool-0.1.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "gamma@1.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "gamma_1_0_0_linux"
+          },
+          "filename": "gamma-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl"
+        },
+        {
+          "file_reference": {
+            "key": "gamma_1_0_0_macos"
+          },
+          "filename": "gamma-1.0.0-cp312-cp312-macosx_14_0_arm64.whl"
+        }
+      ]
+    },
+    "setuptools@75.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "setuptools_75_0_0_whl"
+          },
+          "filename": "setuptools-75.0.0-py3-none-any.whl"
+        }
+      ]
+    }
+  },
+  "pins": {
+    "alpha": "alpha@1.0.0",
+    "beta": "beta@2.0.0",
+    "devtool": "devtool@0.1.0",
+    "gamma": "gamma@1.0.0",
+    "setuptools": "setuptools@75.0.0"
+  },
+  "testonly_pins": [
+    "devtool"
+  ]
+}

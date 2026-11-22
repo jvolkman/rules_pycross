@@ -1,0 +1,161 @@
+{
+  "packages": {
+    "colorama@0.4.6": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "colorama_0_4_6_whl"
+          },
+          "filename": "colorama-0.4.6-py2.py3-none-any.whl"
+        }
+      ]
+    },
+    "iniconfig@1.1.1": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "iniconfig_1_1_1_whl"
+          },
+          "filename": "iniconfig-1.1.1-py2.py3-none-any.whl"
+        }
+      ]
+    },
+    "iniconfig@2.0.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "iniconfig_2_0_0_whl"
+          },
+          "filename": "iniconfig-2.0.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "pytest@7.4.4": {
+      "marker_dependencies": [
+        {
+          "key": "colorama@0.4.6",
+          "marker": "sys_platform == 'win32' or (extra == '__variant_group_app_g-a' and extra == '__variant_group_app_g-b')"
+        },
+        {
+          "key": "iniconfig@1.1.1",
+          "marker": "extra == '__variant_group_app_g-a'"
+        },
+        {
+          "key": "iniconfig@2.0.0",
+          "marker": "extra == '__variant_extra_app_x' or extra == '__variant_group_app_g-b'"
+        }
+      ],
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "pytest_7_4_4_whl"
+          },
+          "filename": "pytest-7.4.4-py3-none-any.whl"
+        }
+      ]
+    },
+    "typing-extensions@4.11.0": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "typing_extensions_4_11_0_whl"
+          },
+          "filename": "typing_extensions-4.11.0-py3-none-any.whl"
+        }
+      ]
+    },
+    "typing-extensions@4.12.2": {
+      "wheel_candidates": [
+        {
+          "file_reference": {
+            "key": "typing_extensions_4_12_2_whl"
+          },
+          "filename": "typing_extensions-4.12.2-py3-none-any.whl"
+        }
+      ]
+    }
+  },
+  "pins": {
+    "iniconfig": {
+      "extra_app_x": "iniconfig@2.0.0",
+      "group_app_g-a": "iniconfig@1.1.1",
+      "group_app_g-b": "iniconfig@2.0.0"
+    },
+    "pytest": "pytest@7.4.4",
+    "typing-extensions": {
+      "extra_app_x_res_py312": "typing-extensions@4.11.0",
+      "extra_app_y": "typing-extensions@4.12.2"
+    }
+  },
+  "resolution_marker_exprs": {
+    "extra_app_x_res_py312": {
+      "marker": "res_py312",
+      "variant": "extra_app_x"
+    },
+    "res_py312": "python_full_version >= '3.12'"
+  },
+  "variants": [
+    {
+      "items": [
+        {
+          "flags": [
+            "group_g-a"
+          ],
+          "kind": "group",
+          "name": "g-a",
+          "package": "app"
+        },
+        {
+          "flags": [
+            "group_g-b"
+          ],
+          "kind": "group",
+          "name": "g-b",
+          "package": "app"
+        }
+      ],
+      "repo_default": "group_app_g-a"
+    },
+    {
+      "items": [
+        {
+          "flags": [
+            "extra_x"
+          ],
+          "kind": "extra",
+          "name": "x",
+          "package": "app"
+        },
+        {
+          "flags": [
+            "group_g-a"
+          ],
+          "kind": "group",
+          "name": "g-a",
+          "package": "app"
+        }
+      ],
+      "repo_default": "group_app_g-a"
+    },
+    {
+      "items": [
+        {
+          "flags": [
+            "extra_x"
+          ],
+          "kind": "extra",
+          "name": "x",
+          "package": "app"
+        },
+        {
+          "flags": [
+            "extra_y"
+          ],
+          "kind": "extra",
+          "name": "y",
+          "package": "app"
+        }
+      ]
+    }
+  ]
+}

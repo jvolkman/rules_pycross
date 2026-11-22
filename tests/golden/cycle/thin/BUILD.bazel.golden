@@ -1,0 +1,30 @@
+load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_library")
+package(default_visibility = ["//visibility:public"])
+
+# Empty library for _maybe_ targets on incompatible platforms.
+py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
+
+exports_files(["requirements.bzl", "_packages.bzl"])
+
+pycross_modules_mapping(
+    name = "modules_mapping",
+    deps = [
+        "@golden_cycle__pkgs//_lock:_raw_cycle-a@1.0.0",
+        "@golden_cycle__pkgs//_lock:_raw_cycle-b@1.0.0",
+        "@golden_cycle__pkgs//_lock:leaf@1.0.0",
+    ],
+)
+
+alias(
+    name = "cycle-a",
+    actual = "//cycle_a:pkg",
+)
+alias(
+    name = "cycle-b",
+    actual = "//cycle_b:pkg",
+)
+alias(
+    name = "leaf",
+    actual = "//leaf:pkg",
+)

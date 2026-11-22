@@ -1,0 +1,28 @@
+load("@pypackaging.bzl", "pypackaging")
+
+def requirement(pkg):
+    extra = None
+    if "[" in pkg:
+        pkg, extra = pkg.split("[", 1)
+        extra = pypackaging.utils.canonicalize_name(extra.rstrip("]"))
+
+    pkg = pypackaging.utils.canonicalize_name(pkg)
+    pkg_dir = pkg.replace("-", "_")
+
+    if extra:
+        return "@@golden_extras//%s:[%s]" % (pkg_dir, extra)
+    return "@@golden_extras//%s" % (pkg_dir)
+
+
+# All pinned requirements, excluding testonly ones
+all_requirements = [
+    "@@golden_extras//only_extra:[opt]",
+    "@@golden_extras//pkg_a",
+    "@@golden_extras//pkg_a:[cli]",
+    "@@golden_extras//pkg_a:[fast]",
+    "@@golden_extras//win_only:maybe",
+]
+
+# All testonly pinned requirements
+all_testonly_requirements = [
+]

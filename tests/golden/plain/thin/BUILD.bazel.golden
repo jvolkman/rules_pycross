@@ -1,0 +1,40 @@
+load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_library")
+package(default_visibility = ["//visibility:public"])
+
+# Empty library for _maybe_ targets on incompatible platforms.
+py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
+
+exports_files(["requirements.bzl", "_packages.bzl"])
+
+pycross_modules_mapping(
+    name = "modules_mapping",
+    deps = [
+        "//__maybe:beta_2_0_0",
+        "//__maybe:gamma_1_0_0",
+        "@golden_plain__pkgs//_lock:alpha@1.0.0",
+        "@golden_plain__pkgs//_lock:devtool@0.1.0",
+        "@golden_plain__pkgs//_lock:setuptools@75.0.0",
+    ],
+)
+
+alias(
+    name = "alpha",
+    actual = "//alpha:pkg",
+)
+alias(
+    name = "beta",
+    actual = "//beta:pkg",
+)
+alias(
+    name = "devtool",
+    actual = "//devtool:pkg",
+)
+alias(
+    name = "gamma",
+    actual = "//gamma:pkg",
+)
+alias(
+    name = "setuptools",
+    actual = "//setuptools:pkg",
+)

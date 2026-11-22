@@ -1,0 +1,61 @@
+load("//:_transition.bzl", "pycross_transitioning_file_proxy")
+load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_library")
+package(default_visibility = ["//visibility:public"])
+
+# Empty library for _maybe_ targets on incompatible platforms.
+py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
+
+pycross_transitioning_file_proxy(
+    name = "modules_mapping",
+    actual = ":_modules_mapping",
+)
+
+exports_files(["requirements.bzl", "_packages.bzl"])
+
+pycross_modules_mapping(
+    name = "_modules_mapping",
+    deps = [
+        "@golden_sdist_reset__pkgs//_lock:custom-build@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:merged-pkg@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:mixed-consumer@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:native2@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:native3@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:pure-leaf@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:sdistonly@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:variant-dep@1.0.0",
+    ],
+)
+
+alias(
+    name = "custom-build",
+    actual = "//custom_build:pkg",
+)
+alias(
+    name = "merged-pkg",
+    actual = "//merged_pkg:pkg",
+)
+alias(
+    name = "mixed-consumer",
+    actual = "//mixed_consumer:pkg",
+)
+alias(
+    name = "native2",
+    actual = "//native2:pkg",
+)
+alias(
+    name = "native3",
+    actual = "//native3:pkg",
+)
+alias(
+    name = "pure-leaf",
+    actual = "//pure_leaf:pkg",
+)
+alias(
+    name = "sdistonly",
+    actual = "//sdistonly:pkg",
+)
+alias(
+    name = "variant-dep",
+    actual = "//variant_dep:pkg",
+)

@@ -1,0 +1,29 @@
+load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")
+
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "devtool",
+    actual = ":pkg",
+)
+
+pycross_library_proxy(
+    name = "pkg",
+    actual = "@golden_plain__pkgs//_lock:devtool@0.1.0",
+    testonly = True,
+)
+
+pycross_file_proxy(
+    name = "wheel",
+    actual = "@golden_plain__pkgs//_wheel:devtool@0.1.0",
+)
+
+pycross_file_proxy(
+    name = "dist_info",
+    actual = "@golden_plain__pkgs//_lock:_dist_info_devtool@0.1.0",
+)
+
+alias(
+    name = "data",
+    actual = ":pkg",
+)

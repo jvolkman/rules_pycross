@@ -1,0 +1,28 @@
+load("//:_transition.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")
+
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "mixed_consumer",
+    actual = ":pkg",
+)
+
+pycross_transitioning_library_proxy(
+    name = "pkg",
+    actual = "@golden_sdist_reset__pkgs//_lock:mixed-consumer@1.0.0",
+)
+
+pycross_transitioning_file_proxy(
+    name = "wheel",
+    actual = "@golden_sdist_reset__pkgs//_wheel:mixed-consumer@1.0.0",
+)
+
+pycross_transitioning_file_proxy(
+    name = "dist_info",
+    actual = "@golden_sdist_reset__pkgs//_lock:_dist_info_mixed-consumer@1.0.0",
+)
+
+alias(
+    name = "data",
+    actual = ":pkg",
+)

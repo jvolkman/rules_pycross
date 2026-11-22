@@ -1,0 +1,52 @@
+load("@rules_pycross//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
+
+package(default_visibility = ["//visibility:public"])
+
+pycross_wheel_dir(
+    name = "custom-build@1.0.0",
+    src = "//_lock:_wheel_custom-build@1.0.0",
+    whldir_name = "custom_build-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "merged-pkg@1.0.0",
+    src = "//_lock:_wheel_merged-pkg@1.0.0",
+    whldir_name = "merged_pkg-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "mixed-consumer@1.0.0",
+    src = "//_lock:_wheel_mixed-consumer@1.0.0",
+    whldir_name = "mixed_consumer-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "native2@1.0.0",
+    src = "//_lock:_wheel_native2@1.0.0",
+    whldir_name = "native2-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "native3@1.0.0",
+    src = "//_lock:_wheel_native3@1.0.0",
+    whldir_name = "native3-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "pure-leaf@1.0.0",
+    src = "//_lock:_wheel_pure-leaf@1.0.0",
+    whldir_name = "pure_leaf-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "sdistonly@1.0.0",
+    src = "//_lock:_wheel_sdistonly@1.0.0",
+    whldir_name = "sdistonly-1.0.0.whldir",
+)
+
+pycross_wheel_dir(
+    name = "variant-dep@1.0.0",
+    src = "//_lock:_wheel_variant-dep@1.0.0",
+    whldir_name = "variant_dep-1.0.0.whldir",
+)
+

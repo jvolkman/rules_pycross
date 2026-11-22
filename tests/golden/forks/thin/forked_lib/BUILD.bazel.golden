@@ -1,0 +1,37 @@
+load("@rules_pycross//pycross/private:proxy.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")
+
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "forked_lib",
+    actual = ":pkg",
+)
+
+pycross_transitioning_library_proxy(
+    name = "pkg",
+    actual = "//__actual/forked_lib:pkg",
+    platform = "//:_internal_platform",
+)
+
+pycross_transitioning_file_proxy(
+    name = "wheel",
+    actual = "//__actual/forked_lib:wheel",
+    platform = "//:_internal_platform",
+)
+
+pycross_transitioning_file_proxy(
+    name = "dist_info",
+    actual = "//__actual/forked_lib:dist_info",
+    platform = "//:_internal_platform",
+)
+
+alias(
+    name = "data",
+    actual = ":pkg",
+)
+pycross_transitioning_library_proxy(
+    name = "maybe",
+    actual = "//__actual/forked_lib:maybe",
+    platform = "//:_internal_platform",
+)
+
