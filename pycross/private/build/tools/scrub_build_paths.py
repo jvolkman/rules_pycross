@@ -12,12 +12,80 @@ The hook strips absolute sandbox paths, Bazel output directory prefixes
 making build metadata reproducible across different build hosts.
 """
 
+import base64
+import csv
+import hashlib
+import io
 import os
 import re
 import shutil
 import sys
 import zipfile
 from pathlib import Path
+
+_BAZEL_OUT_RE = re.compile(r"bazel-out/[^/]+/bin/")
+# Anchor external/ so package/directory names like my_external/ or pkg/external/
+# are not corrupted while flag-attached paths like -Iexternal/ still match.
+_EXTERNAL_RE = re.compile(r"(^|[\s'\"=:,;(\[]|-[IL]|-isystem|/I)external/", re.MULTILINE)
+
+
+def _is_record_file(filename: str) -> bool:
+    parts = filename.split("/")
+    return len(parts) == 2 and parts[0].endswith(".dist-info") and parts[1] == "RECORD"
+
+
+def _record_hash_and_size(data: bytes) -> tuple[str, str]:
+    digest = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode("ascii")
+    return f"sha256={digest}", str(len(data))
+
+
+def _update_record(record_bytes: bytes, updated_hashes: dict[str, tuple[str, str]]) -> bytes:
+    text = record_bytes.decode("utf-8")
+    lineterminator = "\r\n" if "\r\n" in text else "\n"
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator=lineterminator)
+    for row in csv.reader(io.StringIO(text, newline="")):
+        if row and row[0] in updated_hashes:
+            hash_str, size_str = updated_hashes[row[0]]
+            writer.writerow([row[0], hash_str, size_str])
+        else:
+            writer.writerow(row)
+    return out.getvalue().encode("utf-8")
+
+
+def scrub_text(text: str, prefix: str) -> str:
+    prefix_clean = prefix.rstrip("/\\")
+    if prefix_clean:
+        text = text.replace(prefix_clean + "/", "")
+        text = text.replace(prefix_clean, "")
+    text = _BAZEL_OUT_RE.sub("", text)
+    text = _EXTERNAL_RE.sub(r"\1", text)
+    return text
+
+
+def scrub_wheel(wheel_file: Path, output_wheel: Path, prefix: str, scrub_paths: set[str]) -> bool:
+    updated_hashes: dict[str, tuple[str, str]] = {}
+    deferred_records: list[tuple[zipfile.ZipInfo, bytes]] = []
+
+    with zipfile.ZipFile(wheel_file, "r") as zin, zipfile.ZipFile(output_wheel, "w") as zout:
+        for info in zin.infolist():
+            data = zin.read(info.filename)
+            if _is_record_file(info.filename):
+                deferred_records.append((info, data))
+                continue
+            if info.filename in scrub_paths:
+                text = scrub_text(data.decode("utf-8"), prefix)
+                data = text.encode("utf-8")
+                updated_hashes[info.filename] = _record_hash_and_size(data)
+                print(f"Scrubbed build paths from {info.filename}", file=sys.stderr)
+            zout.writestr(info, data)
+
+        for info, data in deferred_records:
+            if updated_hashes:
+                data = _update_record(data, updated_hashes)
+            zout.writestr(info, data)
+
+    return bool(updated_hashes)
 
 
 def main():
@@ -32,26 +100,8 @@ def main():
         return
 
     scrub_paths = {p.strip() for p in scrub_paths_raw.split(",") if p.strip()}
-    prefix_with_slash = prefix + "/"
-    bazel_out_re = re.compile(r"bazel-out/[^/]+/bin/")
-    external_re = re.compile(r"external/")
-
     output_wheel = output_dir / wheel_file.name
-    modified = False
-
-    with zipfile.ZipFile(wheel_file, "r") as zin, zipfile.ZipFile(output_wheel, "w") as zout:
-        for info in zin.infolist():
-            data = zin.read(info.filename)
-            if info.filename in scrub_paths:
-                text = data.decode("utf-8")
-                text = text.replace(prefix_with_slash, "")
-                text = text.replace(prefix, "")
-                text = bazel_out_re.sub("", text)
-                text = external_re.sub("", text)
-                data = text.encode("utf-8")
-                modified = True
-                print(f"Scrubbed build paths from {info.filename}", file=sys.stderr)
-            zout.writestr(info, data)
+    modified = scrub_wheel(wheel_file, output_wheel, prefix, scrub_paths)
 
     if modified:
         print(f"Wrote scrubbed wheel to {output_wheel}", file=sys.stderr)

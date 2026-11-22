@@ -9,6 +9,7 @@ from unittest.mock import patch
 from pycross.private.build.tools.utils.lifecycle import BackendStrategy
 from pycross.private.build.tools.utils.lifecycle import _apply_pre_build_patches
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
+from pycross.private.build.tools.utils.lifecycle import setup_pkg_config
 
 
 class LifecycleTest(unittest.TestCase):
@@ -104,6 +105,52 @@ class PreBuildPatchesTest(unittest.TestCase):
             _apply_pre_build_patches(self._ctx(["patches/bad.patch"]))
         self.assertIn("failed to apply patch file", str(ctx.exception))
         self.assertIn("targets non-existent file 'pkg/missing.py'", str(ctx.exception))
+
+
+class SetupPkgConfigTest(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = TemporaryDirectory()
+        self.prefix = Path(self.temp_dir.name)
+        self.temp_build = self.prefix / "tmp"
+        self.temp_build.mkdir()
+        self.sdist_dir = self.prefix / "sdist"
+        self.sdist_dir.mkdir()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_materializes_in_temp_dir_and_prepends_pkg_config_path(self):
+        pc_src = self.prefix / "foo.pc"
+        pc_src.write_text("prefix=$$EXT_BUILD_ROOT$$/libs/foo\nName: foo\n")
+        pc_src.chmod(0o444)
+
+        ctx = SimpleNamespace(
+            prefix=self.prefix,
+            temp_dir=self.temp_build,
+            sdist_dir=self.sdist_dir,
+            pkg_config_files=[pc_src],
+            build_env={"PKG_CONFIG_PATH": "/existing/pc"},
+        )
+
+        pc_dir = setup_pkg_config(ctx)
+        self.assertEqual(pc_dir, self.temp_build / "pkgconfig")
+        self.assertFalse((self.sdist_dir / "pkgconfig").exists())
+
+        dest = pc_dir / "foo.pc"
+        self.assertTrue(dest.exists())
+        self.assertEqual(dest.read_text(), f"prefix={self.prefix}/libs/foo\nName: foo\n")
+        self.assertEqual(
+            ctx.build_env["PKG_CONFIG_PATH"],
+            f"{pc_dir.resolve().as_posix()}{os.pathsep}/existing/pc",
+        )
+
+        # Calling a second time (e.g. from meson_utils after pre-build hooks)
+        # preserves hook edits to .pc files and PKG_CONFIG_PATH.
+        dest.write_text("prefix=/hook/override\n")
+        ctx.build_env.pop("PKG_CONFIG_PATH")
+        setup_pkg_config(ctx)
+        self.assertEqual(dest.read_text(), "prefix=/hook/override\n")
+        self.assertNotIn("PKG_CONFIG_PATH", ctx.build_env)
 
 
 if __name__ == "__main__":

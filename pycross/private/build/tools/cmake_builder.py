@@ -36,8 +36,10 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
         raise ValueError(
             "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_layer is configured for this build."
         )
-    cflags = _cmake_escape(get_var("CFLAGS", ""))
-    cxxflags = _cmake_escape(get_var("CXXFLAGS", ""))
+    cflags_raw = get_var("CFLAGS", "")
+    cxxflags_raw = get_var("CXXFLAGS", "")
+    cflags = _cmake_escape(cflags_raw)
+    cxxflags = _cmake_escape(cxxflags_raw)
     ldflags = _cmake_escape(get_var("LDFLAGS", ""))
 
     # Determine system and processor
@@ -49,6 +51,8 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     }.get(target_system, target_system.capitalize())
 
     cmake_system_processor = cc_config.get("target_cpu", "x86_64")
+    if target_system == "darwin" and cmake_system_processor == "aarch64":
+        cmake_system_processor = "arm64"
 
     # Detect AR and guess RANLIB
     ar = get_var("AR")
@@ -58,29 +62,47 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     # additional workarounds. We extract just the binary path and drop flags.
     ar_path = Path(ar_list[0]) if ar_list else None
 
+    layer_dir = ctx.temp_dir / "cc_layer"
+    layer_lib_dir = layer_dir / "lib"
+    layer_include_dir = layer_dir / "include"
+
+    toolchain_provides_cxx_headers = "-nostdlibinc" in cflags_raw or "-nostdlibinc" in cxxflags_raw
+    include_paths = [_cmake_escape(layer_include_dir.absolute().as_posix())]
+    for inc_dir_str in cc_config.get("include_dirs", []):
+        inc_dir = Path(replace_placeholder(ctx.prefix, inc_dir_str)).absolute()
+        if toolchain_provides_cxx_headers and ("libcxx" in str(inc_dir) or "libcxxabi" in str(inc_dir)):
+            continue
+        inc_str = _cmake_escape(inc_dir.as_posix())
+        if inc_str not in include_paths:
+            include_paths.append(inc_str)
+
     # Write the toolchain file
     toolchain_lines = [
         f"set(CMAKE_SYSTEM_NAME {cmake_system_name})",
         f"set(CMAKE_SYSTEM_PROCESSOR {cmake_system_processor})",
         "",
-        f'set(CMAKE_C_COMPILER "{cc}")',
-        f'set(CMAKE_CXX_COMPILER "{cxx}")',
+        f'set(CMAKE_C_COMPILER "{_cmake_escape(cc)}")',
+        f'set(CMAKE_CXX_COMPILER "{_cmake_escape(cxx)}")',
     ]
 
     if ar_path:
-        toolchain_lines.append(f'set(CMAKE_AR "{ar_path.as_posix()}" CACHE STRING "" FORCE)')
+        toolchain_lines.append(f'set(CMAKE_AR "{_cmake_escape(ar_path.as_posix())}" CACHE STRING "" FORCE)')
     if ranlib_path:
-        toolchain_lines.append(f'set(CMAKE_RANLIB "{ranlib_path.as_posix()}" CACHE STRING "" FORCE)')
+        toolchain_lines.append(f'set(CMAKE_RANLIB "{_cmake_escape(ranlib_path.as_posix())}" CACHE STRING "" FORCE)')
 
+    include_path_args = " ".join(f'"{p}"' for p in include_paths)
     toolchain_lines.extend(
         [
             "",
-            f'set(CMAKE_C_FLAGS "{cflags}" CACHE STRING "" FORCE)',
-            f'set(CMAKE_CXX_FLAGS "{cxxflags}" CACHE STRING "" FORCE)',
+            f'set(CMAKE_C_FLAGS_INIT "{cflags}")',
+            f'set(CMAKE_CXX_FLAGS_INIT "{cxxflags}")',
             "",
-            f'set(CMAKE_EXE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)',
-            f'set(CMAKE_SHARED_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)',
-            f'set(CMAKE_MODULE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)',
+            f'set(CMAKE_EXE_LINKER_FLAGS_INIT "{ldflags}")',
+            f'set(CMAKE_SHARED_LINKER_FLAGS_INIT "{ldflags}")',
+            f'set(CMAKE_MODULE_LINKER_FLAGS_INIT "{ldflags}")',
+            "",
+            f'list(PREPEND CMAKE_LIBRARY_PATH "{_cmake_escape(layer_lib_dir.absolute().as_posix())}")',
+            f"list(PREPEND CMAKE_INCLUDE_PATH {include_path_args})",
             "",
             "# Disable stripping during CMake installation step because the host",
             "# strip utility cannot handle cross-compiled binaries (e.g. Mach-O).",
@@ -96,7 +118,7 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
 
     toolchain_content = "\n".join(toolchain_lines) + "\n"
 
-    toolchain_path = ctx.temp_dir / "cc_layer" / "CMakeToolchain.txt"
+    toolchain_path = layer_dir / "CMakeToolchain.txt"
     toolchain_path.parent.mkdir(parents=True, exist_ok=True)
     toolchain_path.write_text(toolchain_content)
 

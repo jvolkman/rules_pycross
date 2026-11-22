@@ -44,6 +44,7 @@ def _pycross_path_tool_impl(ctx):
         ),
         PycrossPathToolInfo(
             executable = executable,
+            files_to_run = di.files_to_run,
             name = ctx.attr.executable_name,
         ),
     ]

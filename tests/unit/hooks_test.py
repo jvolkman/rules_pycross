@@ -54,6 +54,18 @@ class HooksTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             run_pre_build_hook(ctx, hook_config)
 
+    def test_run_pre_build_hook_deletes_env_var_with_null(self):
+        ctx = MockBuildContext(self.temp_path)
+        ctx.build_env = {"KEEP_ME": "1", "DELETE_ME": "yes"}
+
+        hook_exe = self.temp_path / "hook.sh"
+        hook_exe.write_text('#!/bin/sh\necho \'{"DELETE_ME": null, "ADDED": "2"}\' > "$PYCROSS_ENV_VARS_FILE"\n')
+        hook_exe.chmod(0o755)
+
+        run_pre_build_hook(ctx, {"executable": "hook.sh"})
+
+        self.assertEqual(ctx.build_env, {"KEEP_ME": "1", "ADDED": "2"})
+
 
 if __name__ == "__main__":
     unittest.main()

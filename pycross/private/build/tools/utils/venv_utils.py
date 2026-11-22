@@ -132,6 +132,22 @@ def resolve_base_prefix(
     return None
 
 
+def _write_site_hooks(ctx: BuildContext, site_dir: Path) -> None:
+    """Write site_hooks to a file and .pth entry in site_dir."""
+    if not ctx.site_hooks:
+        return
+    hooks_file = ctx.env_dir / "_pycross_hooks.py"
+    with open(hooks_file, "w") as f:
+        for hook in ctx.site_hooks:
+            f.write(hook + "\n")
+    with open(site_dir / "_pycross_hooks.pth", "w") as f:
+        f.write(
+            f"import importlib.util; "
+            f"_s = importlib.util.spec_from_file_location('_pycross_hooks', {repr(str(hooks_file.absolute()))}); "
+            f"_m = importlib.util.module_from_spec(_s); _s.loader.exec_module(_m)\n"
+        )
+
+
 def build_standard_venv(ctx: BuildContext) -> None:
     """Initialize a standard Python virtualenv in the build sandbox."""
     venv_args = [
@@ -163,20 +179,7 @@ def build_standard_venv(ctx: BuildContext) -> None:
 
     _link_merge_multiple(ctx.python_paths, site_dir)
 
-    # Write site_hooks to a file and .pth entry.
-    # The hooks file is loaded by the python wrapper's -c handler and by
-    # non-intercepted Python invocations via the .pth file.
-    if ctx.site_hooks:
-        hooks_file = ctx.env_dir / "_pycross_hooks.py"
-        with open(hooks_file, "w") as f:
-            for hook in ctx.site_hooks:
-                f.write(hook + "\n")
-        with open(site_dir / "_pycross_hooks.pth", "w") as f:
-            f.write(
-                f"import importlib.util; "
-                f"_s = importlib.util.spec_from_file_location('_pycross_hooks', '{hooks_file.absolute()}'); "
-                f"_m = importlib.util.module_from_spec(_s); _s.loader.exec_module(_m)\n"
-            )
+    _write_site_hooks(ctx, site_dir)
 
     inject_python_wrapper(ctx)
 
@@ -223,6 +226,7 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
 
     site_dir = find_site_dir(ctx.env_dir)
     _link_merge_multiple(ctx.python_paths, site_dir)
+    _write_site_hooks(ctx, site_dir)
 
     inject_python_wrapper(ctx)
 

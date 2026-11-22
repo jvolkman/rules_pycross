@@ -36,10 +36,11 @@ _EXEC_TARGET_SETTINGS = {
     "//pycross/settings:pep508_platform_python_implementation": DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION,
     "//pycross/settings:pep508_platform_release": DEFAULT_PEP508_PLATFORM_RELEASE,
     "//pycross/settings:pep508_platform_version": DEFAULT_PEP508_PLATFORM_VERSION,
-    # The exec platform is a glibc host; don't let a musl target's
-    # py_linux_libc select a musl interpreter for exec-side tools.
-    "@rules_python//python/config_settings:py_linux_libc": "glibc",
 }
+
+# Only reset when cross-compiling so native musl hosts keep their musl
+# exec interpreter while cross-builds to musl from a glibc host select glibc.
+_PY_LINUX_LIBC_SETTING = "@rules_python//python/config_settings:py_linux_libc"
 
 # Target-specific C/C++ compiler and feature flags that are reset to their
 # host_* counterparts when transitioning from a non-host target platform.
@@ -58,6 +59,7 @@ def _pycross_exec_platform_transition_impl(settings, _attr):
 
     return {
         "//command_line_option:platforms": [settings["//command_line_option:host_platform"]],
+        _PY_LINUX_LIBC_SETTING: "glibc" if is_cross else settings[_PY_LINUX_LIBC_SETTING],
     } | _EXEC_TARGET_SETTINGS | {
         target_opt: settings[host_opt if is_cross else target_opt]
         for target_opt, host_opt in _CROSS_HOST_OPTION_MAP.items()
@@ -68,8 +70,10 @@ pycross_exec_platform_transition = transition(
     inputs = [
         "//command_line_option:platforms",
         "//command_line_option:host_platform",
+        _PY_LINUX_LIBC_SETTING,
     ] + _EXEC_TARGET_SETTINGS.keys() + _CROSS_HOST_OPTION_MAP.keys() + _CROSS_HOST_OPTION_MAP.values(),
     outputs = [
         "//command_line_option:platforms",
+        _PY_LINUX_LIBC_SETTING,
     ] + _EXEC_TARGET_SETTINGS.keys() + _CROSS_HOST_OPTION_MAP.keys(),
 )

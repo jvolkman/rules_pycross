@@ -6,23 +6,44 @@ load("@rules_python//python:py_info.bzl", "PyInfo")
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
-def _is_sibling_repository_layout_enabled():
+def is_sibling_repository_layout_enabled():
     # This checks if sibling repository layout is enabled.
     test = Label("@pycross_internal_deps//:BUILD.bazel")
     return test.workspace_root.startswith("..")
 
-def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
-    bin_dir_parts = bin_dir.split("/")
+def resolve_import_path_fn(workspace_name, root_path, sibling_layout):
+    """Returns a function mapping PyInfo.imports entries to execroot paths.
+
+    Args:
+        workspace_name: str, the main workspace name.
+        root_path: str, the File root path (empty string for source files).
+        sibling_layout: bool, whether sibling repository layout is enabled.
+
+    Returns:
+        A function accepting an import_name string and returning an execroot path.
+    """
+    if not root_path:
+        def source_fn(import_name):
+            import_repo, _, import_path = import_name.partition("/")
+            if import_repo == workspace_name:
+                return import_path or "."
+            if sibling_layout:
+                return paths.join("..", import_repo, import_path) if import_path else paths.join("..", import_repo)
+            return paths.join("external", import_repo, import_path) if import_path else paths.join("external", import_repo)
+
+        return source_fn
+
+    bin_dir_parts = root_path.split("/")
     output_dir = bin_dir_parts[0]
     bin_dir = paths.join(*bin_dir_parts[-2:])
 
     def fn(import_name):
-        import_repo, import_path = import_name.split("/", 1)
+        import_repo, _, import_path = import_name.partition("/")
         if import_repo == workspace_name:
-            return paths.join(output_dir, bin_dir, import_path)
+            return paths.join(output_dir, bin_dir, import_path) if import_path else paths.join(output_dir, bin_dir)
         if sibling_layout:
-            return paths.join(output_dir, import_repo, bin_dir, import_path)
-        return paths.join(output_dir, bin_dir, "external", import_repo, import_path)
+            return paths.join(output_dir, import_repo, bin_dir, import_path) if import_path else paths.join(output_dir, import_repo, bin_dir)
+        return paths.join(output_dir, bin_dir, "external", import_repo, import_path) if import_path else paths.join(output_dir, bin_dir, "external", import_repo)
 
     return fn
 
@@ -116,10 +137,10 @@ def register_pep517_action(
 
     all_deps = deps + build_deps
     imports = depset(transitive = [d[PyInfo].imports for d in all_deps])
-    map_fn = _resolve_import_path_fn_inner(
+    map_fn = resolve_import_path_fn(
         ctx.workspace_name,
         deps_bin_dir,
-        _is_sibling_repository_layout_enabled(),
+        is_sibling_repository_layout_enabled(),
     )
     python_paths = [map_fn(imp) for imp in imports.to_list()]
 

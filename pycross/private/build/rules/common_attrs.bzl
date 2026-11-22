@@ -34,7 +34,7 @@ def resolve_path_tools(ctx):
             result.append(struct(
                 name = info.name,
                 file = info.executable,
-                files_to_run = target[DefaultInfo].files_to_run,
+                files_to_run = getattr(info, "files_to_run", None) or target[DefaultInfo].files_to_run,
             ))
             continue
 
@@ -94,7 +94,8 @@ COMMON_BUILD_ATTRS = {
     "pre_build_hooks": attr.label_list(
         doc = "Executables to run before building the wheel. " +
               "Each hook receives PYCROSS_CONFIG_SETTINGS_FILE and PYCROSS_ENV_VARS_FILE " +
-              "environment variables pointing to JSON files it may read and modify.",
+              "environment variables pointing to JSON files it may read and modify " +
+              "(set an env key to null in PYCROSS_ENV_VARS_FILE to unset it).",
         cfg = pycross_exec_platform_transition,
     ),
     "post_build_hooks": attr.label_list(
