@@ -5,8 +5,8 @@ load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transitio
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action", "register_console_script_extract_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "TOOL_EXTRACT_ATTRS", "defer_build_error", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
+load("//pycross/private/build/actions:tool_extract.bzl", "PycrossExtractedToolInfo", "extract_wheel_tool_aspect")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "defer_build_error", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
 
 def _meson_build_impl(ctx):
     # 1. Extract tools
@@ -16,20 +16,16 @@ def _meson_build_impl(ctx):
     if missing_tools:
         return defer_build_error(ctx, ["Missing '{}' in tool_deps".format(t) for t in missing_tools])
 
-    meson_site_packages = get_unzipped_wheel(tool_deps["meson"][0])
-    ninja_wheel = get_unzipped_wheel(tool_deps["ninja"][0])
-
     tool_executables = []
-    tool_executables.append(register_console_script_extract_action(
-        ctx,
-        site_packages = meson_site_packages,
-        script_name = "meson",
-    ))
-    tool_executables.append(register_bin_extract_action(
-        ctx,
-        wheel_dir = ninja_wheel,
-        binary_name = "ninja",
-    ))
+    for tool_pkg in ("meson", "ninja"):
+        dep = tool_deps[tool_pkg][0]
+        if PycrossExtractedToolInfo in dep:
+            info = dep[PycrossExtractedToolInfo]
+            tool_executables.append(struct(name = info.name, file = info.file))
+        else:
+            # Validates PycrossExtractedWheelInfo and fails with a clear message if missing.
+            get_unzipped_wheel(dep)
+            fail("Expected PycrossExtractedToolInfo on '{}' tool target {}".format(tool_pkg, dep.label))
 
     tool_executables.extend(resolve_path_tools(ctx))
 
@@ -78,7 +74,6 @@ def _meson_build_impl(ctx):
         target_environment = target_environment,
         repair_exclude_globs = ctx.attr.repair_exclude_globs,
         repair_deps = tool_deps.get("repairwheel", []),
-        resource_set = resources.resource_set,
     )
 
     return [
@@ -90,11 +85,12 @@ def _meson_build_impl(ctx):
 
 meson_build = rule(
     implementation = _meson_build_impl,
-    attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | TOOL_EXTRACT_ATTRS | {
+    attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | {
         "tool_deps": attr.label_list(
             doc = "Python build tool packages (`meson`, `ninja` and `meson-python`). " +
                   "The generated `@<repo>//_backend` macro fills these in from the lock file.",
             cfg = pycross_exec_platform_transition,
+            aspects = [extract_wheel_tool_aspect],
         ),
         "meson_properties": attr.string_dict(
             doc = "Extra entries for the `[properties]` section of the generated Meson cross file.",

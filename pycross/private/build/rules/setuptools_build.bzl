@@ -52,7 +52,6 @@ def _setuptools_build_impl(ctx):
         target_environment = target_environment,
         repair_exclude_globs = ctx.attr.repair_exclude_globs,
         repair_deps = tool_deps.get("repairwheel", []),
-        resource_set = resources.resource_set,
     )
 
     return [

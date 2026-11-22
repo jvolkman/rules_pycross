@@ -1,8 +1,26 @@
 """Tests for maturin_build.bzl."""
 
+load("@rules_pycross//pycross:backend.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo")
+load("@rules_python//python:defs.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 load("//rules:maturin_build.bzl", "maturin_build")
+
+def _mock_pkg_impl(ctx):
+    out = ctx.actions.declare_directory(ctx.label.name + "_dir")
+    ctx.actions.run_shell(outputs = [out], command = "mkdir -p $1", arguments = [out.path])
+    return [
+        PycrossPackageInfo(package_name = ctx.attr.package_name, package_version = "1.0"),
+        DefaultInfo(files = depset([out])),
+        PyInfo(has_py2_only_sources = False, has_py3_only_sources = True, transitive_sources = depset([])),
+        PycrossExtractedWheelInfo(site_packages = out),
+    ]
+
+_mock_pkg = rule(
+    implementation = _mock_pkg_impl,
+    attrs = {"package_name": attr.string()},
+)
 
 def _mock_executable_impl(ctx):
     out = ctx.actions.declare_file(ctx.label.name)
@@ -106,6 +124,36 @@ def _test_maturin_build_missing_tools_impl(env, target):
         "PYCROSS_ERROR": "Cannot build test-sdist.tar.gz from source:\nMissing 'maturin' in tool_deps",
     })
 
+def _test_maturin_build_tool_deps_aspect(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_sdist",
+        srcs = ["test-sdist.tar.gz"],
+    )
+    util.helper_target(
+        _mock_pkg,
+        name = name + "_maturin",
+        package_name = "maturin",
+    )
+    util.helper_target(
+        maturin_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        tool_deps = [name + "_maturin"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_maturin_build_tool_deps_aspect_impl,
+    )
+
+def _test_maturin_build_tool_deps_aspect_impl(env, target):
+    mnemonics = [a.mnemonic for a in target.actions]
+    env.expect.that_collection(mnemonics).not_contains("PycrossExtractWheelBin")
+
+    build_action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    build_action.inputs().contains_predicate(matching.file_path_matches("*_maturin_tools/maturin"))
+
 def maturin_build_test_suite(name):
     test_suite(
         name = name,
@@ -113,5 +161,6 @@ def maturin_build_test_suite(name):
             _test_maturin_build_basic,
             _test_maturin_build_resources,
             _test_maturin_build_missing_tools,
+            _test_maturin_build_tool_deps_aspect,
         ],
     )

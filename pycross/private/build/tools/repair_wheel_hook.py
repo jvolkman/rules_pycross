@@ -1,10 +1,13 @@
 import argparse
+import datetime
 import glob
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Iterable
 from typing import Optional
@@ -74,39 +77,6 @@ def main() -> None:
             sys.exit(1)
         wheel_file = Path(whl_files[0])
 
-    lib_dirs = args.lib_dir
-    if not lib_dirs:
-        lib_path_env = os.environ.get("PYCROSS_LIBRARY_PATH")
-        if lib_path_env:
-            lib_dirs = lib_path_env.split(os.pathsep)
-
-    lib_paths = [str(Path(p).absolute()) for p in lib_dirs]
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "repairwheel",
-        str(wheel_file),
-        "--output-dir",
-        out_wheel_dir,
-        "--no-sys-paths",
-    ]
-
-    for lp in lib_paths:
-        cmd.extend(["--lib-dir", lp])
-
-    from pycross.private.build.tools.utils.env import make_clean_env
-
-    for pattern in args.exclude:
-        cmd.extend(["--exclude", pattern])
-
-    env = make_clean_env()
-    python_path = list(sys.path)
-    extra = os.environ.get("REPAIRWHEEL_PYTHONPATH", "")
-    if extra:
-        python_path = extra.split(os.pathsep) + python_path
-    env["PYTHONPATH"] = os.pathsep.join(python_path)
-
     target_env_data = None
     if args.target_environment:
         target_env_path = Path(args.target_environment)
@@ -114,20 +84,84 @@ def main() -> None:
             with open(target_env_path, "r") as f:
                 target_env_data = json.load(f)
 
-    # Tell repairwheel the target libc and musl policy up front; otherwise it
-    # guesses from the input wheel and ignores the configured musl version.
-    if target_env_data and "AUDITWHEEL_PLAT" not in env:
-        plat = auditwheel_plat_from_tags(target_env_data.get("compatibility_tags", []))
-        if plat:
-            env["AUDITWHEEL_PLAT"] = plat
+    extra = os.environ.get("REPAIRWHEEL_PYTHONPATH", "")
 
-    subprocess.check_call(cmd, env=env)
+    # Pure-Python wheels (-none-any.whl) contain no native shared libraries to
+    # audit or bundle, so canonicalize them in-process instead of spawning a
+    # repairwheel subprocess (preserving deterministic zip metadata and RECORD
+    # regeneration) unless a custom repairwheel override is set.
+    if wheel_file.name.lower().endswith("-none-any.whl") and not extra:
+        from repairwheel.wheel import write_canonical_wheel
+
+        mtime = None
+        if "SOURCE_DATE_EPOCH" in os.environ:
+            try:
+                epoch = int(os.environ["SOURCE_DATE_EPOCH"])
+                mtime = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc)
+            except ValueError:
+                print(
+                    f"ERROR: SOURCE_DATE_EPOCH value cannot be parsed as a number: {os.environ['SOURCE_DATE_EPOCH']}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+        out_path = Path(out_wheel_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        dest_wheel = out_path / wheel_file.name
+        if wheel_file.resolve() == dest_wheel.resolve():
+            with tempfile.TemporaryDirectory(prefix="repairwheel") as tmp_dir:
+                staged = write_canonical_wheel(wheel_file, wheel_file, Path(tmp_dir), mtime=mtime)
+                shutil.move(str(staged), str(dest_wheel))
+        else:
+            write_canonical_wheel(wheel_file, wheel_file, out_path, mtime=mtime)
+    else:
+        lib_dirs = args.lib_dir
+        if not lib_dirs:
+            lib_path_env = os.environ.get("PYCROSS_LIBRARY_PATH")
+            if lib_path_env:
+                lib_dirs = lib_path_env.split(os.pathsep)
+
+        lib_paths = [str(Path(p).absolute()) for p in lib_dirs]
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "repairwheel",
+            str(wheel_file),
+            "--output-dir",
+            out_wheel_dir,
+            "--no-sys-paths",
+        ]
+
+        for lp in lib_paths:
+            cmd.extend(["--lib-dir", lp])
+
+        from pycross.private.build.tools.utils.env import make_clean_env
+
+        for pattern in args.exclude:
+            cmd.extend(["--exclude", pattern])
+
+        env = make_clean_env()
+        python_path = list(sys.path)
+        if extra:
+            python_path = extra.split(os.pathsep) + python_path
+        env["PYTHONPATH"] = os.pathsep.join(python_path)
+
+        # Tell repairwheel the target libc and musl policy up front; otherwise it
+        # guesses from the input wheel and ignores the configured musl version.
+        if target_env_data and "AUDITWHEEL_PLAT" not in env:
+            plat = auditwheel_plat_from_tags(target_env_data.get("compatibility_tags", []))
+            if plat:
+                env["AUDITWHEEL_PLAT"] = plat
+
+        subprocess.check_call(cmd, env=env)
 
     if args.target_environment:
         from packaging.utils import parse_wheel_filename
 
         if target_env_data is not None:
-            compatibility_tags = set(target_env_data.get("compatibility_tags", []))
+            expected_tags = target_env_data.get("compatibility_tags", [])
+            compatibility_tags = set(expected_tags)
 
             repaired_wheels = list(Path(out_wheel_dir).glob("*.whl"))
             if not repaired_wheels:
@@ -139,12 +173,16 @@ def main() -> None:
             output_tags = {str(t) for t in output_tag_objects}
 
             if not output_tags.intersection(compatibility_tags):
+                sample_limit = 5
+                sample = ", ".join(expected_tags[:sample_limit])
+                if len(expected_tags) > sample_limit:
+                    sample += f", ... ({len(expected_tags)} total)"
                 print(
-                    f"ERROR: Built wheel {output_wheel_file.name} has incompatible tags: {output_tags}",
+                    f"ERROR: Built wheel {output_wheel_file.name} has incompatible tags: {sorted(output_tags)}",
                     file=sys.stderr,
                 )
                 print(
-                    f"Target environment requires compatible tags from list of size {len(compatibility_tags)}",
+                    f"Target environment expects one of: {sample or '<none>'}",
                     file=sys.stderr,
                 )
                 sys.exit(1)

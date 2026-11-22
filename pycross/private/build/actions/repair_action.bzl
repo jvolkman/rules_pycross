@@ -3,8 +3,20 @@
 load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load("//pycross/private/build:cc_toolchain_util.bzl", "get_libraries")
 load("//pycross/private/build:wheel_shared_libraries.bzl", "wheel_shared_libraries")
+
+def _file_dirname(f):
+    return f.dirname
+
+def _get_dynamic_libraries(cc_info):
+    """Returns dynamic library Files from CcInfo (excluding static/interface archives)."""
+    libs = []
+    for li in cc_info.linking_context.linker_inputs.to_list():
+        for library_to_link in li.libraries:
+            lib = library_to_link.resolved_symlink_dynamic_library or library_to_link.dynamic_library
+            if lib:
+                libs.append(lib)
+    return libs
 
 def register_repair_action(
         ctx,
@@ -43,21 +55,18 @@ def register_repair_action(
     # Declare outputs.
     out_wheel_dir = ctx.actions.declare_directory(whldir_name)
 
-    # Extract library paths from CcInfo.
-    lib_dirs = []
+    # Extract dynamic library files from CcInfo (skipping static/interface archives).
+    lib_files = []
     data_inputs = []
     wheel_lib_excludes = []
     for dep in native_deps:
         if CcInfo in dep:
-            for lib in get_libraries(dep[CcInfo]):
-                lib_dirs.append(lib.dirname)
-                data_inputs.append(depset([lib]))
+            lib_files.extend(_get_dynamic_libraries(dep[CcInfo]))
 
     # Another wheel ships these at runtime. Bundling a copy would load the library twice,
     # with separate state.
     for lib in wheel_shared_libraries(native_deps).to_list():
-        lib_dirs.append(lib.dirname)
-        data_inputs.append(depset([lib]))
+        lib_files.append(lib)
         wheel_lib_excludes.append(lib.basename)
 
     # Collect user-provided repair deps (e.g. repairwheel override).
@@ -76,30 +85,40 @@ def register_repair_action(
                     repair_dep_paths.append(src.path + "/site-packages")
 
     # Collect inputs.
-    input_files = [input_wheel_dir]
+    input_files = [input_wheel_dir] + lib_files
     if target_environment:
         input_files.append(target_environment)
 
     # Build arguments for the repair tool.
+    # Pass File objects (not .path strings) so Bazel path mapping can rewrite them.
     args = ctx.actions.args()
-    args.add("--wheel-dir", input_wheel_dir.path)
-    args.add("--out-wheel-dir", out_wheel_dir.path)
+    args.add_all([input_wheel_dir], before_each = "--wheel-dir", expand_directories = False)
+    args.add_all([out_wheel_dir], before_each = "--out-wheel-dir", expand_directories = False)
 
-    for d in depset(lib_dirs).to_list():
-        args.add("--lib-dir", d)
+    if lib_files:
+        args.add_all(
+            lib_files,
+            before_each = "--lib-dir",
+            map_each = _file_dirname,
+            uniquify = True,
+        )
 
     for pattern in repair_exclude_globs + collections.uniq(wheel_lib_excludes):
         args.add("--exclude", pattern)
 
     if target_environment:
-        args.add("--target-environment", target_environment.path)
+        args.add("--target-environment", target_environment)
 
     outputs = [out_wheel_dir]
 
     # Build environment: inject user repair deps into PYTHONPATH if provided.
     env = {}
+    execution_requirements = {"supports-path-mapping": "1"}
     if repair_dep_paths:
         env["REPAIRWHEEL_PYTHONPATH"] = ":".join(repair_dep_paths)
+
+        # REPAIRWHEEL_PYTHONPATH embeds raw .path strings in env, which path mapping does not rewrite.
+        execution_requirements = {}
 
     ctx.actions.run(
         executable = repair_tool,
@@ -108,6 +127,7 @@ def register_repair_action(
         outputs = outputs,
         env = env,
         mnemonic = "PycrossRepairWheel",
+        execution_requirements = execution_requirements,
         progress_message = "Repairing %s" % input_wheel_dir.basename,
         resource_set = resource_set,
     )

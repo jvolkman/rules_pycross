@@ -20,6 +20,9 @@ load("//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_library.bzl", "pycross_wheel_library")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_library")
+
 def _test_pycross_wheel_library_basic(name):
     # Dummy wheel file
     util.helper_target(
@@ -550,6 +553,83 @@ def _test_pycross_wheel_library_precompile_missing_toolchain_skipped(name):
         impl = _assert_precompile_disabled_impl,
     )
 
+def _test_pycross_wheel_library_precompile_invalidation_mode_flag(name):
+    _define_precompile_subject(name, precompile = "enabled")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            "//command_line_option:compilation_mode": "fastbuild",
+            str(Label("//pycross/settings:precompile_invalidation_mode")): "unchecked_hash",
+        },
+        impl = _assert_precompile_enabled_unchecked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_invalidation_mode_attr_overrides_flag(name):
+    _define_precompile_subject(
+        name,
+        precompile = "enabled",
+        precompile_invalidation_mode = "checked_hash",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            "//command_line_option:compilation_mode": "fastbuild",
+            str(Label("//pycross/settings:precompile_invalidation_mode")): "unchecked_hash",
+        },
+        impl = _assert_precompile_enabled_checked_opt0_impl,
+    )
+
+def _test_pycross_wheel_zipimport_library_file_uses_symlink(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_zipimport_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_wheel_zipimport_library_file_uses_symlink_impl,
+    )
+
+def _test_pycross_wheel_zipimport_library_file_uses_symlink_impl(env, target):
+    mnemonics = [a.mnemonic for a in target.actions]
+    env.expect.that_collection(mnemonics).not_contains("PycrossLinkWheel")
+    env.expect.that_collection(mnemonics).contains("Symlink")
+
+def _test_pycross_wheel_zipimport_library_dir_uses_link_wheel(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel_src",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_dir,
+        name = name + "_wheel_dir",
+        src = name + "_wheel_src",
+        whldir_name = "test-1.0.whldir",
+    )
+    util.helper_target(
+        pycross_wheel_zipimport_library,
+        name = name + "_subject",
+        wheel = name + "_wheel_dir",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_wheel_zipimport_library_dir_uses_link_wheel_impl,
+    )
+
+def _test_pycross_wheel_zipimport_library_dir_uses_link_wheel_impl(env, target):
+    action = env.expect.that_target(target).action_named("PycrossLinkWheel")
+    action.argv().contains_predicate(matching.str_endswith("test-1.0.whldir"))
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -578,5 +658,9 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_library_precompile_invalidation_mode_unchecked_explicit,
             _test_pycross_wheel_library_precompile_optimize_level,
             _test_pycross_wheel_library_precompile_missing_toolchain_skipped,
+            _test_pycross_wheel_library_precompile_invalidation_mode_flag,
+            _test_pycross_wheel_library_precompile_invalidation_mode_attr_overrides_flag,
+            _test_pycross_wheel_zipimport_library_file_uses_symlink,
+            _test_pycross_wheel_zipimport_library_dir_uses_link_wheel,
         ],
     )

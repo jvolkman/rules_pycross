@@ -68,12 +68,22 @@ if lib_dir.is_dir():
 """
 
 
+def _has_py_files(lib_dir: Path) -> bool:
+    for _, dirs, files in os.walk(lib_dir):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        if any(f.endswith(".py") for f in files):
+            return True
+    return False
+
+
 def compile_bytecode(
     lib_dir: Path,
     compile_python: str,
     invalidation_mode: str,
     optimize: int = 0,
 ) -> None:
+    if not _has_py_files(lib_dir):
+        return
     env = dict(os.environ)
     env["PYTHONHASHSEED"] = "0"
     env["PYTHONNOUSERSITE"] = "1"
