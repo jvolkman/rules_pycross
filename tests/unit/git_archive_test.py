@@ -2,7 +2,9 @@
 
 import gzip
 import os
+import shutil
 import stat
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -100,6 +102,26 @@ class GitArchiveTest(unittest.TestCase):
         git_archive.create_archive(src, out, "repo", _MTIME)
         with tarfile.open(out) as tar:
             self.assertEqual(tar.getnames(), ["repo", "repo/a.txt"])
+
+    @unittest.skipUnless(shutil.which("git"), "git not available")
+    def test_preserves_git_index_executable_mode(self) -> None:
+        """Tracked 100755 files stay executable in the archive even when working-tree mode is 0o644."""
+        src = self.tmp / "gitrepo"
+        src.mkdir()
+        subprocess.run(["git", "init", "-q", str(src)], check=True)
+        (src / "run.sh").write_text("#!/bin/sh\necho hi\n")
+        (src / "plain.txt").write_text("hello\n")
+        subprocess.run(["git", "-C", str(src), "add", "run.sh", "plain.txt"], check=True)
+        subprocess.run(["git", "-C", str(src), "update-index", "--chmod=+x", "run.sh"], check=True)
+        # Simulate Windows NTFS lacking POSIX execute bits on the checked-out file.
+        (src / "run.sh").chmod(0o644)
+
+        out = self.tmp / "gitrepo.tar.gz"
+        git_archive.create_archive(src, out, "repo", _MTIME)
+        with tarfile.open(out) as tar:
+            by_name = {m.name: m for m in tar.getmembers()}
+        self.assertEqual(by_name["repo/run.sh"].mode, 0o755)
+        self.assertEqual(by_name["repo/plain.txt"].mode, 0o644)
 
 
 if __name__ == "__main__":

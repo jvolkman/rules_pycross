@@ -129,6 +129,8 @@ exports_files(["{filename}"])
             "repo",
             "--mtime",
             mtime,
+            "--git",
+            str(git_path),
         ],
     )
 
