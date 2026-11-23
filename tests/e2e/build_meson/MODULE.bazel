@@ -27,12 +27,6 @@ use_repo(python, "python_versions")
 
 pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
 pycross.configure_toolchains(
-    platforms = [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-unknown-linux-gnu",
-        "x86_64-unknown-linux-musl",
-    ],
     python_versions = [
         "3.14.2",
     ],

@@ -710,15 +710,11 @@ For a custom package list, use `pycross_modules_mapping(deps = ...)` from `@rule
 
 ### Toolchain configuration
 
-`rules_pycross` discovers Python versions from registered `rules_python` toolchains and enables all supported target platforms by default. Use `pycross.configure_toolchains()` to restrict platforms or Python versions, or to set default compatibility versions:
+`rules_pycross` discovers Python versions from registered `rules_python` toolchains by default. Use `pycross.configure_toolchains()` to restrict Python versions or set default OS/libc compatibility versions:
 
 ```python
 pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
 pycross.configure_toolchains(
-    platforms = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-    ],
     python_versions = [
         "3.13",
         "3.14",

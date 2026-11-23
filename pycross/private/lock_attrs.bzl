@@ -17,10 +17,9 @@ CONFIGURE_TOOLCHAINS_ATTRS = dict(
     ),
     platforms = attr.string_list(
         doc = (
-            "The list of Python platforms to support in by default in Pycross builds. " +
-            "See https://github.com/bazelbuild/rules_python/blob/main/python/versions.bzl " +
-            "for the list of supported platforms per Python version. By default all supported " +
-            "platforms for each registered version are supported."
+            "Deprecated: no-op kept for backwards compatibility. Target platforms " +
+            "are determined by Bazel's `--platforms` flag and registered " +
+            "`rules_python` toolchains."
         ),
     ),
     glibc_version = attr.string(
