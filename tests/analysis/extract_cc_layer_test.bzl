@@ -314,6 +314,7 @@ def _test_absolutize_additional_input_paths_impl(env, target):
         ("-Wl,--version-script=pkg/foo.lds", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
         ("/DEF:bazel-out/k8-opt/bin/x.def", "/DEF:$$EXT_BUILD_ROOT$$/bazel-out/k8-opt/bin/x.def"),
         ("@pkg/foo.lds", "@$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        # buildifier: disable=external-path
         ("-Wl,--version-script=external/repo/a.lds", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/external/repo/a.lds"),
         # Trailing boundary check avoids prefix-matching `pkg/foo.lds` inside `pkg/foo.lds.bak`.
         ("-Wl,--version-script=pkg/foo.lds.bak", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/pkg/foo.lds.bak"),
