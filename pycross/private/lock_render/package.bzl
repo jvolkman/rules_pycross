@@ -64,8 +64,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads
         dep_key = md["key"]
         if dep_key in unconditional:
             continue
-        effective_extra = extra if "extra" in md["marker"] else ""
-        eval_name = marker_evaluator_name(md["marker"], effective_extra)
+        eval_name = marker_evaluator_name(md["marker"], extra)
         dep_evals.setdefault(dep_key, {})[eval_name] = True
 
     # Group single-evaluator deps by evaluator; deps reachable under multiple

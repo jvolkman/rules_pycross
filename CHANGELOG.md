@@ -40,7 +40,7 @@ All notable changes to this project will be documented in this file.
 - **PDM bare package targets exclude extras.** `@repo//pkg` no longer pulls in
   `pkg[extra]` dependencies when a root pins `pkg[extra]`; depend on
   `@repo//pkg:[extra]`, matching `uv` and Poetry.
-- **Native `linux_<arch>` wheel preference (`pypackaging.bzl` 0.4.0).**
+- **Native `linux_<arch>` wheel preference (`pypackaging.bzl` 0.4.1).**
   `linux_<arch>` wheels now rank ahead of `manylinux_*` and `musllinux_*` tags
   (matching upstream `packaging`). Also bumped `toml.bzl` to `0.6.0`.
 - **Root-wins override precedence.** Root-module backend overrides now win over

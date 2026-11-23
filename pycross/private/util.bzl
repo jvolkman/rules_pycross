@@ -28,6 +28,19 @@ def sanitize_name(val):
             out.append("_")
     return "".join(out)
 
+def marker_uses_extra(marker_str):
+    """Returns True if `marker_str` references the PEP 508 `extra` variable.
+
+    Args:
+        marker_str: The PEP 508 marker expression string.
+
+    Returns:
+        Bool indicating whether the marker AST references `extra`.
+    """
+    if not marker_str or "extra" not in marker_str:
+        return False
+    return "extra" in pypackaging.markers.variables(pypackaging.markers.parse(marker_str))
+
 def marker_evaluator_name(marker_str, extra = ""):
     """Generate a deterministic target name for a PEP 508 marker evaluator.
 
@@ -41,7 +54,7 @@ def marker_evaluator_name(marker_str, extra = ""):
 
     # Starlark's hash() is deterministic within a build invocation.
     # We sanitize the marker string for readability and add the hash for uniqueness.
-    effective_extra = extra if (extra and "extra" in marker_str) else ""
+    effective_extra = extra if (extra and marker_uses_extra(marker_str)) else ""
     key = marker_str if not effective_extra else "{}|extra={}".format(marker_str, effective_extra)
     san_chars = []
     for c in key.lower().elems():
