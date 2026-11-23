@@ -1,0 +1,57 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "markers",
+    srcs = ["markers.bzl"],
+    deps = [
+        ":common",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "cycles",
+    srcs = ["cycles.bzl"],
+    deps = [
+        ":common",
+        ":markers",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "wheels",
+    srcs = ["wheels.bzl"],
+    deps = [
+        ":common",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "package",
+    srcs = ["package.bzl"],
+    deps = [
+        ":common",
+        ":wheels",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "reset_plan",
+    srcs = ["reset_plan.bzl"],
+    deps = [
+        ":common",
+        ":wheels",
+        "//pycross/private:util",
+        "@pypackaging.bzl//:pypackaging",
+    ],
+)
+
+bzl_library(
+    name = "common",
+    srcs = ["common.bzl"],
+)

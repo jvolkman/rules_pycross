@@ -379,8 +379,11 @@ bzl_library(
     name = "resolved_lock_renderer",
     srcs = ["resolved_lock_renderer.bzl"],
     deps = [
-        ":util",
-        "@pypackaging.bzl//:pypackaging",
+        "//pycross/private/lock_render:common",
+        "//pycross/private/lock_render:cycles",
+        "//pycross/private/lock_render:markers",
+        "//pycross/private/lock_render:package",
+        "//pycross/private/lock_render:reset_plan",
     ],
 )
 
