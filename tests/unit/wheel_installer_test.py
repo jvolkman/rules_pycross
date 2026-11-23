@@ -652,6 +652,58 @@ class WheelInstallerDestinationAndFlagsTest(unittest.TestCase):
                 extract_wheel_bin.main()
             self.assertEqual(out_file.read_bytes(), expected, msg=name)
 
+    def test_validate_site_paths(self):
+        import io
+        from unittest import mock
+
+        from pycross.private.tools.wheel_installer import _validate_site_paths
+
+        lib_dir = Path(self.temp_dir) / "site-packages"
+        (lib_dir / "real_pkg").mkdir(parents=True)
+        (lib_dir / "real_pkg" / "__init__.py").write_text("", encoding="utf-8")
+        (lib_dir / "real_pkg.libs").mkdir(parents=True)
+        (lib_dir / "real_pkg.libs" / "libfoo.so").write_bytes(b"\x7fELF")
+        (lib_dir / "real_pkg-1.0.dist-info").mkdir(parents=True)
+        (lib_dir / "real_pkg-1.0.dist-info" / "METADATA").write_text("Name: real-pkg\n", encoding="utf-8")
+
+        # Exact match (including auditwheel .libs file path) succeeds without warnings.
+        stderr = io.StringIO()
+        with mock.patch("sys.stderr", stderr):
+            _validate_site_paths(lib_dir, ["real_pkg", "real_pkg.libs/libfoo.so"], [], "real-pkg")
+        self.assertEqual(stderr.getvalue(), "")
+
+        # Directory-level annotation covering .libs also succeeds without warnings.
+        stderr = io.StringIO()
+        with mock.patch("sys.stderr", stderr):
+            _validate_site_paths(lib_dir, ["real_pkg", "real_pkg.libs"], [], "real-pkg")
+        self.assertEqual(stderr.getvalue(), "")
+
+        # Deliberate annotated subset succeeds with a warning listing uncovered paths.
+        stderr = io.StringIO()
+        with mock.patch("sys.stderr", stderr):
+            _validate_site_paths(lib_dir, ["real_pkg"], [], "real-pkg")
+        self.assertIn("warning:", stderr.getvalue())
+        self.assertIn("real_pkg.libs/libfoo.so", stderr.getvalue())
+        self.assertIn("Annotate site_paths =", stderr.getvalue())
+
+        # Missing annotated path hard-fails with an annotate site_paths hint.
+        with self.assertRaises(SystemExit) as cm:
+            _validate_site_paths(lib_dir, ["noxfile.py"], [], "real-pkg")
+        self.assertIn("noxfile.py", str(cm.exception))
+        self.assertIn("real_pkg", str(cm.exception))
+        self.assertIn("Annotate site_paths =", str(cm.exception))
+
+        # Paths excluded by install_exclude_globs are ignored.
+        stderr = io.StringIO()
+        with mock.patch("sys.stderr", stderr):
+            _validate_site_paths(
+                lib_dir,
+                ["real_pkg", "real_pkg.libs", "test_extra.py", "tests"],
+                ["test_extra.py", "tests/**"],
+                "real-pkg",
+            )
+        self.assertEqual(stderr.getvalue(), "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -27,6 +28,7 @@ from installer.utils import Scheme
 from installer.utils import construct_record_file
 from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.inspect_package import find_installed_site_paths
 from pycross_patch import apply_patch_or_exit
 
 _COMPILE_SCRIPT = """\
@@ -252,6 +254,53 @@ def _validate_wheel_identity(
         )
 
 
+def _is_excluded_site_path(site_path: str, install_exclude_globs: List[str]) -> bool:
+    for pattern in install_exclude_globs:
+        if fnmatch.fnmatchcase(site_path, pattern) or fnmatch.fnmatchcase(site_path + "/", pattern):
+            return True
+        if pattern.endswith("/**"):
+            prefix = pattern[:-3]
+            if site_path == prefix or site_path.startswith(prefix + "/"):
+                return True
+    return False
+
+
+def _validate_site_paths(
+    lib_dir: Path,
+    expected_site_paths: List[str],
+    install_exclude_globs: List[str],
+    package_name: str | None,
+) -> None:
+    """Verify expected/annotated `site_paths` against the installed wheel layout.
+
+    Fails if any expected path is missing from the installed wheel (which would
+    create dangling venv symlinks). Warns if the wheel installs additional
+    top-level paths not covered by `expected_site_paths` (allowing deliberate
+    annotated subsets and post-install patches that add modules).
+    """
+    active_expected = [p for p in expected_site_paths if not _is_excluded_site_path(p, install_exclude_globs)]
+    missing = sorted(p for p in active_expected if not (lib_dir / p).exists())
+    actual = find_installed_site_paths(lib_dir)
+    uncovered = sorted(a for a in actual if not any(a == p or a.startswith(p + "/") for p in active_expected))
+    if not missing and not uncovered:
+        return
+
+    pkg_desc = package_name or lib_dir.parent.name
+    if missing:
+        details = [f"expected paths not found in wheel: {missing}"]
+        if uncovered:
+            details.append(f"installed paths not in site_paths: {uncovered}")
+        raise SystemExit(
+            f"error: site_paths mismatch for '{pkg_desc}' ({'; '.join(details)}). "
+            f"Annotate site_paths = {actual!r} for '{pkg_desc}'."
+        )
+
+    sys.stderr.write(
+        f"warning: '{pkg_desc}' installed additional top-level paths not in site_paths: {uncovered}. "
+        f"Annotate site_paths = {actual!r} for '{pkg_desc}' to include them in the venv.\n"
+    )
+
+
 def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
@@ -296,6 +345,15 @@ def main(args: Any) -> None:
         )
 
     apply_patches(lib_dir, args.patches)
+
+    expected_site_paths = getattr(args, "expected_site_paths", None) or []
+    if expected_site_paths:
+        _validate_site_paths(
+            lib_dir,
+            expected_site_paths,
+            args.install_exclude_globs,
+            getattr(args, "expected_name", None),
+        )
 
     compile_python = getattr(args, "compile_python", None)
     if compile_python:
@@ -376,6 +434,14 @@ def parse_flags(argv: list[str] | None = None) -> Any:
         type=str,
         required=False,
         help="Expected package version; validated against wheel METADATA.",
+    )
+
+    parser.add_argument(
+        "--expected-site-path",
+        action="append",
+        dest="expected_site_paths",
+        default=[],
+        help="Expected top-level site-packages path to verify after installation.",
     )
 
     parser.add_argument(

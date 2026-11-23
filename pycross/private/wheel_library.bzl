@@ -27,7 +27,7 @@ load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers", "underscore_name")
 
 _PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
-def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
+def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir, expected_site_paths = []):
     if PycrossUnsupportedWheelInfo in ctx.attr.wheel:
         pkg_id = "{}{}".format(
             ctx.attr.package_name or ctx.label.name,
@@ -71,6 +71,8 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         args.add("--expected-version", ctx.attr.package_version)
     if dist_info_dir:
         args.add("--dist-info-dir", dist_info_dir)
+    for site_path in expected_site_paths:
+        args.add("--expected-site-path", site_path)
 
     flag_precompile = ctx.attr._precompile[BuildSettingInfo].value
     if flag_precompile == "force_enabled":
@@ -210,8 +212,11 @@ def _build_venv_symlinks(
                 files = entry_files,
             ))
 
-    # Also add .dist-info directory symlink so metadata is accessible.
-    if dist_info_dir:
+    # Also add .dist-info directory symlink when Python modules are linked into
+    # the venv's site-packages. When site_paths is empty we keep [imp] on
+    # sys.path (which already exposes site-packages/*.dist-info), so linking
+    # dist-info into the venv would expose the distribution twice to importlib.metadata.
+    if site_paths and dist_info_dir:
         venv_symlinks.append(VenvSymlinkEntry(
             kind = VenvSymlinkKind.LIB,
             link_to_path = paths.join(imp, dist_info_dir),
@@ -271,7 +276,40 @@ def _pycross_wheel_library_impl(ctx):
             ctx.attr.package_version,
         )
 
-    precompile_cache_tag = _register_wheel_install_action(ctx, out, entry_points, dist_info_dir)
+    package_name = ctx.attr.package_name or ctx.label.name
+    package_version = ctx.attr.package_version or ""
+
+    wheel_pkg_info = ctx.attr.wheel[PycrossPackageInfo] if PycrossPackageInfo in ctx.attr.wheel else None
+    site_paths = ctx.attr.site_paths
+    site_paths_exact = bool(ctx.attr.site_paths)
+    bin_paths = ctx.attr.bin_paths
+    data_paths = ctx.attr.data_paths
+    include_paths = ctx.attr.include_paths
+    if not site_paths and wheel_pkg_info:
+        site_paths = wheel_pkg_info.site_paths
+        site_paths_exact = getattr(wheel_pkg_info, "site_paths_exact", True)
+    if not bin_paths and wheel_pkg_info:
+        bin_paths = wheel_pkg_info.bin_paths
+    if not data_paths and wheel_pkg_info:
+        data_paths = wheel_pkg_info.data_paths
+    if not include_paths and wheel_pkg_info:
+        include_paths = wheel_pkg_info.include_paths
+
+    venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
+
+    # Only build venv LIB links (and verify installed top-level paths under
+    # venvs_site_packages=yes) from exact wheel metadata or explicit site_paths
+    # annotations. Repo-time sdist guesses stay advisory for modules_mapping
+    # while keeping [imp] on sys.path.
+    venv_site_paths = site_paths if site_paths_exact else []
+
+    precompile_cache_tag = _register_wheel_install_action(
+        ctx,
+        out,
+        entry_points,
+        dist_info_dir,
+        expected_site_paths = venv_site_paths if venvs_site_packages_enabled else [],
+    )
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
@@ -280,24 +318,6 @@ def _pycross_wheel_library_impl(ctx):
         ctx.label.name,
         "site-packages",  # we put lib files in this subdirectory.
     )
-
-    package_name = ctx.attr.package_name or ctx.label.name
-    package_version = ctx.attr.package_version or ""
-
-    site_paths = ctx.attr.site_paths
-    bin_paths = ctx.attr.bin_paths
-    data_paths = ctx.attr.data_paths
-    include_paths = ctx.attr.include_paths
-    if not site_paths and PycrossPackageInfo in ctx.attr.wheel:
-        site_paths = ctx.attr.wheel[PycrossPackageInfo].site_paths
-    if not bin_paths and PycrossPackageInfo in ctx.attr.wheel:
-        bin_paths = ctx.attr.wheel[PycrossPackageInfo].bin_paths
-    if not data_paths and PycrossPackageInfo in ctx.attr.wheel:
-        data_paths = ctx.attr.wheel[PycrossPackageInfo].data_paths
-    if not include_paths and PycrossPackageInfo in ctx.attr.wheel:
-        include_paths = ctx.attr.wheel[PycrossPackageInfo].include_paths
-
-    venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
 
     # Build venv symlink entries for rules_python's venvs_site_packages support.
     # Each top-level package gets a symlink from the venv's site-packages/<tlp>
@@ -309,7 +329,7 @@ def _pycross_wheel_library_impl(ctx):
         dist_info_dir,
         package_name,
         package_version,
-        site_paths,
+        venv_site_paths,
         bin_paths,
         data_paths,
         include_paths,
@@ -317,14 +337,14 @@ def _pycross_wheel_library_impl(ctx):
         precompile_optimize_level = ctx.attr.precompile_optimize_level,
     )
 
-    # With venvs_site_packages, the wheel is linked into the venv's site-packages, so (like rules_python)
-    # don't also put its own site-packages dir on sys.path. Keep [imp] when site_paths is empty so
-    # sdists whose Python modules are generated at build time (even if bin_paths is populated) stay importable.
+    # With venvs_site_packages, wheels with exact/annotated site_paths are linked into the
+    # venv's site-packages, so (like rules_python) don't also put their site-packages dir
+    # on sys.path. Keep [imp] when venv_site_paths is empty (e.g. unannotated sdist builds).
     merged = merge_py_providers(
         ctx,
         ctx.attr.deps,
         direct_sources = [out],
-        direct_imports = [] if (venvs_site_packages_enabled and site_paths) else [imp],
+        direct_imports = [] if (venvs_site_packages_enabled and venv_site_paths) else [imp],
         base_runfiles = ctx.runfiles(files = [out]),
         direct_venv_symlinks = venv_symlinks,
     )
@@ -356,6 +376,7 @@ def _pycross_wheel_library_impl(ctx):
                 package_name = ctx.attr.package_name,
                 package_version = ctx.attr.package_version,
                 site_paths = site_paths,
+                site_paths_exact = site_paths_exact,
                 bin_paths = bin_paths,
                 data_paths = data_paths,
                 include_paths = include_paths,
@@ -458,6 +479,7 @@ def _pycross_wheel_metadata_impl(ctx):
             package_name = ctx.attr.package_name,
             package_version = ctx.attr.package_version,
             site_paths = ctx.attr.site_paths,
+            site_paths_exact = ctx.attr.site_paths_exact,
             bin_paths = ctx.attr.bin_paths,
             data_paths = ctx.attr.data_paths,
             include_paths = ctx.attr.include_paths,
@@ -477,6 +499,10 @@ pycross_wheel_metadata = rule(
         "package_name": attr.string(doc = "The normalized package name."),
         "package_version": attr.string(doc = "The package version."),
         "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
+        "site_paths_exact": attr.bool(
+            default = True,
+            doc = "Whether site_paths is exact (True for inspected wheels, False for repo-time sdist guesses).",
+        ),
         "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
         "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
         "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),

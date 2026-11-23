@@ -64,3 +64,6 @@ uv.package(
     workspace = "uv",
 )
 use_repo(uv, "uv")
+
+misleading_sdist = use_extension("//:misleading_sdist.bzl", "misleading_sdist_ext")
+use_repo(misleading_sdist, "misleading_sdist")

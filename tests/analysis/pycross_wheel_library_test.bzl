@@ -18,7 +18,7 @@ load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
 load("//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:wheel_library.bzl", "pycross_wheel_library")
+load("//pycross/private:wheel_library.bzl", "pycross_wheel_library", "pycross_wheel_metadata")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_library")
@@ -775,12 +775,131 @@ def _test_pycross_wheel_library_bin_only_venv_symlinks(name):
 def _test_pycross_wheel_library_bin_only_venv_symlinks_impl(env, target):
     venv_paths = [e.venv_path for e in target[PyInfo].venv_symlinks.to_list()]
     env.expect.that_collection(venv_paths).contains("mytool")
-    env.expect.that_collection(venv_paths).contains("mytool-1.0.dist-info")
+    env.expect.that_collection(venv_paths).not_contains("mytool-1.0.dist-info")
 
     # Empty site_paths still keeps site-packages on sys.path for build-time generated modules.
     env.expect.that_collection(target[PyInfo].imports.to_list()).contains_predicate(
         matching.str_endswith("/site-packages"),
     )
+
+def _test_pycross_wheel_library_sdist_advisory_site_paths(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel_file",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_metadata,
+        name = name + "_wheel",
+        wheel = name + "_wheel_file",
+        site_paths = ["noxfile.py"],
+        site_paths_exact = False,
+        bin_paths = ["mytool"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        package_name = "my_sdist",
+        package_version = "1.0",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:venvs_site_packages")): "yes",
+        },
+        impl = _test_pycross_wheel_library_sdist_advisory_site_paths_impl,
+    )
+
+def _test_pycross_wheel_library_sdist_advisory_site_paths_impl(env, target):
+    # Advisory sdist site_paths must NOT become venv LIB symlinks or drop [imp].
+    venv_paths = [e.venv_path for e in target[PyInfo].venv_symlinks.to_list()]
+    env.expect.that_collection(venv_paths).contains("mytool")
+    env.expect.that_collection(venv_paths).not_contains("noxfile.py")
+    env.expect.that_collection(venv_paths).not_contains("my_sdist-1.0.dist-info")
+    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_predicate(
+        matching.str_endswith("/site-packages"),
+    )
+
+    # Full guessed site_paths remain on PycrossPackageInfo for modules_mapping.
+    env.expect.that_collection(target[PycrossPackageInfo].site_paths).contains_exactly(["noxfile.py"])
+    env.expect.that_bool(target[PycrossPackageInfo].site_paths_exact).equals(False)
+
+    # Advisory guesses are not verified by --expected-site-path.
+    install_action = env.expect.that_target(target).action_named("PycrossWheelInstall")
+    install_action.argv().not_contains("--expected-site-path")
+
+def _test_pycross_wheel_library_sdist_annotated_site_paths(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel_file",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_metadata,
+        name = name + "_wheel",
+        wheel = name + "_wheel_file",
+        site_paths = ["noxfile.py"],
+        site_paths_exact = False,
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        package_name = "my_sdist",
+        package_version = "1.0",
+        site_paths = ["real_pkg"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:venvs_site_packages")): "yes",
+        },
+        impl = _test_pycross_wheel_library_sdist_annotated_site_paths_impl,
+    )
+
+def _test_pycross_wheel_library_sdist_annotated_site_paths_impl(env, target):
+    venv_paths = [e.venv_path for e in target[PyInfo].venv_symlinks.to_list()]
+    env.expect.that_collection(venv_paths).contains_exactly(["real_pkg", "my_sdist-1.0.dist-info"])
+    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_exactly([])
+    env.expect.that_bool(target[PycrossPackageInfo].site_paths_exact).equals(True)
+
+    install_action = env.expect.that_target(target).action_named("PycrossWheelInstall")
+    install_action.argv().contains_at_least(["--expected-site-path", "real_pkg"])
+
+def _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel_file",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_metadata,
+        name = name + "_wheel",
+        wheel = name + "_wheel_file",
+        site_paths = ["real_pkg"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        package_name = "my_pkg",
+        package_version = "1.0",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:venvs_site_packages")): "no",
+        },
+        impl = _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths_impl,
+    )
+
+def _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths_impl(env, target):
+    install_action = env.expect.that_target(target).action_named("PycrossWheelInstall")
+    install_action.argv().not_contains("--expected-site-path")
 
 def pycross_wheel_library_test_suite(name):
     test_suite(
@@ -819,5 +938,8 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_zipimport_library_dir_uses_link_wheel,
             _test_pycross_wheel_library_precompile_single_file_pyc_symlinks,
             _test_pycross_wheel_library_bin_only_venv_symlinks,
+            _test_pycross_wheel_library_sdist_advisory_site_paths,
+            _test_pycross_wheel_library_sdist_annotated_site_paths,
+            _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths,
         ],
     )

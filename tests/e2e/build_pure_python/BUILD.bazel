@@ -1,5 +1,9 @@
+# buildifier: disable=bzl-visibility
+load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_library")
 load("@rules_python//python:defs.bzl", "py_test")
 load("//shared:collect_wheels.bzl", "collect_wheels")
+
+exports_files(["misleading_pkg-0.1.0.tar.gz"])
 
 collect_wheels(
     name = "all_wheels",
@@ -26,4 +30,17 @@ py_test(
         "@uv//filelock:pkg",
         "@uv//tomli:pkg",
     ],
+)
+
+pycross_wheel_library(
+    name = "misleading_pkg",
+    package_name = "misleading-pkg",
+    package_version = "0.1.0",
+    wheel = "@misleading_sdist//:wheel",
+)
+
+py_test(
+    name = "test_misleading_layout",
+    srcs = ["test_misleading_layout.py"],
+    deps = [":misleading_pkg"],
 )

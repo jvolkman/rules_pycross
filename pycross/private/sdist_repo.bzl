@@ -106,6 +106,7 @@ pycross_wheel_metadata(
     name = "wheel",
     wheel = ":wheel_build",
     site_paths = {site_paths},
+    site_paths_exact = False,
     bin_paths = {bin_paths},
     data_paths = {data_paths},
     include_paths = {include_paths},
