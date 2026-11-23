@@ -11,8 +11,10 @@ All notable changes to this project will be documented in this file.
   target fastbuild and exec opt installs share one cache entry under path
   mapping.
 - **Custom backend override helpers.** `pycross/backend.bzl` exports
-  `CORE_OVERRIDE_ATTRS` and `CC_OVERRIDE_ATTRS`, and `encode_build_system_attrs`
-  now forwards custom override attributes dynamically.
+  `CORE_OVERRIDE_ATTRS` and `CC_OVERRIDE_ATTRS`, `encode_build_system_attrs`
+  forwards custom override attributes dynamically, and
+  `backends.register(package_repo_hook_subdir = ...)` lets third-party backends
+  expose hook aliases such as `_cargo` in thin repos.
 - **`config_settings` on `pep517_build`** joins the common build attributes
   shared by all backends.
 - **`PycrossBuildExecRuntimeInfo.bytecode_cache_tag`** exposes the target
@@ -64,21 +66,24 @@ All notable changes to this project will be documented in this file.
   are shared across sdist targets, and POSIX `/bin/sh` wrappers replace
   per-compile Python wrappers.
 - **Trimmed internal lock metadata.** Auto-generated `<workspace>__build` repos
-  omit `//_variants` unless declared, and `@<repo>_lock_json//:data.json` drops
-  unused `files` and `remote_files` fields.
+  omit `//_variants` unless declared, `@<repo>_lock_json//:data.json` drops
+  unused `files` and `remote_files` fields, and `__pkgs//_lock` drops unused
+  `_available_*` targets and replaces `_explicit_*` / `_pin_*` / `_default_*` /
+  `_usable_*` with `_variant_state` and `_state`.
 
 ### Fixed
 
 - **Sdist builds and CC layer.** Fixed `CXXFLAGS` flag shadowing, `native_deps`
   defines and PIC archives, `pkg_config_files` across all builders, user
-  `build_env` preservation, `meson`/`cmake` edge cases, and native musl builds.
+  `build_env` preservation, `meson`/`cmake` edge cases, native musl builds, and
+  large-argument performance in the POSIX compiler wrapper.
 - **Maturin and `setuptools-rust` builds.** Fixed `rustc` wrapper metadata
   hashes, probe detection, `rustlib` and `vendored_crates` paths, and workspace
   `Cargo.lock` handling.
 - **Generated repos, variants, and cycles.** Fixed multi-member availability
   markers, extras in dependency cycles, `_cargo` alias filtering,
-  `modules_mapping` fork selection, overlapping `uv` conflict defaults, and
-  extras canonicalization.
+  `modules_mapping` fork selection, overlapping `uv` conflict defaults,
+  extras canonicalization, and runtime-reachable deps staying non-testonly.
 - **Lock translators and package inspection.** Fixed marker-gated sdist `deps`,
   Windows `ARM64`/`x86_32`/PyPy markers, `pylock` selection pruning and edge
   markers, Poetry caret/tilde epochs, quote-aware PEP 503 parsing, and
