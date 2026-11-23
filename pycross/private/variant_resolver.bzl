@@ -1,8 +1,8 @@
 """Joint conflict-variant state rule and FeatureFlagInfo projections.
 
 A single `variant_state` target per workspace reads every repo's bool_flags,
-`//_variants` string_flags, and per-set pin/default/usable settings once, and
-computes the consistent assignment across all conflict sets:
+`//_variants` string_flags, and the canonical `//_lock:_state` setting once,
+and computes the consistent assignment across all conflict sets:
 
   1. Validate all `//_variants` string_flag tokens up front so typos fail loudly.
   2. Apply explicit selections per set: repo pin > usable-filtered flags,
@@ -21,7 +21,7 @@ marker evaluators can match them directly without two-stage rival plumbing or
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":deferred_failure.bzl", "register_failure_action")
-load(":util.bzl", "excluded_variant_items")
+load(":util.bzl", "decode_variant_state", "excluded_variant_items")
 
 VariantStateInfo = provider(
     doc = "Resolved conflict-variant selections for all conflict sets in a workspace.",
@@ -40,15 +40,14 @@ def _check_item(set_items, value, source):
         ))
     return value
 
-def _parse_usable(target, set_items):
-    """Return `{qname: True}` allowed by `target`, or None if all items are usable."""
-    value = target[BuildSettingInfo].value if target else "*"
+def _parse_usable_str(value, set_items, source):
+    """Return `{qname: True}` allowed by `value`, or None if all items are usable (`*`)."""
     if value == "*":
         return None
     usable = {}
     for name in value.split(" "):
         if name:
-            usable[_check_item(set_items, name, str(target.label))] = True
+            usable[_check_item(set_items, name, source)] = True
     return usable
 
 def _parse_string_flags(ctx):
@@ -97,21 +96,22 @@ def _variant_state_impl(ctx):
     parsed_string_flags = _parse_string_flags(ctx)
     parsed_bool_flags = _parse_bool_flags(ctx)
 
-    pin_targets = {set_key: target for target, set_key in ctx.attr.pins.items()}
-    default_targets = {set_key: target for target, set_key in ctx.attr.defaults.items()}
-    usable_targets = {set_key: target for target, set_key in ctx.attr.usables.items()}
+    raw_state = ctx.attr.state[BuildSettingInfo].value if ctx.attr.state else ""
+    state_label = str(ctx.attr.state.label) if ctx.attr.state else ""
+    state = decode_variant_state(raw_state)
 
     # Stage 1: resolve explicit selections (pin > usable-filtered flags) per set.
     explicit = {}
     usable_by_set = {}
     for set_key, set_items in sorted(sets.items()):
-        pin_target = pin_targets.get(set_key)
-        pin = pin_target[BuildSettingInfo].value if pin_target else ""
+        pin = state.get("p:" + set_key, "")
         if pin:
-            explicit[set_key] = _check_item(set_items, pin, str(pin_target.label))
+            explicit[set_key] = _check_item(set_items, pin, state_label)
             continue
 
-        usable = _parse_usable(usable_targets.get(set_key), set_items)
+        # Absent `"u:<set>"` in `_state` (including reset `""`) means `"*"` (all
+        # items usable), whereas explicit `""` means no items are usable.
+        usable = _parse_usable_str(state.get("u:" + set_key, "*"), set_items, state_label)
         usable_by_set[set_key] = usable
         if usable != None and not usable:
             explicit[set_key] = ""
@@ -174,47 +174,52 @@ def _variant_state_impl(ctx):
             continue
 
         usable = usable_by_set.get(set_key)
-        default_target = default_targets.get(set_key)
-        default = default_target[BuildSettingInfo].value if default_target else ""
+        default = state.get("d:" + set_key, "")
         if default and (usable == None or default in usable):
-            checked_default = _check_item(set_items, default, str(default_target.label))
+            checked_default = _check_item(set_items, default, state_label)
             if checked_default not in rivals_excluded:
                 resolved[set_key] = checked_default
                 continue
         resolved[set_key] = ""
 
     active_items = {v: True for v in resolved.values() if v}
+
+    # Final defense-in-depth invariant: no conflict set may have more than one
+    # active item across the workspace's resolved assignment.
+    for set_key, set_items in sorted(sets.items()):
+        active_in_set = [item for item in set_items if item in active_items]
+        if len(active_in_set) > 1:
+            fail(
+                "Inconsistent conflict variant state: {} are both active but conflict in set '{}' (resolved={}).".format(
+                    " and ".join(active_in_set),
+                    set_key,
+                    resolved,
+                ),
+            )
+
     return [VariantStateInfo(sets = resolved, active_items = active_items)]
 
 variant_state = rule(
     implementation = _variant_state_impl,
     provides = [VariantStateInfo],
     attrs = {
-        "defaults": attr.label_keyed_string_dict(
-            providers = [BuildSettingInfo],
-            doc = "Maps each `_default_<set>` string_flag to its conflict set key.",
-        ),
         "flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],
             doc = "Maps each bool_flag to the space-separated qualified names of the items it enables, " +
                   "optionally prefixed with a display name for error messages (`<display>|<names>`).",
         ),
-        "pins": attr.label_keyed_string_dict(
-            providers = [BuildSettingInfo],
-            doc = "Maps each `_pin_<set>` string_flag to its conflict set key.",
-        ),
         "sets": attr.string_list_dict(
             mandatory = True,
             doc = "Maps each conflict set key to the sorted list of item qualified names in that set.",
+        ),
+        "state": attr.label(
+            providers = [BuildSettingInfo],
+            doc = "Canonical `//_lock:_state` string_flag encoding per-set pins, defaults, and usable narrowing.",
         ),
         "string_flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],
             doc = "Maps each repo's `//_variants` string_flag to a JSON-encoded spec " +
                   "`{\"display\": str, \"valid\": [flag_name, ...], \"map\": {flag_name: [qname, ...]}}`.",
-        ),
-        "usables": attr.label_keyed_string_dict(
-            providers = [BuildSettingInfo],
-            doc = "Maps each `_usable_<set>` string_flag to its conflict set key.",
         ),
     },
 )

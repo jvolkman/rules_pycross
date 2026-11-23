@@ -1104,15 +1104,15 @@ def _test_reset_gates(name):
 
 # buildifier: disable=unused-variable
 def _test_reset_bzl_impl(env, target):
-    """reset.bzl resets every variant setting and each flag once."""
+    """reset.bzl resets canonical //_lock:_state and each flag once."""
     res = render_reset_bzl(
-        ["a_b"],
         ["@r1//_variants:x", "@r1//_variants:x", "@r2//_variants:y"],
         string_flag_labels = ["@r1//_variants:_variants", "@r1//_variants:_variants", "@r2//_variants:_variants"],
     )
-    env.expect.that_str(res).contains('"//_lock:_pin_a_b": "",')
-    env.expect.that_str(res).contains('"//_lock:_default_a_b": "",')
-    env.expect.that_str(res).contains('"//_lock:_usable_a_b": "*",')
+    env.expect.that_str(res).contains('"//_lock:_state": "",')
+    env.expect.that_bool("_pin_" in res).equals(False)
+    env.expect.that_bool("_default_" in res).equals(False)
+    env.expect.that_bool("_usable_" in res).equals(False)
     env.expect.that_int(res.count('"@r1//_variants:x": False,')).equals(1)
     env.expect.that_str(res).contains('"@r2//_variants:y": False,')
     env.expect.that_int(res.count('"@r1//_variants:_variants": "",')).equals(1)

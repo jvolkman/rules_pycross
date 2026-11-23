@@ -267,6 +267,48 @@ def excluded_variant_items(conflict_sets, selected):
                     excluded[other] = True
     return excluded
 
+def decode_variant_state(raw):
+    """Decode a canonical `//_lock:_state` JSON string into a dict of overrides.
+
+    Keys are `"p:<set>"` (pin), `"d:<set>"` (default), and `"u:<set>"` (usable
+    items space-separated, `""` for none; absent means `"*"`, i.e. all usable).
+
+    Args:
+        raw: Canonical JSON string from `//_lock:_state`, or `""`.
+
+    Returns:
+        Dict of `{key: value}`.
+    """
+    if not raw:
+        return {}
+    return json.decode(raw)
+
+def merge_variant_state(current_raw, overrides):
+    """Merge a repo transition's owned variant-state keys over incoming `_state`.
+
+    Unset keys in `overrides` pass through untouched from `current_raw` so
+    downstream repos (such as `<ws>__build` with its own flags or defaults)
+    inherit upstream pins. Default values (`""` for `p:`/`d:`, `"*"` for `u:`)
+    are omitted and keys are sorted so identical effective states always encode
+    to the same canonical string for Bazel configuration deduplication.
+
+    Args:
+        current_raw: Incoming `//_lock:_state` string (may be `""`).
+        overrides: Dict `{key: value}` owned by the transitioning repo.
+
+    Returns:
+        Canonical encoded `//_lock:_state` string (`""` when empty).
+    """
+    merged = dict(decode_variant_state(current_raw))
+    for k, v in overrides.items():
+        if (k.startswith("u:") and v == "*") or (not k.startswith("u:") and not v):
+            merged.pop(k, None)
+        else:
+            merged[k] = v
+    if not merged:
+        return ""
+    return json.encode({k: merged[k] for k in sorted(merged.keys())})
+
 def coerce_transition_values(current, values):
     """Coerce raw repo transition values to the type of a setting's current value.
 

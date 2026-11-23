@@ -145,53 +145,21 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
 
         # There are no static defaults here: thin repos select variants. Their
         # `_variants` bool_flags and string_flags feed `_variant_state` once,
-        # and their transitions set `_pin_<set>` (from `uv.repo(flags/settings)`
-        # or auto-pin), `_default_<set>` (from default-groups), and
-        # `_usable_<set>` (narrowing to items the repo can use).
-        for set_suffix in sorted(sets_by_suffix.keys()):
-            lock_build_lines.extend([
-                "string_flag(",
-                '    name = "_pin_{}",'.format(set_suffix),
-                '    build_setting_default = "",',
-                ")",
-                "",
-                "string_flag(",
-                '    name = "_default_{}",'.format(set_suffix),
-                '    build_setting_default = "",',
-                ")",
-                "",
-                "string_flag(",
-                '    name = "_usable_{}",'.format(set_suffix),
-                '    build_setting_default = "*",',
-                ")",
-                "",
-            ])
-
+        # and their transitions merge per-set pins, defaults, and usable
+        # narrowing into the canonical `:_state` setting.
         lock_build_lines.extend([
+            "string_flag(",
+            '    name = "_state",',
+            '    build_setting_default = "",',
+            ")",
+            "",
             "variant_state(",
             '    name = "_variant_state",',
+            '    state = ":_state",',
             "    sets = {",
         ])
         for set_suffix, qnames in sorted(sets_by_suffix.items()):
             lock_build_lines.append('        "{}": {},'.format(set_suffix, json.encode(qnames)))
-        lock_build_lines.extend([
-            "    },",
-            "    pins = {",
-        ])
-        for set_suffix in sorted(sets_by_suffix.keys()):
-            lock_build_lines.append('        ":_pin_{}": "{}",'.format(set_suffix, set_suffix))
-        lock_build_lines.extend([
-            "    },",
-            "    defaults = {",
-        ])
-        for set_suffix in sorted(sets_by_suffix.keys()):
-            lock_build_lines.append('        ":_default_{}": "{}",'.format(set_suffix, set_suffix))
-        lock_build_lines.extend([
-            "    },",
-            "    usables = {",
-        ])
-        for set_suffix in sorted(sets_by_suffix.keys()):
-            lock_build_lines.append('        ":_usable_{}": "{}",'.format(set_suffix, set_suffix))
         lock_build_lines.extend([
             "    },",
             "    flags = {",
@@ -399,7 +367,6 @@ def _package_repo_impl(rctx):
         rctx.file(
             "_lock/reset.bzl",
             render_reset_bzl(
-                ["_".join(sorted(vset["qnames"])) for vset in variant_sets],
                 [label for vset in variant_sets for label in vset["flags"].keys()],
                 string_flag_labels = ["@{}//_variants:_variants".format(m) for m in sorted(member_variant_flags.keys())],
             ),

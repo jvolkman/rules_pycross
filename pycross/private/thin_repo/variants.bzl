@@ -80,8 +80,8 @@ def excluded_items(variant_info, pins_by_set):
         pins_by_set.values(),
     )
 
-def usable_settings(variant_info, pins_by_set, excluded, workspace_repo):
-    """`_usable_<set>` settings for a transitioned repo.
+def usable_settings(variant_info, pins_by_set, excluded):
+    """`u:<set>` overrides in `//_lock:_state` for a transitioned repo.
 
     Variant resolvers read every repo's flags. Inside a repo with its own
     transition, a flag meant for another repo could otherwise activate an item
@@ -93,10 +93,9 @@ def usable_settings(variant_info, pins_by_set, excluded, workspace_repo):
         variant_info: Result of collect_variants.
         pins_by_set: {set suffix: pinned qname}.
         excluded: Result of excluded_items.
-        workspace_repo: Name of the workspace (backing) repo.
 
     Returns:
-        {label: space-separated usable qnames} for sets that aren't fully usable.
+        `{"u:<set>": space-separated usable qnames}` for sets that aren't fully usable.
     """
     result = {}
     for set_suffix, vset in sorted(variant_info.sets.items()):
@@ -104,22 +103,21 @@ def usable_settings(variant_info, pins_by_set, excluded, workspace_repo):
             continue
         usable = [q for q in vset.requested if q not in excluded]
         if len(usable) < len(vset.qnames):
-            result["@{}//_lock:_usable_{}".format(workspace_repo, set_suffix)] = " ".join(sorted(usable))
+            result["u:" + set_suffix] = " ".join(sorted(usable))
     return result
 
-def transition_settings(variant_info, variant_pins, workspace_repo, member_name, has_other_flags):
-    """The `_lock` settings that a repo's transition sets.
+def transition_settings(variant_info, variant_pins, member_name, has_other_flags):
+    """The `//_lock:_state` overrides that a repo's transition merges.
 
     Args:
         variant_info: Result of collect_variants.
         variant_pins: {set suffix: qname} that the repo's flags/settings select.
-        workspace_repo: Name of the workspace (backing) repo.
         member_name: The repo name, for messages.
         has_other_flags: Whether the repo transitions for other reasons (its
             own `flags` or `settings`).
 
     Returns:
-        struct(fixed_settings = {label: value}, pins_by_set, excluded).
+        struct(state_overrides = {key: value}, pins_by_set, excluded).
     """
     pins_by_set = dict(variant_pins)
     for set_suffix, vset in sorted(variant_info.sets.items()):
@@ -136,16 +134,16 @@ def transition_settings(variant_info, variant_pins, workspace_repo, member_name,
         pins_by_set[set_suffix] = vset.pin
     excluded = excluded_items(variant_info, pins_by_set)
 
-    fixed_settings = {}
+    state_overrides = {}
     for set_suffix, qname in sorted(pins_by_set.items()):
-        fixed_settings["@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)] = qname
+        state_overrides["p:" + set_suffix] = qname
     for set_suffix, vset in sorted(variant_info.sets.items()):
         # A default that conflicts with a pin in another set would select both.
         if set_suffix not in pins_by_set and vset.default and vset.default not in excluded:
-            fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default
-    if has_other_flags or fixed_settings:
-        fixed_settings.update(usable_settings(variant_info, pins_by_set, excluded, workspace_repo))
-    return struct(fixed_settings = fixed_settings, pins_by_set = pins_by_set, excluded = excluded)
+            state_overrides["d:" + set_suffix] = vset.default
+    if has_other_flags or state_overrides:
+        state_overrides.update(usable_settings(variant_info, pins_by_set, excluded))
+    return struct(state_overrides = state_overrides, pins_by_set = pins_by_set, excluded = excluded)
 
 def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None, pins_by_set = None, excluded = None, expose_variant_flags = True):
     """Render _variants/BUILD.bazel: this repo's variant flags.
