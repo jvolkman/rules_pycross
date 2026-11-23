@@ -38,7 +38,7 @@ def wheel_match_condition(lines, pkg_key, resolved_filenames, all_resolved, targ
     Shared by wheel-only availability (`_wheel_available_<pkg>`) and variant-reset
     wheel gating (`_reset_wheel_<pkg>`). Those two callers are mutually exclusive
     (wheel-only requires no sdist fallback; reset gating requires an sdist build
-    fallback), so `_wheel_matched_<pkg>` is emitted at most once per package.
+    fallback); uniqueness of `_wheel_matched_<pkg>` is enforced via `loads`.
 
     Args:
         lines: Output lines list.
@@ -49,7 +49,8 @@ def wheel_match_condition(lines, pkg_key, resolved_filenames, all_resolved, targ
         require_target: If True, emit a `native.alias` named `target_name` even for
             a single candidate (needed when external callers reference `target_name`
             by fixed label).
-        loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
+        loads: Optional dict tracking emitted helper loads (`"selects"`,
+            `"wheel_matched"`) and emitted `_wheel_matched_*` target names.
 
     Returns:
         Relative config_setting label (`":<name>"`) matching when any wheel matched.
@@ -63,6 +64,12 @@ def wheel_match_condition(lines, pkg_key, resolved_filenames, all_resolved, targ
 
     if len(cs_labels) >= 3 and all_resolved:
         matched_name = "_wheel_matched_{}".format(pkg_key)
+        if loads != None:
+            emitted = loads.setdefault("emitted_wheel_matched", {})
+            if matched_name in emitted:
+                fail("internal: duplicate {} target emitted for {}".format(matched_name, pkg_key))
+            emitted[matched_name] = True
+            loads["wheel_matched"] = True
         lines.extend([
             ind("pycross_wheel_matched("),
             ind("name = {},".format(json.encode(matched_name)), 2),
@@ -71,8 +78,6 @@ def wheel_match_condition(lines, pkg_key, resolved_filenames, all_resolved, targ
             "",
         ])
         lines.extend(flag_setting(target_name, ":" + matched_name, "true", indent = 1, use_native = True))
-        if loads != None:
-            loads["wheel_matched"] = True
         return ":" + target_name
 
     lines.extend(config_setting_group(target_name, "match_any", cs_labels, indent = 1))
