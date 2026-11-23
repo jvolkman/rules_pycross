@@ -1019,6 +1019,61 @@ def _test_multi_flag_conflict_omits_internal_qnames(name):
         config_settings = {str(Label(sf)): "extra_cpu,extra_gpu"},
     )
 
+def _test_inconsistent_state_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Inconsistent conflict variant state: g-a and g-b are both active but conflict in set 's1'"),
+    )
+
+def _test_inconsistent_pin_and_sibling_flag_fails(name):
+    """A hand-wired pin + unfiltered sibling flag that activates two conflicting items fails loudly."""
+    flag_refs = _setup_flags(name, ["ga"])
+    state_flag = _setup_string(name + "_state_setting", merge_variant_state("", {"p:s1": "g-b"}))
+    variant_state(
+        name = name + "_state",
+        state = state_flag,
+        sets = {"s1": ["g-a", "g-b"], "s2": ["g-a", "x"]},
+        flags = {flag_refs[0]: "g-a"},
+        tags = ["manual"],
+    )
+    variant_set_projection(
+        name = name + "_resolver",
+        state = ":" + name + "_state",
+        set_key = "s1",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_inconsistent_state_fails_impl,
+        expect_failure = True,
+        config_settings = {str(Label(flag_refs[0])): True},
+    )
+
+def _test_inconsistent_conflicting_defaults_fails(name):
+    """A hand-wired state whose defaults in overlapping sets conflict fails loudly."""
+    state_flag = _setup_string(
+        name + "_state_setting",
+        merge_variant_state("", {"d:s1": "g-b", "d:s2": "g-a"}),
+    )
+    variant_state(
+        name = name + "_state",
+        state = state_flag,
+        sets = {"s1": ["g-a", "g-b"], "s2": ["g-a", "x"]},
+        tags = ["manual"],
+    )
+    variant_set_projection(
+        name = name + "_resolver",
+        state = ":" + name + "_state",
+        set_key = "s1",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_inconsistent_state_fails_impl,
+        expect_failure = True,
+    )
+
 # ── Suite ────────────────────────────────────────────────────────────
 
 def variant_resolver_test_suite(name):
@@ -1062,5 +1117,7 @@ def variant_resolver_test_suite(name):
             _test_string_flag_unknown_fails_when_pinned,
             _test_string_flag_unknown_fails_when_unusable,
             _test_multi_flag_conflict_omits_internal_qnames,
+            _test_inconsistent_pin_and_sibling_flag_fails,
+            _test_inconsistent_conflicting_defaults_fails,
         ],
     )

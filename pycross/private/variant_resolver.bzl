@@ -183,6 +183,20 @@ def _variant_state_impl(ctx):
         resolved[set_key] = ""
 
     active_items = {v: True for v in resolved.values() if v}
+
+    # Final defense-in-depth invariant: no conflict set may have more than one
+    # active item across the workspace's resolved assignment.
+    for set_key, set_items in sorted(sets.items()):
+        active_in_set = [item for item in set_items if item in active_items]
+        if len(active_in_set) > 1:
+            fail(
+                "Inconsistent conflict variant state: {} are both active but conflict in set '{}' (resolved={}).".format(
+                    " and ".join(active_in_set),
+                    set_key,
+                    resolved,
+                ),
+            )
+
     return [VariantStateInfo(sets = resolved, active_items = active_items)]
 
 variant_state = rule(
