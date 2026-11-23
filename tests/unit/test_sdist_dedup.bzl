@@ -13,7 +13,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:package_repo.bzl", "merge_dependencies_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing", "validate_requirements_for_testing")
+load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_file.bzl", "render_wheel_file_build_for_testing")
@@ -445,72 +445,39 @@ def _test_tool_deps_override_unknown_key(name):
         expect_failure = True,
     )
 
-# ── Test: validate_requirements in Starlark ─────────────────────────
+# ── Test: build_requires emission and backend resolution ────────────
 
 # buildifier: disable=unused-variable
-def _test_validate_requirements_impl(env, target):
-    """validate_requirements_for_testing checks simple and variant pins using pypackaging.bzl."""
+def _test_build_requires_and_backend_resolution_impl(env, target):
+    """Emits only non-marker specifier-bearing build_requires, and resolves explicit/bracketed backends."""
 
-    # 1. Simple pin mismatch
-    w_mismatch = validate_requirements_for_testing(
-        ["numpy>=1.20"],
-        {"numpy": "1.19.0"},
-        "my_pkg-1.0.tar.gz",
+    # 1. Versioned non-marker requires are forwarded; specifierless and marker-gated entries are omitted.
+    cfg_reqs = compute_sdist_build_config_for_testing(
+        _make_attr(known_packages = ["setuptools", "wheel", "tomli"]),
+        {
+            "build_backend": "setuptools.build_meta",
+            "build_requires": [
+                "setuptools>=40.8.0",
+                "wheel",
+                "tomli>=2.0; python_version < '3.11'",
+            ],
+        },
     )
-    env.expect.that_collection(w_mismatch).contains_exactly([
-        "WARNING: The build tools repo pins 'numpy==1.19.0', but 'my_pkg-1.0.tar.gz' requires 'numpy>=1.20' in pyproject.toml.",
+    env.expect.that_collection(json.decode(cfg_reqs.macro_attrs["build_requires"])).contains_exactly([
+        "setuptools>=40.8.0",
     ])
 
-    # 2. Simple pin match, markers/extras, and unpinned package
-    w_match = validate_requirements_for_testing(
-        [
-            "numpy>=1.20",
-            "setuptools[ssl]>=40; python_version >= '3.8'",
-            "wheel",
-            "unknown-pkg>=99.0",
-        ],
-        {"NumPy": "1.21.0", "setuptools": "68.0.0", "wheel": "0.45.0"},
-        "my_pkg-1.0.tar.gz",
+    # 2. When no build_requires carry a version specifier, build_requires attr is omitted.
+    cfg_no_spec = compute_sdist_build_config_for_testing(
+        _make_attr(known_packages = ["setuptools", "wheel"]),
+        {
+            "build_backend": "setuptools.build_meta",
+            "build_requires": ["setuptools", "wheel"],
+        },
     )
-    env.expect.that_collection(w_match).contains_exactly([])
+    env.expect.that_bool("build_requires" in cfg_no_spec.macro_attrs).equals(False)
 
-    # 3. Variant pin where at least one variant satisfies -> no warning
-    w_variant_ok = validate_requirements_for_testing(
-        ["setuptools>=70.0"],
-        {"setuptools": {"py310": "68.0.0", "py312": "75.1.0"}},
-        "my_pkg-1.0.tar.gz",
-    )
-    env.expect.that_collection(w_variant_ok).contains_exactly([])
-
-    # 4. Variant pin where no variant satisfies -> warning
-    w_variant_bad = validate_requirements_for_testing(
-        ["setuptools>=80.0"],
-        {"setuptools": {"py310": "68.0.0", "py312": "75.1.0"}},
-        "my_pkg-1.0.tar.gz",
-    )
-    env.expect.that_collection(w_variant_bad).contains_exactly([
-        "WARNING: No variant of 'setuptools' satisfies 'setuptools>=80.0' (available: py310=68.0.0, py312=75.1.0).",
-    ])
-
-    # 5. oldest-supported-numpy maps to numpy pin
-    w_oldest_numpy = validate_requirements_for_testing(
-        ["oldest-supported-numpy>=2022.1"],
-        {"numpy": "1.26.4"},
-        "my_pkg-1.0.tar.gz",
-    )
-    env.expect.that_collection(w_oldest_numpy).contains_exactly([
-        "WARNING: The build tools repo pins 'numpy==1.26.4', but 'my_pkg-1.0.tar.gz' requires 'oldest-supported-numpy>=2022.1' in pyproject.toml.",
-    ])
-
-    # 6. Marker-gated build-system.requires are skipped so non-matching env bounds do not warn.
-    w_marker = validate_requirements_for_testing(
-        ["tomli>=2.0; python_version < '3.11'"],
-        {"tomli": "1.2.3"},
-        "my_pkg-1.0.tar.gz",
-    )
-    env.expect.that_collection(w_marker).contains_exactly([])
-
-    # 7. Explicit-only registered backend (present only in backend_tool_packages, not backend_to_rule),
+    # 3. Explicit-only registered backend (present only in backend_tool_packages, not backend_to_rule),
     #    bracketed requires canonicalization, and repr() escaping on string override attrs.
     cfg_explicit = compute_sdist_build_config_for_testing(
         _make_attr(
@@ -552,9 +519,9 @@ def _test_validate_requirements_impl(env, target):
     )
     env.expect.that_str(cfg_bracket.backend_macro).equals("setuptools_rust_build")
 
-def _test_validate_requirements(name):
+def _test_build_requires_and_backend_resolution(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_validate_requirements_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_build_requires_and_backend_resolution_impl)
 
 # ── Test: marker-gated requires are not required ────────────────────
 
@@ -590,7 +557,7 @@ def sdist_dedup_test_suite(name):
             _test_merge_dependencies_paths,
             _test_tool_deps_from_thin_repo,
             _test_tool_deps_override_unknown_key,
-            _test_validate_requirements,
+            _test_build_requires_and_backend_resolution,
             _test_marker_gated_requires,
         ],
     )

@@ -8,6 +8,9 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:providers.bzl", "PycrossPackageInfo")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private/build/actions:pep517_action.bzl", "validate_build_requires")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:pep517_build.bzl", "pep517_build")
 
 def _mock_pkg_impl(ctx):
@@ -37,6 +40,7 @@ def _test_pep517_build_valid_deps(name):
         name = name + "_subject",
         sdist = name + "_sdist",
         required_build_packages = ["hatchling"],
+        build_requires = ["hatchling>=1.0"],
         build_deps = [name + "_hatchling"],
     )
     analysis_test(name = name, target = name + "_subject", impl = _test_pep517_build_valid_deps_impl)
@@ -141,6 +145,74 @@ def _test_pep517_build_scratch_dirs_impl(env, target):
         "PYCROSS_SDIST_DIR": out_dir + "/sdist",
     })
 
+def _test_validate_build_requires(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_validate_build_requires_impl)
+
+# buildifier: disable=unused-variable
+def _test_validate_build_requires_impl(env, target):
+    """validate_build_requires checks resolved PycrossPackageInfo versions against PEP 508 specifiers."""
+
+    def _dep(name, version):
+        return {PycrossPackageInfo: PycrossPackageInfo(package_name = name, package_version = version)}
+
+    # 1. Single mismatch
+    w_mismatch = validate_build_requires(
+        ["numpy>=1.20"],
+        [_dep("numpy", "1.19.0")],
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_mismatch).contains_exactly([
+        "WARNING: The build environment provides 'numpy==1.19.0', but 'my_pkg-1.0.tar.gz' requires 'numpy>=1.20' in pyproject.toml.",
+    ])
+
+    # 2. Match, canonical name normalization, markers, specifierless, missing, and non-PEP-440 version
+    w_match = validate_build_requires(
+        [
+            "numpy>=1.20",
+            "setuptools[ssl]>=40; python_version >= '3.8'",
+            "wheel",
+            "unknown-pkg>=99.0",
+            "custom-pkg>=1.0",
+        ],
+        [
+            _dep("NumPy", "1.21.0"),
+            _dep("setuptools", "30.0.0"),
+            _dep("wheel", "0.45.0"),
+            _dep("custom-pkg", "not-a-pep440-version"),
+            {},  # target without PycrossPackageInfo
+        ],
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_match).contains_exactly([])
+
+    # 3. oldest-supported-numpy maps to numpy
+    w_oldest = validate_build_requires(
+        ["oldest-supported-numpy>=2022.1"],
+        [_dep("numpy", "1.26.4")],
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_oldest).contains_exactly([
+        "WARNING: The build environment provides 'numpy==1.26.4', but 'my_pkg-1.0.tar.gz' requires 'oldest-supported-numpy>=2022.1' in pyproject.toml.",
+    ])
+
+    # 4. Multiple resolved versions: no warning if any satisfies; plural warning if none satisfy.
+    w_multi_ok = validate_build_requires(
+        ["setuptools>=70.0"],
+        [_dep("setuptools", "68.0.0"), _dep("setuptools", "75.1.0")],
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_multi_ok).contains_exactly([])
+
+    w_multi_bad = validate_build_requires(
+        ["setuptools>=80.0"],
+        [_dep("setuptools", "68.0.0"), _dep("setuptools", "75.1.0")],
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_multi_bad).contains_exactly([
+        "WARNING: None of the provided 'setuptools' versions (68.0.0, 75.1.0) satisfy 'setuptools>=80.0' required by 'my_pkg-1.0.tar.gz' in pyproject.toml.",
+    ])
+
 def pep517_build_test_suite(name):
     test_suite(
         name = name,
@@ -150,5 +222,6 @@ def pep517_build_test_suite(name):
             _test_pep517_build_basic,
             _test_pep517_build_resources,
             _test_pep517_build_scratch_dirs,
+            _test_validate_build_requires,
         ],
     )

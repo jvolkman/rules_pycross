@@ -83,32 +83,6 @@ def requirements_bzl(rctx, pins, packages, testonly_pins = {}):
     lines.append("]")
     return "\n".join(lines) + "\n"
 
-def pin_versions(grouped_pins):
-    """Build pin_versions.json mapping from grouped pins (including extras-only pins).
-
-    Args:
-        grouped_pins: Dict of base pin name -> `{"base_target", "extras"}`.
-
-    Returns:
-        Dict mapping pin name -> version string or `{variant: version}` dict.
-    """
-    result = {}
-    for base_pin_name in sorted(grouped_pins.keys()):
-        base_target_dict = effective_base_target_dict(grouped_pins[base_pin_name])
-        if not base_target_dict:
-            continue
-
-        if len(base_target_dict) == 1 and "" in base_target_dict:
-            parts = parse_package_key(base_target_dict[""])
-            result[base_pin_name] = parts.version
-        else:
-            variant_versions = {}
-            for variant_name, pkg_key in sorted(base_target_dict.items()):
-                parts = parse_package_key(pkg_key)
-                variant_versions[variant_name] = parts.version
-            result[base_pin_name] = variant_versions
-    return result
-
 def packages_bzl(grouped_pins, packages):
     """Render `_packages.bzl` metadata for all packages in a thin repo.
 

@@ -13,7 +13,7 @@ load("//pycross/private:util.bzl", "coerce_transition_values", "excluded_variant
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/thin_repo:metadata.bzl", "hook_subdir_build", "packages_bzl", "pin_versions", "requirements_bzl")
+load("//pycross/private/thin_repo:metadata.bzl", "hook_subdir_build", "packages_bzl", "requirements_bzl")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/thin_repo:modules_mapping_deps.bzl", "modules_mapping_deps")
@@ -1549,7 +1549,7 @@ def _test_partial_fork_maybe_and_testonly(name):
 
 # buildifier: disable=unused-variable
 def _test_requirement_extra_canon_and_extras_only_metadata_impl(env, target):
-    """requirement() canonicalizes extras and pin_versions/_packages include extras-only pins."""
+    """requirement() canonicalizes extras and _packages.bzl includes extras-only pins."""
     mock_rctx = struct(name = "my_repo")
     req_bzl = requirements_bzl(mock_rctx, {}, {})
     env.expect.that_str(req_bzl).contains('extra = pypackaging.utils.canonicalize_name(extra.rstrip("]"))')
@@ -1573,9 +1573,6 @@ def _test_requirement_extra_canon_and_extras_only_metadata_impl(env, target):
         "httpx@0.26.0": {},
         "httpx@0.27.0": {},
     }
-    pv = pin_versions(grouped_pins)
-    env.expect.that_str(pv["uvicorn"]).equals("0.30.0")
-    env.expect.that_dict(pv["httpx"]).contains_exactly({"extra_a": "0.26.0", "extra_b": "0.27.0"})
 
     pkgs_bzl = packages_bzl(grouped_pins, packages)
     uvicorn_block = pkgs_bzl.split('"uvicorn": struct(')[1].split("),")[0]

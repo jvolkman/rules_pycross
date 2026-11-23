@@ -13,7 +13,7 @@ load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name", "sdist_builds_disallowed", "variant_item_qname")
+load("//pycross/private:util.bzl", "parse_package_key", "sanitize_name", "sdist_builds_disallowed", "variant_item_qname")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 
@@ -241,6 +241,19 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
 # Visible for testing
 compute_variant_pins_for_testing = _compute_variant_pins
 
+def _known_packages_from_lock(resolved_lock):
+    """Return sorted unique canonical package names pinned in a resolved lock.
+
+    Using sorted deduplicated pin names (rather than raw versioned `packages` keys)
+    keeps `pycross_sdist_repo.known_packages` invariant across version bumps, extra
+    additions, and dict ordering changes, and matches the targets actually present
+    in the thin build-tools repo.
+    """
+    return sorted({
+        pypackaging.utils.canonicalize_name(parse_package_key(pin_name).name): True
+        for pin_name in resolved_lock.get("pins", {})
+    }.keys())
+
 def _compute_workspace_pkg_has_deps(all_resolved_locks, workspace_memberships):
     """Return {(workspace_name, pkg_key): True} for packages with marker_dependencies in any member."""
     has_deps = {}
@@ -312,7 +325,7 @@ def create_repos(
     }
 
     known_packages_by_repo = {
-        repo_name: [key_name(key) for key in rlock.get("packages", {})]
+        repo_name: _known_packages_from_lock(rlock)
         for repo_name, rlock in all_resolved_locks.items()
     }
 
@@ -387,7 +400,6 @@ def create_repos(
                 "sdist": sdist_label,
                 "deps": sdist_deps,
                 "known_packages": known_packages_by_repo.get(thin_repo, known_packages),
-                "pin_versions_json": "@{}//:pin_versions.json".format(thin_repo),
                 "lock_repo": lock_repo_for_deps,
                 "thin_repo": thin_repo,
                 "backend_to_rule": BACKEND_TO_RULE,
@@ -504,3 +516,4 @@ validate_override_packages_for_testing = _validate_override_packages
 normalize_override_name_for_testing = _normalize_override_name
 remote_file_dedup_key_and_repo_name_for_testing = _remote_file_dedup_key_and_repo_name
 compute_workspace_pkg_has_deps_for_testing = _compute_workspace_pkg_has_deps
+known_packages_from_lock_for_testing = _known_packages_from_lock

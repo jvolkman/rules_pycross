@@ -8,7 +8,6 @@ def _misleading_sdist_ext_impl(mctx):
     pycross_sdist_repo(
         name = "misleading_sdist",
         sdist = "//:misleading_pkg-0.1.0.tar.gz",
-        pin_versions_json = "@uv//:pin_versions.json",
         thin_repo = "uv",
         lock_repo = "uv",
         known_packages = ["hatchling"],

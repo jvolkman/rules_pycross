@@ -70,6 +70,10 @@ COMMON_BUILD_ATTRS = {
         providers = [PyInfo],
         cfg = pycross_exec_platform_transition,
     ),
+    "build_requires": attr.string_list(
+        doc = "PEP 508 requirement strings from `pyproject.toml`'s `build-system.requires`, " +
+              "used to warn when a resolved build dependency version does not satisfy its version specifier.",
+    ),
     "pre_build_patches": attr.label_list(
         doc = "Patch files to apply to the sdist source tree before building.",
         allow_files = [".patch", ".diff"],
