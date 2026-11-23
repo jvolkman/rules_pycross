@@ -7,6 +7,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load(
     "//pycross/private:lock_repo_creation.bzl",
     "compute_workspace_pkg_has_deps_for_testing",
+    "extra_build_tool_names_for_testing",
     "known_packages_from_lock_for_testing",
     "remote_file_dedup_key_and_repo_name_for_testing",
 )
@@ -112,6 +113,12 @@ def _test_known_packages_from_lock_impl(env, target):
     expected = ["my-pkg", "setuptools"]
     env.expect.that_collection(known_packages_from_lock_for_testing(lock_v1)).contains_exactly(expected).in_order()
     env.expect.that_collection(known_packages_from_lock_for_testing(lock_v2)).contains_exactly(expected).in_order()
+
+    # extra_build_tools strips versions and deduplicates/sorts canonical names.
+    tools_v1 = extra_build_tool_names_for_testing(["Setuptools@68.0.0", "my_tool@1.0.0", "setuptools@68.0.0"])
+    tools_v2 = extra_build_tool_names_for_testing(["my-tool@2.0.0", "setuptools@75.0.0"])
+    env.expect.that_collection(tools_v1).contains_exactly(["my-tool", "setuptools"]).in_order()
+    env.expect.that_collection(tools_v2).contains_exactly(["my-tool", "setuptools"]).in_order()
 
 def _test_known_packages_from_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

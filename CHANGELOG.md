@@ -75,10 +75,13 @@ All notable changes to this project will be documented in this file.
 - **Repo and analysis performance.** Lockfiles and `pyproject.toml` files parse
   once per workspace, pure repo rules are `reproducible = True`, universal
   `py3-none-any` wheels bypass wheel chooser targets, and `pycross_sdist_repo`
-  no longer reads `pin_versions.json` or depends on raw versioned package keys
-  (moving `build-system.requires` version warnings to build-rule analysis via
-  `build_requires`, so lockfile version bumps do not invalidate unrelated sdist
-  repos).
+  no longer reads `pin_versions.json` or depends on versioned package keys or
+  `extra_build_tools` versions (so lockfile version bumps do not invalidate
+  unrelated sdist repos; adding or removing a pin in the build-tools repo still
+  updates `known_packages`). `build-system.requires` version warnings now run
+  during build-rule analysis via `COMMON_BUILD_ATTRS`'s `build_requires`
+  attribute against the active configuration's resolved `build_deps`/`tool_deps`
+  (custom backend rules must include `COMMON_BUILD_ATTRS`).
 - **Build and repair execution performance.** `PycrossRepairWheel` enables
   `supports-path-mapping` and skips pure-Python wheels, extracted build tools
   are shared across sdist targets, and POSIX `/bin/sh` wrappers replace

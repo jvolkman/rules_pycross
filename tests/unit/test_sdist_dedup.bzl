@@ -451,15 +451,17 @@ def _test_tool_deps_override_unknown_key(name):
 def _test_build_requires_and_backend_resolution_impl(env, target):
     """Emits only non-marker specifier-bearing build_requires, and resolves explicit/bracketed backends."""
 
-    # 1. Versioned non-marker requires are forwarded; specifierless and marker-gated entries are omitted.
+    # 1. Versioned non-marker requires are forwarded; specifierless, marker-gated,
+    #    and oldest-supported-numpy (calendar-versioned) entries are omitted.
     cfg_reqs = compute_sdist_build_config_for_testing(
-        _make_attr(known_packages = ["setuptools", "wheel", "tomli"]),
+        _make_attr(known_packages = ["setuptools", "wheel", "tomli", "numpy"]),
         {
             "build_backend": "setuptools.build_meta",
             "build_requires": [
                 "setuptools>=40.8.0",
                 "wheel",
                 "tomli>=2.0; python_version < '3.11'",
+                "oldest-supported-numpy>=2022.1",
             ],
         },
     )

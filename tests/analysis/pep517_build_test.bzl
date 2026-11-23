@@ -186,15 +186,13 @@ def _test_validate_build_requires_impl(env, target):
     )
     env.expect.that_collection(w_match).contains_exactly([])
 
-    # 3. oldest-supported-numpy maps to numpy
+    # 3. oldest-supported-numpy uses calendar versions and is skipped (no false-positive warning).
     w_oldest = validate_build_requires(
         ["oldest-supported-numpy>=2022.1"],
         [_dep("numpy", "1.26.4")],
         "my_pkg-1.0.tar.gz",
     )
-    env.expect.that_collection(w_oldest).contains_exactly([
-        "WARNING: The build environment provides 'numpy==1.26.4', but 'my_pkg-1.0.tar.gz' requires 'oldest-supported-numpy>=2022.1' in pyproject.toml.",
-    ])
+    env.expect.that_collection(w_oldest).contains_exactly([])
 
     # 4. Multiple resolved versions: no warning if any satisfies; plural warning if none satisfy.
     w_multi_ok = validate_build_requires(

@@ -87,8 +87,11 @@ def validate_build_requires(build_requires, build_deps, sdist_name):
             continue
 
         req_name = req.name
+
+        # oldest-supported-numpy uses calendar versions (e.g. >=2022.1) that cannot
+        # be compared against numpy's version numbering; skip version validation.
         if req_name == "oldest-supported-numpy":
-            req_name = "numpy"
+            continue
 
         versions = versions_by_pkg.get(req_name)
         if not versions:
@@ -130,8 +133,11 @@ def register_pep517_action(
         resource_set = None):
     """Registers the PEP 517 wheel build action.
 
-    Common attributes (sdist, deps, build_deps, site_hooks, pre_build_patches,
-    config_settings, pkg_config_files) are extracted directly from ctx.attr/ctx.file/ctx.files.
+    Common attributes (`sdist`, `deps`, `build_deps`, `build_requires`, `tool_deps`,
+    `site_hooks`, `pre_build_patches`, `config_settings`, `pkg_config_files`) are
+    extracted directly from `ctx.attr`/`ctx.file`/`ctx.files`. When `build_requires`
+    is set, version specifiers are validated against `PycrossPackageInfo` versions on
+    `build_deps`, `additional_build_deps`, and `tool_deps` during analysis.
     This avoids repetitive plumbing in each build rule implementation.
 
     Args:

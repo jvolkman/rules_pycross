@@ -247,11 +247,23 @@ def _known_packages_from_lock(resolved_lock):
     Using sorted deduplicated pin names (rather than raw versioned `packages` keys)
     keeps `pycross_sdist_repo.known_packages` invariant across version bumps, extra
     additions, and dict ordering changes, and matches the targets actually present
-    in the thin build-tools repo.
+    in the thin build-tools repo. Note that adding or removing a pin in the build-tools
+    repo (including any package in `<ws>__build`) still changes this list.
     """
     return sorted({
         pypackaging.utils.canonicalize_name(parse_package_key(pin_name).name): True
         for pin_name in resolved_lock.get("pins", {})
+    }.keys())
+
+def _extra_build_tool_names(extra_build_tools):
+    """Return sorted unique canonical package names from resolved `extra_build_tools` keys.
+
+    Stripping versions prevents unrelated tool version bumps from invalidating
+    `pycross_sdist_repo` (which only uses the package name to construct `@<thin_repo>//<pkg>:pkg`).
+    """
+    return sorted({
+        pypackaging.utils.canonicalize_name(parse_package_key(key).name): True
+        for key in extra_build_tools
     }.keys())
 
 def _compute_workspace_pkg_has_deps(all_resolved_locks, workspace_memberships):
@@ -412,7 +424,7 @@ def create_repos(
             if remote_file.get("sha256") and not (sdist_urls and sdist_urls[0].startswith("git+")):
                 sdist_repo_attrs["sdist_sha256"] = remote_file["sha256"]
             if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
-                sdist_repo_attrs["extra_build_tools"] = pkg["extra_build_tools"]
+                sdist_repo_attrs["extra_build_tools"] = _extra_build_tool_names(pkg["extra_build_tools"])
 
             if pkg.get("source_dir"):
                 sdist_repo_attrs["source_dir"] = pkg["source_dir"]
@@ -517,3 +529,4 @@ normalize_override_name_for_testing = _normalize_override_name
 remote_file_dedup_key_and_repo_name_for_testing = _remote_file_dedup_key_and_repo_name
 compute_workspace_pkg_has_deps_for_testing = _compute_workspace_pkg_has_deps
 known_packages_from_lock_for_testing = _known_packages_from_lock
+extra_build_tool_names_for_testing = _extra_build_tool_names

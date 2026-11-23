@@ -199,7 +199,8 @@ def _compute_sdist_build_config(attr, metadata):
     data_paths = metadata.get("data_paths", [])
     include_paths = metadata.get("include_paths", [])
 
-    build_requires_names = [extract_pep508_name(r) for r in requires]
+    parsed_requires = [(req, pypackaging.requirements.parse(req)) for req in requires]
+    build_requires_names = [parsed.name for _, parsed in parsed_requires]
     if attr.build_backend:
         backend_macro = attr.build_backend
     else:
@@ -215,18 +216,20 @@ def _compute_sdist_build_config(attr, metadata):
     build_deps = {}
     required_build_packages = {}
     versioned_build_requires = []
-    for req in requires:
-        parsed_req = pypackaging.requirements.parse(req)
+    for req, parsed_req in parsed_requires:
         req_name = parsed_req.name
-        if req_name == "oldest-supported-numpy":
+        is_oldest_numpy = req_name == "oldest-supported-numpy"
+        if is_oldest_numpy:
             req_name = "numpy"
 
         # Marker-gated entries may not apply to the target environment (and so
         # may be absent from the lock); don't require them or validate their
-        # version specifiers unconditionally.
+        # version specifiers unconditionally. Skip oldest-supported-numpy version
+        # validation because it uses calendar versions (e.g. >=2022.1) that are
+        # incompatible with numpy's own version scheme.
         if not parsed_req.marker:
             required_build_packages[req_name] = True
-            if parsed_req.specifier and parsed_req.specifier.specs:
+            if not is_oldest_numpy and parsed_req.specifier and parsed_req.specifier.specs:
                 versioned_build_requires.append(req)
 
         # We only add it if it's in the known lock repo mapping.
