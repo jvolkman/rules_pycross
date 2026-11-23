@@ -1,7 +1,19 @@
 """PEP 508 dependency and resolution-marker evaluator rendering for `_lock/lock.bzl`."""
 
+load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
 load("//pycross/private:util.bzl", "marker_evaluator_name", "parse_package_key")
 load(":common.bzl", "ind")
+
+def format_variants_attr(resolvers):
+    """Format a `variants = [...]` attribute line for evaluator and cycle targets.
+
+    Args:
+        resolvers: Non-empty iterable of variant_resolver target labels.
+
+    Returns:
+        Attribute string `variants = ["...", ...],`.
+    """
+    return "variants = [{}],".format(", ".join([json.encode(r) for r in resolvers]))
 
 def collect_unique_markers(packages):
     """Collect all unique `(marker, extra)` pairs across packages.
@@ -69,6 +81,23 @@ def matching_variant_resolvers(markers, variant_resolvers):
             matched.append(label)
     return matched if matched else sorted(variant_resolvers.keys())
 
+def _render_evaluator_and_setting(lines, eval_name, expr, setting_name, extra = None, resolvers = None):
+    """Append a `pycross_pep508_evaluator` and its matching `native.config_setting`."""
+    lines.extend([
+        ind("pycross_pep508_evaluator("),
+        ind("name = {},".format(json.encode(eval_name)), 2),
+        ind("expr = {},".format(json.encode(expr)), 2),
+    ])
+    if extra:
+        lines.append(ind("extra = {},".format(json.encode(extra)), 2))
+    if resolvers:
+        lines.append(ind(format_variants_attr(resolvers), 2))
+    lines.extend([
+        ind(")"),
+        "",
+    ])
+    lines.extend(flag_setting(setting_name, ":" + eval_name, "true", indent = 1, use_native = True))
+
 def render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
     """Render deduped pycross_pep508_evaluator and config_setting targets.
 
@@ -81,34 +110,16 @@ def render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
     for marker_str, extra in sorted(unique_markers):
         eval_name = marker_evaluator_name(marker_str, extra)
         resolvers = matching_variant_resolvers([marker_str], variant_resolvers)
+        _render_evaluator_and_setting(
+            lines,
+            eval_name,
+            marker_str,
+            "{}_match".format(eval_name),
+            extra = extra,
+            resolvers = resolvers,
+        )
 
-        # Evaluator rule — returns FeatureFlagInfo("true"/"false")
-        lines.extend([
-            ind("pycross_pep508_evaluator("),
-            ind('name = "{}",'.format(eval_name), 2),
-            ind('expr = "{}",'.format(marker_str.replace('"', '\\"')), 2),
-        ])
-        if extra:
-            lines.append(ind('extra = "{}",'.format(extra), 2))
-        if resolvers:
-            lines.append(ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in resolvers])), 2))
-        lines.extend([
-            ind(")"),
-            "",
-        ])
-
-        # Config setting that matches when the evaluator says "true"
-        lines.extend([
-            ind("native.config_setting("),
-            ind('name = "{}_match",'.format(eval_name), 2),
-            ind("flag_values = {", 2),
-            ind('":{eval}": "true",'.format(eval = eval_name), 3),
-            ind("},", 2),
-            ind(")"),
-            "",
-        ])
-
-def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_resolvers = None):
+def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_resolvers = None, loads = None):
     """Render pycross_pep508_evaluator + config_setting for resolution-marker forks.
 
     Entries in ``resolution_marker_exprs`` are either:
@@ -122,44 +133,27 @@ def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_
             PEP 508 marker expression string or a compound dict.
         variant_resolvers: Optional list of variant_resolver target labels, or
             dict mapping resolver label -> list of item qualified names.
+        loads: Optional dict tracking emitted helper loads (`"selects"`).
     """
     for constraint_name, entry in sorted(resolution_marker_exprs.items()):
         if type(entry) == "dict":
             # Compound constraint: combine variant + marker config_settings.
             # Both is_<variant> and is_<marker> must already exist.
-            lines.extend([
-                ind("selects.config_setting_group("),
-                ind('name = "is_{}",'.format(constraint_name), 2),
-                ind("match_all = [", 2),
-                ind('"is_{}",'.format(entry["variant"]), 3),
-                ind('"is_{}",'.format(entry["marker"]), 3),
-                ind("],", 2),
-                ind(")"),
-                "",
-            ])
+            lines.extend(config_setting_group(
+                "is_{}".format(constraint_name),
+                "match_all",
+                ["is_{}".format(entry["variant"]), "is_{}".format(entry["marker"])],
+                indent = 1,
+            ))
+            if loads != None:
+                loads["selects"] = True
         else:
-            # Simple fork: evaluator + config_setting.
             eval_name = "_res_eval_{}".format(constraint_name)
             resolvers = matching_variant_resolvers([entry], variant_resolvers)
-            lines.extend([
-                ind("pycross_pep508_evaluator("),
-                ind('name = "{}",'.format(eval_name), 2),
-                ind('expr = "{}",'.format(entry.replace('"', '\\"')), 2),
-            ])
-            if resolvers:
-                lines.append(ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in resolvers])), 2))
-            lines.extend([
-                ind(")"),
-                "",
-            ])
-
-            # Config setting matching when the evaluator says "true".
-            lines.extend([
-                ind("native.config_setting("),
-                ind('name = "is_{}",'.format(constraint_name), 2),
-                ind("flag_values = {", 2),
-                ind('":{eval}": "true",'.format(eval = eval_name), 3),
-                ind("},", 2),
-                ind(")"),
-                "",
-            ])
+            _render_evaluator_and_setting(
+                lines,
+                eval_name,
+                entry,
+                "is_{}".format(constraint_name),
+                resolvers = resolvers,
+            )

@@ -7,6 +7,7 @@ bzl_library(
     srcs = ["markers.bzl"],
     deps = [
         ":common",
+        "//pycross/private:build_text",
         "//pycross/private:util",
     ],
 )
@@ -26,6 +27,7 @@ bzl_library(
     srcs = ["wheels.bzl"],
     deps = [
         ":common",
+        "//pycross/private:build_text",
         "//pycross/private:util",
     ],
 )
@@ -36,6 +38,7 @@ bzl_library(
     deps = [
         ":common",
         ":wheels",
+        "//pycross/private:build_text",
         "//pycross/private:util",
     ],
 )
@@ -44,8 +47,8 @@ bzl_library(
     name = "reset_plan",
     srcs = ["reset_plan.bzl"],
     deps = [
-        ":common",
         ":wheels",
+        "//pycross/private:build_text",
         "//pycross/private:util",
         "@pypackaging.bzl//:pypackaging",
     ],

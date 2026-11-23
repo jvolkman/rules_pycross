@@ -1,5 +1,6 @@
 """Select expression and variant fallback helpers for thin package repos."""
 
+load("//pycross/private:build_text.bzl", "alias", "select_expr")
 load(":common.bzl", "NO_MATCH_ERROR_TARGET", "NO_VARIANT_PREFIX", "aggregated_key")
 
 def variant_fallbacks(sets_by_constraint):
@@ -18,6 +19,28 @@ def variant_fallbacks(sets_by_constraint):
 def unselected_all_name(set_suffixes):
     """Return the deterministic `_unselected_all_<hash>` target name for `set_suffixes`."""
     return "_unselected_all_%x" % (hash("|".join(set_suffixes)) & 0xffffffff)
+
+def unselected_condition(set_suffixes, workspace_repo, groups, local_prefix = "//_variants:"):
+    """Return the condition label matching when every conflict set in `set_suffixes` is unselected.
+
+    For a single set, points directly at `@<workspace_repo>//_lock:_unselected_<set>`.
+    For multiple sets, records an `_unselected_all_<hash>` group in `groups` and returns
+    its label under `local_prefix`.
+
+    Args:
+        set_suffixes: Sorted non-empty list of conflict set suffixes.
+        workspace_repo: Name of the workspace (backing) repo.
+        groups: Mutable dict collecting `{group_name: set_suffixes}` to emit in `_variants/BUILD.bazel`.
+        local_prefix: Label prefix for multi-set `_unselected_all_*` groups (`"//_variants:"` or `":"`).
+
+    Returns:
+        Config setting label string.
+    """
+    if len(set_suffixes) == 1:
+        return "@{}//_lock:_unselected_{}".format(workspace_repo, set_suffixes[0])
+    name = unselected_all_name(set_suffixes)
+    groups[name] = set_suffixes
+    return local_prefix + name
 
 def unselected_branch(constraints, no_variant_fallbacks, workspace_repo):
     """The select() branch for "no variant selected", or None.
@@ -49,11 +72,8 @@ def unselected_branch(constraints, no_variant_fallbacks, workspace_repo):
     for set_suffix in set_suffixes:
         if counts[set_suffix] > counts[error_set]:
             error_set = set_suffix
-    if len(set_suffixes) == 1:
-        return ("@{}//_lock:_unselected_{}".format(workspace_repo, error_set), error_set)
-    name = unselected_all_name(set_suffixes)
-    no_variant_fallbacks.groups[name] = set_suffixes
-    return ("//_variants:" + name, error_set)
+    cond = unselected_condition(set_suffixes, workspace_repo, no_variant_fallbacks.groups)
+    return (cond, error_set)
 
 def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     """Render a target label or `select({...})` mapping constraints to lock targets.
@@ -78,7 +98,7 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
             t = aggregated_key(t, aggregated_keys)
         return json.encode(prefix + t)
 
-    lines = ["select({"]
+    branches = []
     for constraint in effective_all.keys():
         if constraint in target_dict:
             t_base = target_dict[constraint]
@@ -92,9 +112,9 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
             continue
 
         if constraint == "":
-            lines.append('        "//conditions:default": {},'.format(json.encode(target_label)))
+            branches.append(("//conditions:default", target_label))
         else:
-            lines.append("        {}: {},".format(json.encode("@{}//_lock:is_{}".format(workspace_repo, constraint)), json.encode(target_label)))
+            branches.append(("@{}//_lock:is_{}".format(workspace_repo, constraint), target_label))
 
     # Add the uncovered-branch fallback (only if not already present via "").
     # When the select touches a conflict set, also add an explicit
@@ -102,15 +122,15 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
     # clearly while platform-incompatible selected variants still fall through to default.
     # Variant defaults come from this repo's transition (`_default_<set>`), not from
     # //conditions:default.
+    default_target = None
     if "" not in effective_all:
         unselected = unselected_branch(effective_all.keys(), no_variant_fallbacks, workspace_repo)
         if unselected:
-            lines.append("        {}: {},".format(json.encode(unselected[0]), json.encode(NO_VARIANT_PREFIX + unselected[1])))
+            branches.append((unselected[0], NO_VARIANT_PREFIX + unselected[1]))
         if fallback_target:
-            lines.append('        "//conditions:default": {},'.format(json.encode(fallback_target)))
+            default_target = fallback_target
 
-    lines.append("    })")
-    return "\n".join(lines)
+    return select_expr(branches, default = default_target, indent = 1)
 
 def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
@@ -149,12 +169,6 @@ def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, 
         aggregated_keys = aggregated_keys,
     )
     if has_transition and not (len(effective_all) == 1 and "" in effective_all and "" in target_dict):
-        actual_lines.extend([
-            "alias(",
-            "    name = {},".format(json.encode(alias_name)),
-            "    actual = {},".format(actual),
-            ")",
-            "",
-        ])
+        actual_lines.extend(alias(alias_name, actual, actual_is_expr = True))
         return "{},".format(json.encode("{}:{}".format(actual_pkg_ref, alias_name)))
     return "{},".format(actual)

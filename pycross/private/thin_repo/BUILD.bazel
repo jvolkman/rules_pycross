@@ -11,7 +11,10 @@ bzl_library(
 bzl_library(
     name = "selects",
     srcs = ["selects.bzl"],
-    deps = [":common"],
+    deps = [
+        ":common",
+        "//pycross/private:build_text",
+    ],
 )
 
 bzl_library(
@@ -20,6 +23,7 @@ bzl_library(
     deps = [
         ":common",
         ":selects",
+        "//pycross/private:build_text",
         "//pycross/private:util",
     ],
 )
@@ -31,6 +35,7 @@ bzl_library(
         ":availability",
         ":common",
         ":selects",
+        "//pycross/private:build_text",
         "//pycross/private:util",
     ],
 )
@@ -40,6 +45,7 @@ bzl_library(
     srcs = ["variants.bzl"],
     deps = [
         ":selects",
+        "//pycross/private:build_text",
         "//pycross/private:util",
     ],
 )
@@ -50,6 +56,7 @@ bzl_library(
     deps = [
         ":common",
         ":selects",
+        "//pycross/private:build_text",
         "//pycross/private:util",
     ],
 )
@@ -60,6 +67,7 @@ bzl_library(
     deps = [
         ":common",
         ":selects",
+        "//pycross/private:build_text",
         "//pycross/private:override_helpers",
         "//pycross/private:util",
     ],

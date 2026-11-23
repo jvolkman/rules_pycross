@@ -1,7 +1,8 @@
 """Metadata, requirements, backend forwarding, and hook-subdir files for thin package repos."""
 
+load("//pycross/private:build_text.bzl", "alias")
 load("//pycross/private:override_helpers.bzl", "merge_backend_overrides")
-load("//pycross/private:util.bzl", "parse_package_key", "underscore_name")
+load("//pycross/private:util.bzl", "base_package_key", "parse_package_key", "underscore_name")
 load(":common.bzl", "NO_MATCH_ERROR_TARGET", "effective_base_target_dict", "is_key_platform_specific", "safe_name")
 load(":selects.bzl", "target_select")
 
@@ -205,7 +206,7 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
         matched_target_dict = {}
         for constraint, pkg_key in target_dict.items():
             parts = parse_package_key(pkg_key)
-            base_key = "{}@{}".format(parts.name, parts.version)
+            base_key = base_package_key(pkg_key)
             if not packages.get(base_key, {}).get("sdist_file"):
                 continue
             merged = merge_backend_overrides(override_configs, parts.name, parts.version)
@@ -224,13 +225,7 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
             fallback_target = NO_MATCH_ERROR_TARGET,
         )
 
-        lines.extend([
-            "alias(",
-            '    name = "{}",'.format(us_name),
-            "    actual = {},".format(actual_target),
-            ")",
-            "",
-        ])
+        lines.extend(alias(us_name, actual_target, actual_is_expr = True))
         has_targets = True
 
     if not has_targets:

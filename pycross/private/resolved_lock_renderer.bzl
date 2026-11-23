@@ -52,13 +52,17 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
     if cycle_groups:
         pycross_loads["cycle_member_marker_deps.bzl"] = ["pycross_cycle_member_marker_deps"]
 
+    loads = {}
     reset_plan = None
     gate_lines = []
     if reset_conflict_sets:
-        reset_plan = compute_reset_plan(packages, repo_map, conflict_pairs(reset_conflict_sets), gate_lines)
+        reset_loads = {}
+        reset_plan = compute_reset_plan(packages, repo_map, conflict_pairs(reset_conflict_sets), gate_lines, loads = reset_loads)
         if not [p for p in reset_plan.values() if p.ok]:
             reset_plan = None
             gate_lines = []
+        else:
+            loads.update(reset_loads)
 
     body_lines = []
 
@@ -68,7 +72,7 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
 
     # 1b. Resolution-marker evaluators for pin forks
     resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
-    render_resolution_marker_evaluators(body_lines, resolution_marker_exprs, variant_resolvers = variant_resolvers)
+    render_resolution_marker_evaluators(body_lines, resolution_marker_exprs, variant_resolvers = variant_resolvers, loads = loads)
 
     # 2. Per-member cycle deps (marker-aware)
     render_marker_cycle_member_deps(body_lines, cycle_groups, packages, variant_resolvers = variant_resolvers)
@@ -78,22 +82,12 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
 
     # 3. Packages
     for pkg_key, pkg in sorted(packages.items()):
-        render_marker_package(body_lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = reset_plan)
+        render_marker_package(body_lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = reset_plan, loads = loads)
 
     # 4. Extras aggregates ([_all_] targets)
     render_extras_aggregates(body_lines, packages)
 
-    needs_selects = False
-    needs_wheel_matched = False
-    for line in body_lines:
-        if "selects.config_setting_group(" in line:
-            needs_selects = True
-        elif "pycross_wheel_matched(" in line:
-            needs_wheel_matched = True
-        if needs_selects and needs_wheel_matched:
-            break
-
-    if needs_wheel_matched:
+    if loads.get("wheel_matched"):
         pycross_loads["wheel_chooser.bzl"].append("pycross_wheel_matched")
 
     lines = [
@@ -102,16 +96,16 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         '"""Pycross-generated dependency targets."""',
         "",
     ] + [
-        'load("@rules_pycross//pycross/private:{}", {})'.format(
-            bzl,
-            ", ".join(['"{}"'.format(sym) for sym in symbols]),
+        "load({}, {})".format(
+            json.encode("@rules_pycross//pycross/private:" + bzl),
+            ", ".join([json.encode(sym) for sym in symbols]),
         )
         for bzl, symbols in sorted(pycross_loads.items())
     ]
 
     if reset_plan:
         lines.append('load(":reset.bzl", "pycross_resettable_wheel_library")')
-    if needs_selects:
+    if loads.get("selects"):
         lines.append('load("@bazel_skylib//lib:selects.bzl", "selects")')
 
     lines.extend([

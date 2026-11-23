@@ -17,6 +17,7 @@ The file structure is as follows:
 
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
+load(":build_text.bzl", "alias", "config_setting_group", "flag_setting")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
 load(":util.bzl", "is_wheel_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
@@ -226,54 +227,23 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
                 "",
             ])
 
-        lock_build_lines.extend([
-            "config_setting(",
-            '    name = "_unselected_{}",'.format(set_suffix),
-            '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),
-            ")",
-            "",
-        ])
+        lock_build_lines.extend(flag_setting("_unselected_{}".format(set_suffix), ":" + resolver_name, "", inline = True))
 
     # Emit config_settings referencing the resolver(s).
     for qname in sorted(variant_items.keys()):
         resolvers = qname_to_resolvers.get(qname, [])
         if len(resolvers) == 1:
             # Simple case: item is in exactly one conflict set.
-            lock_build_lines.extend([
-                "config_setting(",
-                '    name = "is_{}",'.format(qname),
-                '    flag_values = {{":{resolver}": "{value}"}},'.format(
-                    resolver = resolvers[0],
-                    value = qname,
-                ),
-                ")",
-                "",
-            ])
+            lock_build_lines.extend(flag_setting("is_{}".format(qname), ":" + resolvers[0], qname, inline = True))
         elif len(resolvers) > 1:
             # Item appears in multiple conflict sets: OR them together.
             for j, resolver in enumerate(resolvers):
-                lock_build_lines.extend([
-                    "config_setting(",
-                    '    name = "_is_{}_via_{}",'.format(qname, j),
-                    '    flag_values = {{":{resolver}": "{value}"}},'.format(
-                        resolver = resolver,
-                        value = qname,
-                    ),
-                    ")",
-                    "",
-                ])
-            lock_build_lines.extend([
-                "selects.config_setting_group(",
-                '    name = "is_{}",'.format(qname),
-                "    match_any = [",
-            ])
-            for j in range(len(resolvers)):
-                lock_build_lines.append('        ":_is_{}_via_{}",'.format(qname, j))
-            lock_build_lines.extend([
-                "    ],",
-                ")",
-                "",
-            ])
+                lock_build_lines.extend(flag_setting("_is_{}_via_{}".format(qname, j), ":" + resolver, qname, inline = True))
+            lock_build_lines.extend(config_setting_group(
+                "is_{}".format(qname),
+                "match_any",
+                [":_is_{}_via_{}".format(qname, j) for j in range(len(resolvers))],
+            ))
 
     return "\n".join(lock_build_lines)
 
@@ -484,13 +454,7 @@ def _package_repo_impl(rctx):
 
         sdist_file = packages[pkg_key].get("sdist_file")
         if sdist_file:
-            sdist_lines.extend([
-                "alias(",
-                '    name = "{}@{}",'.format(norm_name, pkg_version),
-                '    actual = "//_lock:_sdist_{}",'.format(pkg_key),
-                ")",
-                "",
-            ])
+            sdist_lines.extend(alias("{}@{}".format(norm_name, pkg_version), "//_lock:_sdist_{}".format(pkg_key)))
 
     rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")

@@ -1,6 +1,7 @@
 """Per-package target rendering and extras aggregation for `_lock/lock.bzl`."""
 
-load("//pycross/private:util.bzl", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:build_text.bzl", "alias", "config_setting_group", "deps_plus_selects")
+load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 load(":common.bzl", "ind", "is_in_same_cycle", "render_str_list_attr", "wheel_target")
 load(":wheels.bzl", "render_marker_wheel_chooser")
 
@@ -11,30 +12,28 @@ def render_extras_aggregates(lines, packages):
         lines: Output lines list.
         packages: Lock packages dict.
     """
-    base_packages_with_extras = {}
-    for pkg_key in packages.keys():
-        parts = parse_package_key(pkg_key)
-        if not parts.extra:
-            continue
-        base_packages_with_extras.setdefault((parts.name, parts.version), []).append(pkg_key)
+    extras_by_base = base_packages_with_extras(packages)
 
-    for (base_name, version), extra_keys in sorted(base_packages_with_extras.items()):
-        base_pkg_key = "{}@{}".format(base_name, version)
+    for base_pkg_key, extra_keys in sorted(
+        extras_by_base.items(),
+        key = lambda item: (parse_package_key(item[0]).name, parse_package_key(item[0]).version),
+    ):
+        parts = parse_package_key(base_pkg_key)
         lines.extend([
             ind("pycross_library_proxy("),
-            ind('name = "{}[_all_]@{}",'.format(base_name, version), 2),
-            ind('actual = ":{}",'.format(base_pkg_key), 2),
+            ind("name = {},".format(json.encode("{}[_all_]@{}".format(parts.name, parts.version))), 2),
+            ind("actual = {},".format(json.encode(":" + base_pkg_key)), 2),
             ind("deps = [", 2),
         ])
         for extra_key in sorted(extra_keys):
-            lines.append(ind('":{}\",'.format(extra_key), 3))
+            lines.append(ind("{},".format(json.encode(":" + extra_key)), 3))
         lines.extend([
             ind("],", 2),
             ind(")"),
             "",
         ])
 
-def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
+def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads = None):
     """Render deps using marker-based `select()` instead of environment-based selects.
 
     Args:
@@ -43,6 +42,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
         pkg_key_san: Sanitized Starlark identifier form of `pkg_key`.
         pkg: Package dict.
         packages: All lock packages dict.
+        loads: Optional dict tracking emitted helper loads (`"selects"`).
     """
     marker_deps = pkg.get("marker_dependencies", [])
     extra = parse_package_key(pkg_key).extra
@@ -71,7 +71,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     # Group single-evaluator deps by evaluator; deps reachable under multiple
     # distinct markers get a shared match_any config_setting_group so overlapping
     # markers never emit duplicate labels in `deps`.
-    by_condition = {}  # condition_label -> {dep_key: True}
+    by_condition = {}  # condition_label -> {dep_label: True}
     multi_groups = {}  # tuple(sorted_evals) -> group_name
     for dep_key in sorted(dep_evals.keys()):
         evals = sorted(dep_evals[dep_key].keys())
@@ -85,36 +85,28 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
                     hash("|".join(evals)) & 0xffffffff,
                 )
                 multi_groups[evals_key] = group_name
-                lines.extend([
-                    ind("selects.config_setting_group("),
-                    ind('name = "{}",'.format(group_name), 2),
-                    ind("match_any = [", 2),
-                ])
-                for ev in evals:
-                    lines.append(ind('":{}_match",'.format(ev), 3))
-                lines.extend([
-                    ind("],", 2),
-                    ind(")"),
-                    "",
-                ])
+                lines.extend(config_setting_group(
+                    group_name,
+                    "match_any",
+                    [":{}_match".format(ev) for ev in evals],
+                    indent = 1,
+                ))
+                if loads != None:
+                    loads["selects"] = True
             cond = ":{}".format(multi_groups[evals_key])
-        by_condition.setdefault(cond, {})[dep_key] = True
+        by_condition.setdefault(cond, {})[":" + dep_key] = True
 
-    lines.append(ind("_{}_deps = [".format(pkg_key_san)))
-    for dep_key in sorted(unconditional.keys()):
-        lines.append(ind('"{}",'.format(":" + dep_key), 2))
-    lines.append(ind("]"))
-
-    for cond in sorted(by_condition.keys()):
-        dep_list = ", ".join(['":{}"'.format(k) for k in sorted(by_condition[cond].keys())])
-        lines[-1] = lines[-1] + " + select({"
-        lines.append(ind('"{}": [{}],'.format(cond, dep_list), 2))
-        lines.append(ind('"//conditions:default": [],', 2))
-        lines.append(ind("})", 1))
-
+    lines.extend(deps_plus_selects(
+        "_{}_deps".format(pkg_key_san),
+        [":" + k for k in sorted(unconditional.keys())],
+        by_condition,
+        indent = 1,
+        inline_values = True,
+        trailing_comma = False,
+    ))
     lines.append("")
 
-def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = None):
+def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = None, loads = None):
     """Renders all targets for a single package using marker-based deps and wheel selection.
 
     Args:
@@ -125,6 +117,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
         repo_map: File key -> repository label dict.
         rctx_name: Canonical repository name of the `package_repo`.
         reset_plan: Optional dict mapping `pkg_key -> struct(ok, gate)`.
+        loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
     """
     pkg_key_san = sanitize_name(pkg_key)
     parts = parse_package_key(pkg_key)
@@ -140,17 +133,17 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
 
     # Runtime deps
     if has_marker_deps:
-        render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages)
+        render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads = loads)
 
     if not has_wheel_candidates and extra:
-        base_pkg_key = "{}@{}".format(package_name, package_version)
+        base_pkg_key = base_package_key(pkg_key)
         proxy_name = "_raw_{}".format(pkg_key) if pkg.get("cycle_group") else pkg_key
         base_actual = "_raw_{}".format(base_pkg_key) if is_in_same_cycle(base_pkg_key, pkg, packages) else base_pkg_key
 
         lines.extend([
             ind("pycross_library_proxy("),
-            ind('name = "{}",'.format(proxy_name), 2),
-            ind('actual = ":{}",'.format(base_actual), 2),
+            ind("name = {},".format(json.encode(proxy_name)), 2),
+            ind("actual = {},".format(json.encode(":" + base_actual)), 2),
             ind("deps = _{}_deps,".format(pkg_key_san) if has_marker_deps else "deps = [],", 2),
             ind(")"),
             "",
@@ -159,13 +152,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
 
     # Sdist alias
     if sdist_label:
-        lines.extend([
-            ind("native.alias("),
-            ind('name = "_sdist_{}",'.format(pkg_key), 2),
-            ind('actual = "{}",'.format(sdist_label), 2),
-            ind(")"),
-            "",
-        ])
+        lines.extend(alias("_sdist_{}".format(pkg_key), sdist_label, indent = 1, use_native = True))
 
     # Compute the sdist build target (if available) for fallback when no wheel matches.
     sdist_target = None
@@ -182,26 +169,14 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     # Wheel chooser
     wheel_gated = False
     if has_wheel_candidates:
-        wheel_gated = render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = sdist_target)
+        wheel_gated = render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = sdist_target, loads = loads)
     else:
         # No wheel candidates, alias directly to sdist_target or no_match_error
         target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
-        lines.extend([
-            ind("native.alias("),
-            ind('name = "_wheel_{}",'.format(pkg_key), 2),
-            ind('actual = "{}",'.format(target), 2),
-            ind(")"),
-            "",
-        ])
+        lines.extend(alias("_wheel_{}".format(pkg_key), target, indent = 1, use_native = True))
 
     if not wheel_gated and pkg.get("emit_unconditional_wheel_available"):
-        lines.extend([
-            ind("native.alias("),
-            ind('name = "_wheel_available_{}",'.format(pkg_key), 2),
-            ind('actual = "@rules_pycross//pycross/private:always_true",', 2),
-            ind(")"),
-            "",
-        ])
+        lines.extend(alias("_wheel_available_{}".format(pkg_key), "@rules_pycross//pycross/private:always_true", indent = 1, use_native = True))
 
     # Library
     lib_name = pkg_key
@@ -212,18 +187,18 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     if reset and reset.ok:
         lines.extend([
             ind("pycross_resettable_wheel_library("),
-            ind('name = "{}",'.format(lib_name), 2),
-            ind("reset_gate = {},".format('"{}"'.format(reset.gate) if reset.gate else "None"), 2),
+            ind("name = {},".format(json.encode(lib_name)), 2),
+            ind("reset_gate = {},".format(json.encode(reset.gate) if reset.gate else "None"), 2),
         ])
     else:
         lines.extend([
             ind("pycross_wheel_library("),
-            ind('name = "{}",'.format(lib_name), 2),
+            ind("name = {},".format(json.encode(lib_name)), 2),
         ])
     lines.extend([
-        ind('package_name = "{}",'.format(package_name), 2),
-        ind('package_version = "{}",'.format(package_version), 2),
-        ind('wheel = ":_wheel_{}",'.format(pkg_key), 2),
+        ind("package_name = {},".format(json.encode(package_name)), 2),
+        ind("package_version = {},".format(json.encode(package_version)), 2),
+        ind("wheel = {},".format(json.encode(":_wheel_{}".format(pkg_key))), 2),
     ])
 
     for attr_name in ("site_paths", "bin_paths", "data_paths", "include_paths"):
@@ -240,7 +215,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
         render_str_list_attr(lines, attr_name, pkg.get(field))
 
     if pkg.get("precompile"):
-        lines.append(ind('precompile = "{}",'.format(pkg["precompile"]), 2))
+        lines.append(ind("precompile = {},".format(json.encode(pkg["precompile"])), 2))
 
     lines.extend([
         ind(")"),
@@ -255,8 +230,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     # exec analysis doesn't pull in the entire cycle SCC and reachability evaluators)
     lines.extend([
         ind("pycross_dist_info("),
-        ind('name = "_dist_info_{}",'.format(pkg_key), 2),
-        ind('pkg = ":{lib}",'.format(lib = lib_name), 2),
+        ind("name = {},".format(json.encode("_dist_info_{}".format(pkg_key))), 2),
+        ind("pkg = {},".format(json.encode(":" + lib_name)), 2),
         ind(")"),
         "",
     ])
@@ -267,7 +242,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     if has_sdist_repo and has_marker_deps:
         lines.extend([
             ind("pycross_library_proxy("),
-            ind('name = "_sdist_deps_{}",'.format(pkg_key), 2),
+            ind("name = {},".format(json.encode("_sdist_deps_{}".format(pkg_key))), 2),
             ind("deps = _{}_deps,".format(pkg_key_san), 2),
             ind(")"),
             "",
