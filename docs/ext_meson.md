@@ -9,10 +9,11 @@ Meson build backend for rules_pycross.
 <pre>
 load("@rules_pycross//pycross/backends:meson.bzl", "meson_build")
 
-meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">deps</a>, <a href="#meson_build-data">data</a>, <a href="#meson_build-allow_native_exec">allow_native_exec</a>, <a href="#meson_build-build_deps">build_deps</a>, <a href="#meson_build-build_env">build_env</a>, <a href="#meson_build-config_settings">config_settings</a>, <a href="#meson_build-copts">copts</a>,
-            <a href="#meson_build-linkopts">linkopts</a>, <a href="#meson_build-meson_properties">meson_properties</a>, <a href="#meson_build-native_deps">native_deps</a>, <a href="#meson_build-path_tools">path_tools</a>, <a href="#meson_build-pkg_config_files">pkg_config_files</a>, <a href="#meson_build-post_build_hooks">post_build_hooks</a>,
-            <a href="#meson_build-pre_build_hooks">pre_build_hooks</a>, <a href="#meson_build-pre_build_patches">pre_build_patches</a>, <a href="#meson_build-repair_exclude_globs">repair_exclude_globs</a>, <a href="#meson_build-resource_size">resource_size</a>, <a href="#meson_build-sdist">sdist</a>,
-            <a href="#meson_build-site_hooks">site_hooks</a>, <a href="#meson_build-source_dir">source_dir</a>, <a href="#meson_build-target_environment">target_environment</a>, <a href="#meson_build-tool_deps">tool_deps</a>, <a href="#meson_build-whldir_name">whldir_name</a>)
+meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">deps</a>, <a href="#meson_build-data">data</a>, <a href="#meson_build-allow_native_exec">allow_native_exec</a>, <a href="#meson_build-build_deps">build_deps</a>, <a href="#meson_build-build_env">build_env</a>, <a href="#meson_build-build_requires">build_requires</a>,
+            <a href="#meson_build-config_settings">config_settings</a>, <a href="#meson_build-copts">copts</a>, <a href="#meson_build-linkopts">linkopts</a>, <a href="#meson_build-meson_properties">meson_properties</a>, <a href="#meson_build-native_deps">native_deps</a>, <a href="#meson_build-path_tools">path_tools</a>,
+            <a href="#meson_build-pkg_config_files">pkg_config_files</a>, <a href="#meson_build-post_build_hooks">post_build_hooks</a>, <a href="#meson_build-pre_build_hooks">pre_build_hooks</a>, <a href="#meson_build-pre_build_patches">pre_build_patches</a>,
+            <a href="#meson_build-repair_exclude_globs">repair_exclude_globs</a>, <a href="#meson_build-resource_size">resource_size</a>, <a href="#meson_build-sdist">sdist</a>, <a href="#meson_build-site_hooks">site_hooks</a>, <a href="#meson_build-source_dir">source_dir</a>, <a href="#meson_build-target_environment">target_environment</a>,
+            <a href="#meson_build-tool_deps">tool_deps</a>, <a href="#meson_build-whldir_name">whldir_name</a>)
 </pre>
 
 
@@ -28,6 +29,7 @@ meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">de
 | <a id="meson_build-allow_native_exec"></a>allow_native_exec |  Allow Meson to run compiled test binaries on the build host during feature detection. When False (default), Meson always uses compile-only checks, producing reproducible builds regardless of host. Set to True only if you need host-specific optimizations and don't require cross-host reproducibility.   | Boolean | optional |  `False`  |
 | <a id="meson_build-build_deps"></a>build_deps |  Build-time Python packages (e.g. `build-system.requires`), available on the build's Python path.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to $(location) expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="meson_build-build_requires"></a>build_requires |  PEP 508 requirement strings from `pyproject.toml`'s `build-system.requires`, used to warn when a resolved build dependency version does not satisfy its version specifier.   | List of strings | optional |  `[]`  |
 | <a id="meson_build-config_settings"></a>config_settings |  PEP 517 `config_settings` passed to the build backend. Values are subject to $(location) expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
 | <a id="meson_build-copts"></a>copts |  Extra C/C++ compiler flags, appended after the toolchain flags.   | List of strings | optional |  `[]`  |
 | <a id="meson_build-linkopts"></a>linkopts |  Extra linker flags, appended after the toolchain flags and native_deps' linkopts.   | List of strings | optional |  `[]`  |

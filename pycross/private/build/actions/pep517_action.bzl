@@ -1,7 +1,9 @@
 """Action logic for PEP 517 wheel building."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@pypackaging.bzl", "pypackaging")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load("//pycross/private:providers.bzl", "PycrossPackageInfo")
 
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
@@ -47,6 +49,78 @@ def resolve_import_path_fn(workspace_name, root_path, sibling_layout):
 
     return fn
 
+def validate_build_requires(build_requires, build_deps, sdist_name):
+    """Validate PEP 508 build-system.requires against resolved build_deps versions.
+
+    Args:
+        build_requires: list[str] of PEP 508 requirement strings.
+        build_deps: list[Target] of resolved build dependency targets (may carry PycrossPackageInfo).
+        sdist_name: str, basename of the sdist archive for warning messages.
+
+    Returns:
+        list[str] of warning messages for any unsatisfied version specifiers.
+    """
+    if not build_requires:
+        return []
+
+    versions_by_pkg = {}
+    for dep in build_deps:
+        if PycrossPackageInfo not in dep:
+            continue
+        info = dep[PycrossPackageInfo]
+        if not info.package_name or not info.package_version:
+            continue
+        if pypackaging.version.try_parse(info.package_version) == None:
+            continue
+        norm = pypackaging.utils.canonicalize_name(info.package_name)
+        versions = versions_by_pkg.setdefault(norm, [])
+        if info.package_version not in versions:
+            versions.append(info.package_version)
+
+    if not versions_by_pkg:
+        return []
+
+    warnings = []
+    for req_str in build_requires:
+        req = pypackaging.requirements.parse(req_str)
+        if req.marker or not req.specifier or not req.specifier.specs:
+            continue
+
+        req_name = req.name
+
+        # oldest-supported-numpy uses calendar versions (e.g. >=2022.1) that cannot
+        # be compared against numpy's version numbering; skip version validation.
+        if req_name == "oldest-supported-numpy":
+            continue
+
+        versions = versions_by_pkg.get(req_name)
+        if not versions:
+            continue
+
+        if any([pypackaging.specifiers.set_contains(req.specifier, v) for v in versions]):
+            continue
+
+        if len(versions) == 1:
+            warnings.append(
+                "WARNING: The build environment provides '{}=={}', but '{}' requires '{}' in pyproject.toml.".format(
+                    req_name,
+                    versions[0],
+                    sdist_name,
+                    req_str,
+                ),
+            )
+        else:
+            warnings.append(
+                "WARNING: None of the provided '{}' versions ({}) satisfy '{}' required by '{}' in pyproject.toml.".format(
+                    req_name,
+                    ", ".join(versions),
+                    req_str,
+                    sdist_name,
+                ),
+            )
+
+    return warnings
+
 def register_pep517_action(
         ctx,
         builder,
@@ -59,8 +133,11 @@ def register_pep517_action(
         resource_set = None):
     """Registers the PEP 517 wheel build action.
 
-    Common attributes (sdist, deps, build_deps, site_hooks, pre_build_patches,
-    config_settings, pkg_config_files) are extracted directly from ctx.attr/ctx.file/ctx.files.
+    Common attributes (`sdist`, `deps`, `build_deps`, `build_requires`, `tool_deps`,
+    `site_hooks`, `pre_build_patches`, `config_settings`, `pkg_config_files`) are
+    extracted directly from `ctx.attr`/`ctx.file`/`ctx.files`. When `build_requires`
+    is set, version specifiers are validated against `PycrossPackageInfo` versions on
+    `build_deps`, `additional_build_deps`, and `tool_deps` during analysis.
     This avoids repetitive plumbing in each build rule implementation.
 
     Args:
@@ -85,6 +162,12 @@ def register_pep517_action(
     sdist = ctx.file.sdist
     deps = list(ctx.attr.deps)
     build_deps = list(ctx.attr.build_deps) + list(additional_build_deps)
+    build_requires = list(getattr(ctx.attr, "build_requires", []))
+    if build_requires:
+        version_check_deps = build_deps + list(getattr(ctx.attr, "tool_deps", []))
+        for warning in validate_build_requires(build_requires, version_check_deps, sdist.basename):
+            # buildifier: disable=print
+            print(warning)
     site_hooks = list(ctx.attr.site_hooks)
     pre_build_patches = list(ctx.files.pre_build_patches)
     config_settings = dict(getattr(ctx.attr, "config_settings", {}))

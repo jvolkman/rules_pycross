@@ -10,7 +10,6 @@ sh_test(
         "$(rootpath @repo_legacy//:BUILD.bazel)",
         "$(rootpath @repo_explicit_backend//:BUILD.bazel)",
         "$(rootpath @repo_basic//:inspection.json)",
-        "$(rootpath @repo_version_mismatch//:inspection.json)",
         "$(rootpath @repo_patched_pyproject//:BUILD.bazel)",
     ],
     data = [
@@ -19,7 +18,6 @@ sh_test(
         "@repo_explicit_backend//:BUILD.bazel",
         "@repo_legacy//:BUILD.bazel",
         "@repo_patched_pyproject//:BUILD.bazel",
-        "@repo_version_mismatch//:inspection.json",
         "@repo_with_pyproject//:BUILD.bazel",
         "@repo_with_setuptools//:BUILD.bazel",
     ],

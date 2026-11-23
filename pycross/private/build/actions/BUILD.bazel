@@ -17,7 +17,9 @@ bzl_library(
     name = "pep517_action",
     srcs = ["pep517_action.bzl"],
     deps = [
+        "//pycross/private:providers",
         "@bazel_skylib//lib:paths",
+        "@pypackaging.bzl//:pypackaging",
         "@rules_python//python:py_info_bzl",
     ],
 )

@@ -199,7 +199,8 @@ def _compute_sdist_build_config(attr, metadata):
     data_paths = metadata.get("data_paths", [])
     include_paths = metadata.get("include_paths", [])
 
-    build_requires_names = [extract_pep508_name(r) for r in requires]
+    parsed_requires = [(req, pypackaging.requirements.parse(req)) for req in requires]
+    build_requires_names = [parsed.name for _, parsed in parsed_requires]
     if attr.build_backend:
         backend_macro = attr.build_backend
     else:
@@ -214,15 +215,22 @@ def _compute_sdist_build_config(attr, metadata):
     # Map build requires and extra_build_tools to targets in the workspace repo
     build_deps = {}
     required_build_packages = {}
-    for req in requires:
-        req_name = extract_pep508_name(req)
-        if req_name == "oldest-supported-numpy":
+    versioned_build_requires = []
+    for req, parsed_req in parsed_requires:
+        req_name = parsed_req.name
+        is_oldest_numpy = req_name == "oldest-supported-numpy"
+        if is_oldest_numpy:
             req_name = "numpy"
 
         # Marker-gated entries may not apply to the target environment (and so
-        # may be absent from the lock); don't require them.
-        if ";" not in req:
+        # may be absent from the lock); don't require them or validate their
+        # version specifiers unconditionally. Skip oldest-supported-numpy version
+        # validation because it uses calendar versions (e.g. >=2022.1) that are
+        # incompatible with numpy's own version scheme.
+        if not parsed_req.marker:
             required_build_packages[req_name] = True
+            if not is_oldest_numpy and parsed_req.specifier and parsed_req.specifier.specs:
+                versioned_build_requires.append(req)
 
         # We only add it if it's in the known lock repo mapping.
         # (This will be passed in via rctx.attr.known_packages)
@@ -234,6 +242,8 @@ def _compute_sdist_build_config(attr, metadata):
         build_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(dep_name))] = True
 
     macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
+    if versioned_build_requires:
+        macro_attrs["build_requires"] = str(versioned_build_requires)
 
     # Populate tool_deps from the resolved backend's tool_packages that are present in the lock.
     # Keyed by normalized tool package name so that override tool_deps can replace single entries.
@@ -288,67 +298,6 @@ def _compute_sdist_build_config(attr, metadata):
         non_matching_override_backends = non_matching_backends,
     )
 
-def _validate_requirements(requires, pin_versions, pkg_name):
-    """Validate build-system.requires against pinned versions from the thin repo.
-
-    Args:
-        requires: List of PEP 508 requirement strings from build-system.requires.
-        pin_versions: Dict from pin_versions.json. Simple pins: name -> version string.
-            Variant pins: name -> {variant -> version}.
-        pkg_name: Name of the package being inspected (for warning messages).
-
-    Returns:
-        List of warning strings.
-    """
-    if not pin_versions:
-        return []
-
-    warnings = []
-    normalized_pins = {
-        pypackaging.utils.canonicalize_name(k): v
-        for k, v in pin_versions.items()
-    }
-
-    for req_str in requires:
-        req = pypackaging.requirements.parse(req_str)
-        if req.marker or not req.specifier:
-            continue
-
-        req_name = req.name
-        if req_name == "oldest-supported-numpy":
-            req_name = "numpy"
-
-        if req_name not in normalized_pins:
-            continue
-        version_or_dict = normalized_pins[req_name]
-        if type(version_or_dict) == "string":
-            if not pypackaging.specifiers.set_contains(req.specifier, version_or_dict):
-                warnings.append(
-                    "WARNING: The build tools repo pins '{}=={}', but '{}' requires '{}' in pyproject.toml.".format(
-                        req_name,
-                        version_or_dict,
-                        pkg_name,
-                        req_str,
-                    ),
-                )
-        elif type(version_or_dict) == "dict":
-            satisfying = [
-                v
-                for v in version_or_dict.values()
-                if pypackaging.specifiers.set_contains(req.specifier, v)
-            ]
-            if not satisfying:
-                versions_str = ", ".join(["{}={}".format(k, v) for k, v in sorted(version_or_dict.items())])
-                warnings.append(
-                    "WARNING: No variant of '{}' satisfies '{}' (available: {}).".format(
-                        req_name,
-                        req_str,
-                        versions_str,
-                    ),
-                )
-
-    return warnings
-
 def _sdist_repo_common(rctx):
     """Shared sdist repo logic: inspect metadata, resolve backend, apply override configs.
 
@@ -375,7 +324,6 @@ def _sdist_repo_common(rctx):
         for patch_label in rctx.attr.pre_build_patches:
             rctx.watch(patch_label)
     output_json = rctx.path("build_metadata.json")
-    pin_versions = json.decode(rctx.read(rctx.path(rctx.attr.pin_versions_json)))
 
     # Run the Python inspector tool
     inspect_args = [
@@ -398,13 +346,9 @@ def _sdist_repo_common(rctx):
 
     metadata = json.decode(rctx.read(output_json))
     rctx.delete(output_json)
-    warnings = list(metadata.get("warnings", [])) + _validate_requirements(
-        metadata.get("build_requires", []),
-        pin_versions,
-        sdist_path.basename,
-    )
+    warnings = list(metadata.get("warnings", []))
 
-    # Print any warnings from the package inspector or version validation
+    # Print any warnings from the package inspector
     for warning in warnings:
         # buildifier: disable=print
         print(warning)
@@ -471,8 +415,7 @@ _SDIST_REPO_ATTRS = {
               "do not need to materialize the archive repo.",
     ),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
-    "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
-    "pin_versions_json": attr.label(doc = "The pin_versions.json file from the build tools thin repo.", mandatory = True),
+    "known_packages": attr.string_list(doc = "Sorted canonical package names pinned in the build tools repo, used to filter build_requires."),
     "lock_repo": attr.string(doc = "Name of the lock workspace repo (e.g. 'uv__pkgs').", mandatory = True),
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(
@@ -506,4 +449,3 @@ pycross_sdist_repo = repository_rule(
 
 # Visible for testing
 compute_sdist_build_config_for_testing = _compute_sdist_build_config
-validate_requirements_for_testing = _validate_requirements

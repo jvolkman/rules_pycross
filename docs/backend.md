@@ -326,8 +326,11 @@ register_pep517_action(<a href="#register_pep517_action-ctx">ctx</a>, <a href="#
 
 Registers the PEP 517 wheel build action.
 
-Common attributes (sdist, deps, build_deps, site_hooks, pre_build_patches,
-config_settings, pkg_config_files) are extracted directly from ctx.attr/ctx.file/ctx.files.
+Common attributes (`sdist`, `deps`, `build_deps`, `build_requires`, `tool_deps`,
+`site_hooks`, `pre_build_patches`, `config_settings`, `pkg_config_files`) are
+extracted directly from `ctx.attr`/`ctx.file`/`ctx.files`. When `build_requires`
+is set, version specifiers are validated against `PycrossPackageInfo` versions on
+`build_deps`, `additional_build_deps`, and `tool_deps` during analysis.
 This avoids repetitive plumbing in each build rule implementation.
 
 

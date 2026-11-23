@@ -14,7 +14,7 @@ The file structure is:
 
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS", "PACKAGE_REPO_HOOK_SUBDIRS")
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
-load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS", "emit_backend_files", "hook_subdir_build", "packages_bzl", "pin_versions", "requirements_bzl")
+load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS", "emit_backend_files", "hook_subdir_build", "packages_bzl", "requirements_bzl")
 load("//pycross/private/thin_repo:modules_mapping_deps.bzl", "modules_mapping_deps")
 load("//pycross/private/thin_repo:pins.bzl", "append_root_aliases", "emit_pin_directories")
 load("//pycross/private/thin_repo:selects.bzl", "variant_fallbacks")
@@ -223,8 +223,6 @@ def _thin_package_repo_impl(rctx):
     )
     if variants_content:
         rctx.file("_variants/BUILD.bazel", variants_content)
-
-    rctx.file("pin_versions.json", json.encode(pin_versions(grouped_pins)))
 
     if hasattr(rctx, "repo_metadata"):
         return rctx.repo_metadata(reproducible = True)
