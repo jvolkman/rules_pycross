@@ -27,7 +27,7 @@ Paired with [hermetic-llvm](https://github.com/hermeticbuild/hermetic-llvm) (`ll
 Add `rules_pycross`, `rules_python`, and your lock file extension to `MODULE.bazel`:
 
 ```python
-bazel_dep(name = "rules_pycross", version = "2.2.0")
+bazel_dep(name = "rules_pycross", version = "2.3.0")
 bazel_dep(name = "rules_python", version = "1.7.0")
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
@@ -450,7 +450,7 @@ Wheel repair locates shared libraries from `pycross_wheel_cc_import` targets, in
 Add `rules_pycross_backend_maturin` and `rules_rust` to build Rust extensions from source:
 
 ```python
-bazel_dep(name = "rules_pycross_backend_maturin", version = "2.2.0")
+bazel_dep(name = "rules_pycross_backend_maturin", version = "2.3.0")
 bazel_dep(name = "rules_rust", version = "0.68.0")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
