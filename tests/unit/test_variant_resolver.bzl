@@ -1,6 +1,5 @@
-"""Tests for variant_resolver rule."""
+"""Tests for variant_state and its FeatureFlagInfo projections."""
 
-load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
@@ -9,9 +8,51 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:variant_resolver.bzl", "variant_resolver")
+load("//pycross/private:variant_resolver.bzl", "variant_item_projection", "variant_set_projection", "variant_state")
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
+def _infer_items(flags, string_flags):
+    seen = {}
+    for val in flags.values():
+        _, sep, names = val.partition("|")
+        for n in (names if sep else val).split(" "):
+            if n:
+                seen[n] = True
+    for spec_json in string_flags.values():
+        spec = json.decode(spec_json)
+        for qnames in spec.get("map", {}).values():
+            for n in qnames:
+                seen[n] = True
+    return sorted(seen.keys())
+
+def _single_set_resolver(
+        name,
+        items = None,
+        flags = {},
+        string_flags = {},
+        pin = None,
+        default_setting = None,
+        usable = None,
+        tags = ["manual"]):
+    """Wire a single-set variant_state + variant_set_projection under `name`."""
+    set_items = items if items != None else _infer_items(flags, string_flags)
+    variant_state(
+        name = name + "_state",
+        sets = {"s": set_items},
+        pins = {pin: "s"} if pin else {},
+        defaults = {default_setting: "s"} if default_setting else {},
+        usables = {usable: "s"} if usable else {},
+        flags = flags,
+        string_flags = string_flags,
+        tags = tags,
+    )
+    variant_set_projection(
+        name = name,
+        state = ":" + name + "_state",
+        set_key = "s",
+        tags = tags,
+    )
 
 def _setup_string(name, value):
     """Create a string_flag helper target (for resolver pin/default settings)."""
@@ -40,7 +81,7 @@ def _test_single_flag_active_impl(env, target):
 
 def _test_single_flag_active(name):
     flag_refs = _setup_flags(name, ["alpha", "beta"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["alpha", "beta"])),
         tags = ["manual"],
@@ -62,7 +103,7 @@ def _test_default_when_no_flag_impl(env, target):
 
 def _test_default_when_no_flag(name):
     flag_refs = _setup_flags(name, ["cpu", "gpu"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["cpu", "gpu"])),
         default_setting = _setup_string(name + "_resolver" + "_default", "cpu"),
@@ -82,7 +123,7 @@ def _test_no_flags_no_default_impl(env, target):
 
 def _test_no_flags_no_default(name):
     flag_refs = _setup_flags(name, ["a", "b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["a", "b"])),
         # No default
@@ -103,7 +144,7 @@ def _test_mutual_exclusion_fails_impl(env, target):
 
 def _test_mutual_exclusion_fails(name):
     flag_refs = _setup_flags(name, ["x", "y"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["x", "y"])),
         default_setting = _setup_string(name + "_resolver" + "_default", "x"),
@@ -130,7 +171,7 @@ def _test_shared_flag_conflict_fails_impl(env, target):
 def _test_shared_flag_conflict_fails(name):
     """A repo-level `group_test` covering two projects whose `test` groups conflict."""
     flag_refs = _setup_flags(name, ["group_test", "group_test_a"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = {
             flag_refs[0]: "group_app-a_test group_app-b_test",
@@ -156,7 +197,7 @@ def _test_flags_sharing_item_impl(env, target):
 
 def _test_flags_sharing_item(name):
     flag_refs = _setup_flags(name, ["group_test", "group_test_a"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = {
             flag_refs[0]: "group_app-a_test",
@@ -178,7 +219,7 @@ def _test_flags_sharing_item(name):
 
 def _usable_resolver(name, usable, default):
     flag_refs = _setup_flags(name, ["a", "b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["a", "b"])),
         items = ["a", "b", "c"],
@@ -240,7 +281,7 @@ def _test_pin_beats_flags_impl(env, target):
 def _test_pin_beats_flags(name):
     """A repo pin wins over ambient flags, even conflicting ones."""
     flag_refs = _setup_flags(name, ["a", "b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["a", "b"])),
         items = ["a", "b"],
@@ -267,7 +308,7 @@ def _test_flag_beats_default_impl(env, target):
 def _test_flag_beats_default(name):
     """An ambient flag wins over a repo default, so the two never conflict."""
     flag_refs = _setup_flags(name, ["a", "b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["a", "b"])),
         items = ["a", "b"],
@@ -290,7 +331,7 @@ def _test_unknown_pin_fails_impl(env, target):
 
 def _test_unknown_pin_fails(name):
     flag_refs = _setup_flags(name, ["a", "b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["a", "b"])),
         items = ["a", "b"],
@@ -312,7 +353,7 @@ def _test_display_names_impl(env, target):
 def _test_display_names(name):
     """Conflict errors use the display names, not canonical labels."""
     flag_refs = _setup_flags(name, ["cpu", "gpu"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = {
             flag_refs[0]: "@pypi//_variants:extra_cpu|extra_my-app_cpu",
@@ -338,7 +379,7 @@ def _test_mixed_extra_group_impl(env, target):
 
 def _test_mixed_extra_group(name):
     flag_refs = _setup_flags(name, ["extra_variant-a", "group_variant-b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["extra_variant-a", "group_variant-b"])),
         tags = ["manual"],
@@ -359,7 +400,7 @@ def _test_three_way_conflict_impl(env, target):
 
 def _test_three_way_conflict(name):
     flag_refs = _setup_flags(name, ["cpu", "cu118", "cu124"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["cpu", "cu118", "cu124"])),
         default_setting = _setup_string(name + "_resolver" + "_default", "cpu"),
@@ -383,7 +424,7 @@ def _test_three_way_exclusion_fails_impl(env, target):
 
 def _test_three_way_exclusion_fails(name):
     flag_refs = _setup_flags(name, ["cpu", "cu118", "cu124"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["cpu", "cu118", "cu124"])),
         default_setting = _setup_string(name + "_resolver" + "_default", "cpu"),
@@ -410,7 +451,7 @@ def _test_config_setting_matches_resolver_impl(env, target):
 def _test_config_setting_matches_resolver(name):
     """End-to-end test: bool_flag → resolver → config_setting → select."""
     flag_refs = _setup_flags(name, ["opt_a", "opt_b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["opt_a", "opt_b"])),
         default_setting = _setup_string(name + "_resolver" + "_default", "opt_a"),
@@ -449,7 +490,7 @@ def _test_config_setting_explicit_flag_impl(env, target):
 def _test_config_setting_explicit_flag(name):
     """Same as above but with an explicit flag set to opt_b."""
     flag_refs = _setup_flags(name, ["opt_a", "opt_b"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["opt_a", "opt_b"])),
         default_setting = _setup_string(name + "_resolver" + "_default", "opt_a"),
@@ -480,33 +521,52 @@ def _test_config_setting_explicit_flag(name):
         },
     )
 
-# ── Test: item in multiple conflict sets (config_setting_group) ──────
+# ── Test: item in multiple conflict sets (variant_item_projection) ───
 
 def _test_multi_set_overlap_impl(env, target):
-    """Shared item resolved via config_setting_group(match_any)."""
+    """Shared item resolved via variant_item_projection."""
     env.expect.that_target(target).default_outputs().contains_at_least([])
 
 def _test_multi_set_overlap(name):
     """Simulates: set1=[variant-a, group-a], set2=[group-a, group-b].
 
-    group-a appears in both sets. Its config_setting must match if EITHER
-    resolver returns 'group_group-a'.
+    group-a appears in both sets. Its config_setting matches via
+    variant_item_projection when active in either set.
     """
     flag_refs = _setup_flags(name, ["extra_variant-a", "group_group-a", "group_group-b"])
+    def1 = _setup_string(name + "_resolver_set1_default", "group_group-a")
+    def2 = _setup_string(name + "_resolver_set2_default", "group_group-a")
 
-    # Resolver for set 1: [extra_variant-a, group_group-a]
-    variant_resolver(
-        name = name + "_resolver_set1",
-        flags = {flag_refs[0]: "extra_variant-a", flag_refs[1]: "group_group-a"},
-        default_setting = _setup_string(name + "_resolver_set1" + "_default", "group_group-a"),
+    variant_state(
+        name = name + "_state",
+        sets = {
+            "set1": ["extra_variant-a", "group_group-a"],
+            "set2": ["group_group-a", "group_group-b"],
+        },
+        defaults = {def1: "set1", def2: "set2"},
+        flags = {
+            flag_refs[0]: "extra_variant-a",
+            flag_refs[1]: "group_group-a",
+            flag_refs[2]: "group_group-b",
+        },
         tags = ["manual"],
     )
-
-    # Resolver for set 2: [group_group-a, group_group-b]
-    variant_resolver(
+    variant_set_projection(
+        name = name + "_resolver_set1",
+        state = ":" + name + "_state",
+        set_key = "set1",
+        tags = ["manual"],
+    )
+    variant_set_projection(
         name = name + "_resolver_set2",
-        flags = {flag_refs[1]: "group_group-a", flag_refs[2]: "group_group-b"},
-        default_setting = _setup_string(name + "_resolver_set2" + "_default", "group_group-a"),
+        state = ":" + name + "_state",
+        set_key = "set2",
+        tags = ["manual"],
+    )
+    variant_item_projection(
+        name = name + "_item_group_group-a",
+        state = ":" + name + "_state",
+        item = "group_group-a",
         tags = ["manual"],
     )
 
@@ -516,21 +576,10 @@ def _test_multi_set_overlap(name):
         flag_values = {":" + name + "_resolver_set1": "extra_variant-a"},
     )
 
-    # group_group-a: in BOTH sets → config_setting_group
+    # group_group-a: in BOTH sets → variant_item_projection
     native.config_setting(
-        name = name + "_is_group_group-a_via_0",
-        flag_values = {":" + name + "_resolver_set1": "group_group-a"},
-    )
-    native.config_setting(
-        name = name + "_is_group_group-a_via_1",
-        flag_values = {":" + name + "_resolver_set2": "group_group-a"},
-    )
-    selects.config_setting_group(
         name = name + "_is_group_group-a",
-        match_any = [
-            ":" + name + "_is_group_group-a_via_0",
-            ":" + name + "_is_group_group-a_via_1",
-        ],
+        flag_values = {":" + name + "_item_group_group-a": "true"},
     )
 
     # group_group-b: only in set 2
@@ -554,7 +603,7 @@ def _test_multi_set_overlap(name):
         name = name,
         target = name + "_subject",
         impl = _test_multi_set_overlap_impl,
-        # No flags set → both resolvers default to group_group-a → matches.
+        # No flags set → both sets default to group_group-a → matches.
     )
 
 # ── Test: cross-set mutual exclusion with shared item ────────────────
@@ -573,7 +622,7 @@ def _test_multi_set_cross_exclusion_fails(name):
     """
     flag_refs = _setup_flags(name, ["extra_variant-a", "group_group-a"])
 
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["extra_variant-a", "group_group-a"])),
         tags = ["manual"],
@@ -597,7 +646,7 @@ def _test_variants_with_evaluator_impl(env, target):
 
 def _test_variants_with_evaluator(name):
     flag_refs = _setup_flags(name, ["group_cpu", "group_cuda"])
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["group_cpu", "group_cuda"])),
         default_setting = _setup_string(name + "_resolver" + "_default", "group_cpu"),
@@ -644,7 +693,7 @@ def _string_flag_resolver(name, usable = "*", default = ""):
             "extra_gpu": ["extra_app_gpu"],
         },
     })
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         flags = {
             flag_refs[0]: "@pypi//_variants:extra_cpu|extra_app_cpu",
@@ -749,44 +798,30 @@ def _test_string_flag_usable_filters(name):
 def _overlapping_rival_resolver(name, other_usable = "*", s2_default = "a", s1_pin = "", s2_usable = "*"):
     """Helper for overlapping sets S1=[a, b] and S2=[a, c] with configurable defaults/pins/usable."""
     flag_refs = _setup_flags(name, ["a", "b", "c"])
-    string_flag = _setup_string(name + "_variants", "")
+    sf = _setup_string(name + "_variants", "")
     other_usable_flag = _setup_string(name + "_usable_s1", other_usable)
     s2_usable_flag = _setup_string(name + "_usable_s2", s2_usable)
     s1_pin_flag = _setup_string(name + "_pin_s1", s1_pin)
-    spec_s1 = {
+    s2_default_flag = _setup_string(name + "_default_s2", s2_default)
+    spec = {
         "display": "@repo//_variants",
         "valid": ["a", "b", "c"],
-        "map": {"a": ["a"], "b": ["b"]},
+        "map": {"a": ["a"], "b": ["b"], "c": ["c"]},
     }
-    spec_s2 = {
-        "display": "@repo//_variants",
-        "valid": ["a", "b", "c"],
-        "map": {"a": ["a"], "c": ["c"]},
-    }
-    variant_resolver(
-        name = name + "_explicit_s1",
-        items = ["a", "b"],
-        pin = s1_pin_flag,
-        usable = other_usable_flag,
-        flags = {flag_refs[0]: "a", flag_refs[1]: "b"},
-        string_flags = {string_flag: json.encode(spec_s1)},
+    variant_state(
+        name = name + "_state",
+        sets = {"s1": ["a", "b"], "s2": ["a", "c"]},
+        pins = {s1_pin_flag: "s1"},
+        defaults = {s2_default_flag: "s2"},
+        usables = {other_usable_flag: "s1", s2_usable_flag: "s2"},
+        flags = {flag_refs[0]: "a", flag_refs[1]: "b", flag_refs[2]: "c"},
+        string_flags = {sf: json.encode(spec)},
         tags = ["manual"],
     )
-    variant_resolver(
-        name = name + "_explicit_s2",
-        items = ["a", "c"],
-        usable = s2_usable_flag,
-        flags = {flag_refs[0]: "a", flag_refs[2]: "c"},
-        string_flags = {string_flag: json.encode(spec_s2)},
-        tags = ["manual"],
-    )
-    variant_resolver(
+    variant_set_projection(
         name = name + "_resolver_s2",
-        explicit = ":" + name + "_explicit_s2",
-        items = ["a", "c"],
-        usable = s2_usable_flag,
-        default_setting = _setup_string(name + "_default_s2", s2_default),
-        rival_resolvers = {":" + name + "_explicit_s1": "a"},
+        state = ":" + name + "_state",
+        set_key = "s2",
         tags = ["manual"],
     )
 
@@ -829,24 +864,18 @@ def _test_overlapping_rival_ignored_when_not_usable(name):
 def _test_overlapping_rival_unrelated_shared_item_keeps_default(name):
     """A rival in S3=[c, d] (sharing c, not a) does not suppress S2's default a."""
     flag_refs = _setup_flags(name, ["a", "c", "d"])
-    variant_resolver(
-        name = name + "_explicit_s3",
-        items = ["c", "d"],
-        flags = {flag_refs[1]: "c", flag_refs[2]: "d"},
+    s2_default_flag = _setup_string(name + "_default_s2", "a")
+    variant_state(
+        name = name + "_state",
+        sets = {"s2": ["a", "c"], "s3": ["c", "d"]},
+        defaults = {s2_default_flag: "s2"},
+        flags = {flag_refs[0]: "a", flag_refs[1]: "c", flag_refs[2]: "d"},
         tags = ["manual"],
     )
-    variant_resolver(
-        name = name + "_explicit_s2",
-        items = ["a", "c"],
-        flags = {flag_refs[0]: "a", flag_refs[1]: "c"},
-        tags = ["manual"],
-    )
-    variant_resolver(
+    variant_set_projection(
         name = name + "_resolver_s2",
-        explicit = ":" + name + "_explicit_s2",
-        items = ["a", "c"],
-        default_setting = _setup_string(name + "_default_s2", "a"),
-        rival_resolvers = {":" + name + "_explicit_s3": "c"},
+        state = ":" + name + "_state",
+        set_key = "s2",
         tags = ["manual"],
     )
     analysis_test(
@@ -898,7 +927,7 @@ def _test_string_flag_unknown_fails_when_pinned(name):
     """Unknown tokens in //_variants fail even when the conflict set is pinned."""
     sf = _setup_string(name + "_variants", "")
     pin = _setup_string(name + "_pin", "extra_cpu")
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         items = ["extra_cpu", "extra_gpu"],
         pin = pin,
@@ -923,7 +952,7 @@ def _test_string_flag_unknown_fails_when_unusable(name):
     """Unknown tokens in //_variants fail even when usable is empty."""
     sf = _setup_string(name + "_variants", "")
     usable = _setup_string(name + "_usable", "")
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         items = ["extra_cpu", "extra_gpu"],
         usable = usable,
@@ -951,7 +980,7 @@ def _test_multi_flag_conflict_omits_internal_qnames_impl(env, target):
 
 def _test_multi_flag_conflict_omits_internal_qnames(name):
     sf = _setup_string(name + "_variants", "")
-    variant_resolver(
+    _single_set_resolver(
         name = name + "_resolver",
         string_flags = {
             sf: json.encode({

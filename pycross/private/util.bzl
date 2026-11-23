@@ -242,6 +242,31 @@ def variant_item_qname(item):
         return "package_{}".format(item["package"])
     return "{}_{}_{}".format(item["kind"], item["package"], item["name"])
 
+def excluded_variant_items(conflict_sets, selected):
+    """Return `{qname: True}` for every variant item conflicting with an item in `selected`.
+
+    Two distinct items conflict when they appear together in at least one set in
+    `conflict_sets`.
+
+    Args:
+        conflict_sets: Iterable of lists of variant item qnames (one list per
+            conflict set).
+        selected: Iterable (list or dict) of selected variant item qnames.
+
+    Returns:
+        Dict `{qname: True}` of every item that conflicts with at least one item
+        in `selected`.
+    """
+    excluded = {}
+    for qnames in conflict_sets:
+        for qname in selected:
+            if qname not in qnames:
+                continue
+            for other in qnames:
+                if other != qname:
+                    excluded[other] = True
+    return excluded
+
 def coerce_transition_values(current, values):
     """Coerce raw repo transition values to the type of a setting's current value.
 

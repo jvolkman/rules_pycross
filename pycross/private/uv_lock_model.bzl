@@ -19,7 +19,7 @@ load(
     "resolve_lock_graph",
     "sha256_from_string",
 )
-load(":util.bzl", "url_decode_filename", "url_filename", "variant_item_qname")
+load(":util.bzl", "excluded_variant_items", "url_decode_filename", "url_filename", "variant_item_qname")
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
     """Parse a UV lock file entry into a file dict.
@@ -530,16 +530,19 @@ def translate_uv(project_dict, lock_dict, lock_model):
     }
     default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
     requested_by_set = []
-    rival_requested = {}  # qname -> True if another requested item conflicts with it in some set
+    requested_qname_sets = []
+    all_requested_qnames = {}
     for variant_set in variant_sets:
         owned_items = [item for item in variant_set["items"] if item["package"] in target_projects_set]
         requested_items = [item for item in owned_items if _is_item_requested(item, requested_keys[item["package"]])]
         requested_by_set.append((owned_items, requested_items))
         if requested_items:
-            variant_set["repo_requested"] = [variant_item_qname(item) for item in requested_items]
-        if len(requested_items) > 1:
-            for item in requested_items:
-                rival_requested[variant_item_qname(item)] = True
+            qnames = [variant_item_qname(item) for item in requested_items]
+            variant_set["repo_requested"] = qnames
+            requested_qname_sets.append(qnames)
+            for q in qnames:
+                all_requested_qnames[q] = True
+    rival_requested = excluded_variant_items(requested_qname_sets, all_requested_qnames)
 
     for variant_set, (owned_items, requested_items) in zip(variant_sets, requested_by_set):
         # An item can be in several sets (e.g. `[[cpu, gpu], [cpu, gpu-test]]`).
