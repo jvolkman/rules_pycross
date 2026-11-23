@@ -8,33 +8,15 @@ load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_set_projec
 targets()
 
 string_flag(
-    name = "_pin_extra_app_cpu_extra_app_gpu",
+    name = "_state",
     build_setting_default = "",
-)
-
-string_flag(
-    name = "_default_extra_app_cpu_extra_app_gpu",
-    build_setting_default = "",
-)
-
-string_flag(
-    name = "_usable_extra_app_cpu_extra_app_gpu",
-    build_setting_default = "*",
 )
 
 variant_state(
     name = "_variant_state",
+    state = ":_state",
     sets = {
         "extra_app_cpu_extra_app_gpu": ["extra_app_cpu","extra_app_gpu"],
-    },
-    pins = {
-        ":_pin_extra_app_cpu_extra_app_gpu": "extra_app_cpu_extra_app_gpu",
-    },
-    defaults = {
-        ":_default_extra_app_cpu_extra_app_gpu": "extra_app_cpu_extra_app_gpu",
-    },
-    usables = {
-        ":_usable_extra_app_cpu_extra_app_gpu": "extra_app_cpu_extra_app_gpu",
     },
     flags = {
         "@golden_sdist_reset//_variants:extra_cpu": "@golden_sdist_reset//_variants:extra_cpu|extra_app_cpu",

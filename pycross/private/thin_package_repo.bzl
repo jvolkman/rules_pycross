@@ -81,14 +81,13 @@ def _thin_package_repo_impl(rctx):
     settings = transition_settings(
         variant_info,
         rctx.attr.variant_pins,
-        workspace_repo,
         rctx.attr.member_name,
         has_other_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings),
     )
-    fixed_settings = settings.fixed_settings
+    state_overrides = settings.state_overrides
     pins_by_set = settings.pins_by_set
     excluded = settings.excluded
-    has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings) or bool(fixed_settings)
+    has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings) or bool(state_overrides)
 
     if not target_platform and rctx.attr.constraint_values:
         target_platform = "//:_internal_platform"
@@ -108,7 +107,13 @@ def _thin_package_repo_impl(rctx):
     if has_flags:
         rctx.file(
             "_transition.bzl",
-            render_transition_bzl(rctx.attr.member_name, rctx.attr.flags, rctx.attr.settings, fixed_settings),
+            render_transition_bzl(
+                rctx.attr.member_name,
+                rctx.attr.flags,
+                rctx.attr.settings,
+                variant_state_label = "@{}//_lock:_state".format(workspace_repo) if state_overrides else "",
+                variant_state_overrides = state_overrides,
+            ),
         )
 
     unselected_groups = {}

@@ -1,7 +1,7 @@
 """Generated transition rules for golden_overlapping_conflicts with pinned flag values."""
 
 load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_library_proxy_rule")
-load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values", "split_setting_value")
+load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values", "merge_variant_state", "split_setting_value")
 
 _FLAG_VALUES = {
 
@@ -11,13 +11,15 @@ _SETTING_VALUES = {
 
 }
 
-# Variant pins and defaults for the workspace repo's resolvers.
-_FIXED_VALUES = {
-    "@golden_overlapping_conflicts__pkgs//_lock:_default_extra_app_x_group_app_g-a": "group_app_g-a",
-    "@golden_overlapping_conflicts__pkgs//_lock:_default_group_app_g-a_group_app_g-b": "group_app_g-a",
-    "@golden_overlapping_conflicts__pkgs//_lock:_usable_extra_app_x_extra_app_y": "",
-    "@golden_overlapping_conflicts__pkgs//_lock:_usable_extra_app_x_group_app_g-a": "",
-    "@golden_overlapping_conflicts__pkgs//_lock:_usable_group_app_g-a_group_app_g-b": "",
+# Variant pins, defaults, and usable narrowing merged over incoming _state.
+_VARIANT_STATE_LABEL = "@golden_overlapping_conflicts__pkgs//_lock:_state"
+
+_VARIANT_STATE_OVERRIDES = {
+    "d:extra_app_x_group_app_g-a": "group_app_g-a",
+    "d:group_app_g-a_group_app_g-b": "group_app_g-a",
+    "u:extra_app_x_extra_app_y": "",
+    "u:extra_app_x_group_app_g-a": "",
+    "u:group_app_g-a_group_app_g-b": "",
 }
 
 def _transition_impl(settings, attr):
@@ -27,7 +29,7 @@ def _transition_impl(settings, attr):
     }
     for label, value in _SETTING_VALUES.items():
         result[label] = coerce_transition_values(settings[label], split_setting_value(settings[label], value))
-    result.update(_FIXED_VALUES)
+    result[_VARIANT_STATE_LABEL] = merge_variant_state(settings[_VARIANT_STATE_LABEL], _VARIANT_STATE_OVERRIDES)
     if attr.platform:
         result["//command_line_option:platforms"] = [str(attr.platform)]
     else:
@@ -38,16 +40,11 @@ _repo_transition = transition(
     implementation = _transition_impl,
     inputs = [
         "//command_line_option:platforms",
-
+        "@golden_overlapping_conflicts__pkgs//_lock:_state",
     ],
     outputs = [
         "//command_line_option:platforms",
-
-        "@golden_overlapping_conflicts__pkgs//_lock:_default_extra_app_x_group_app_g-a",
-        "@golden_overlapping_conflicts__pkgs//_lock:_default_group_app_g-a_group_app_g-b",
-        "@golden_overlapping_conflicts__pkgs//_lock:_usable_extra_app_x_extra_app_y",
-        "@golden_overlapping_conflicts__pkgs//_lock:_usable_extra_app_x_group_app_g-a",
-        "@golden_overlapping_conflicts__pkgs//_lock:_usable_group_app_g-a_group_app_g-b",
+        "@golden_overlapping_conflicts__pkgs//_lock:_state",
     ],
 )
 

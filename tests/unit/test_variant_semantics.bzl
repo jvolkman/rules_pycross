@@ -9,6 +9,9 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:package_repo.bzl", "render_lock_build_for_testing")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "decode_variant_state", "merge_variant_state")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_set_projection", "variant_state")
 
 _VariantTupleInfo = provider(
@@ -39,49 +42,47 @@ _variant_tuple = rule(
 
 # ── Transition rules for consumer-pinned → __build inheritance & reset ──
 
-_PIN_INH_PIN_S1 = "//tests/unit:_pin_inh_pin_s1"
-_PIN_INH_DEFAULT_S1 = "//tests/unit:_pin_inh_default_s1"
-_PIN_INH_USABLE_S1 = "//tests/unit:_pin_inh_usable_s1"
-_PIN_INH_USABLE_S2 = "//tests/unit:_pin_inh_usable_s2"
+_PIN_INH_STATE = "//tests/unit:_pin_inh_state_setting"
 _PIN_INH_BUILD_FLAG = "//tests/unit:_pin_inh_build_flag"
 
-def _consumer_pin_transition_impl(_settings, _attr):
+def _consumer_pin_transition_impl(settings, _attr):
     return {
-        _PIN_INH_PIN_S1: "g-b",
-        _PIN_INH_USABLE_S2: "",
+        _PIN_INH_STATE: merge_variant_state(settings[_PIN_INH_STATE], {
+            "p:s1": "g-b",
+            "u:s2": "",
+        }),
     }
 
 _consumer_pin_transition = transition(
     implementation = _consumer_pin_transition_impl,
-    inputs = [],
-    outputs = [_PIN_INH_PIN_S1, _PIN_INH_USABLE_S2],
+    inputs = [_PIN_INH_STATE],
+    outputs = [_PIN_INH_STATE],
 )
 
-def _flagged_build_transition_impl(_settings, _attr):
+def _flagged_build_transition_impl(settings, _attr):
     return {
         _PIN_INH_BUILD_FLAG: True,
-        _PIN_INH_DEFAULT_S1: "g-a",
-        _PIN_INH_USABLE_S1: "",
+        _PIN_INH_STATE: merge_variant_state(settings[_PIN_INH_STATE], {
+            "d:s1": "g-a",
+            "u:s1": "",
+        }),
     }
 
 _flagged_build_transition = transition(
     implementation = _flagged_build_transition_impl,
-    inputs = [],
-    outputs = [_PIN_INH_BUILD_FLAG, _PIN_INH_DEFAULT_S1, _PIN_INH_USABLE_S1],
+    inputs = [_PIN_INH_STATE],
+    outputs = [_PIN_INH_BUILD_FLAG, _PIN_INH_STATE],
 )
 
 def _reset_state_transition_impl(_settings, _attr):
     return {
-        _PIN_INH_PIN_S1: "",
-        _PIN_INH_DEFAULT_S1: "",
-        _PIN_INH_USABLE_S1: "*",
-        _PIN_INH_USABLE_S2: "*",
+        _PIN_INH_STATE: "",
     }
 
 _reset_state_transition = transition(
     implementation = _reset_state_transition_impl,
     inputs = [],
-    outputs = [_PIN_INH_PIN_S1, _PIN_INH_DEFAULT_S1, _PIN_INH_USABLE_S1, _PIN_INH_USABLE_S2],
+    outputs = [_PIN_INH_STATE],
 )
 
 def _forward_tuple_impl(ctx):
@@ -179,14 +180,16 @@ def _test_render_lock_build_overlapping_and_disjoint_impl(env, target):
         member_variant_flags,
     )
 
-    # Single joint variant_state holds all sets, settings, and consolidated flags once.
+    # Single joint variant_state holds all sets, canonical `_state` setting, and consolidated flags once.
+    env.expect.that_str(rendered).contains('name = "_state",')
+    env.expect.that_bool("_pin_" in rendered).equals(False)
+    env.expect.that_bool("_default_" in rendered).equals(False)
+    env.expect.that_bool("_usable_" in rendered).equals(False)
     state = _extract_block(rendered, "_variant_state")
+    env.expect.that_str(state).contains('state = ":_state",')
     env.expect.that_str(state).contains('"group_g-a_group_g-b": ["group_g-a","group_g-b"],')
     env.expect.that_str(state).contains('"extra_x_group_g-a": ["extra_x","group_g-a"],')
     env.expect.that_str(state).contains('"extra_p_extra_q": ["extra_p","extra_q"],')
-    env.expect.that_str(state).contains('":_pin_group_g-a_group_g-b": "group_g-a_group_g-b",')
-    env.expect.that_str(state).contains('":_default_extra_x_group_g-a": "extra_x_group_g-a",')
-    env.expect.that_str(state).contains('":_usable_extra_p_extra_q": "extra_p_extra_q",')
     env.expect.that_str(state).contains('"@app//_variants:group_g-a": "@app//_variants:group_g-a|group_g-a",')
     env.expect.that_int(rendered.count('"@app//_variants:_variants":')).equals(1)
     env.expect.that_bool("_explicit_" in rendered).equals(False)
@@ -279,19 +282,20 @@ def _wire_chain_resolvers(prefix, pins = {}, defaults = {}, usables = {}):
     util.helper_target(string_flag, name = sf_name, build_setting_default = "")
     sf_label = ":" + sf_name
 
-    pin_map = {}
-    default_map = {}
-    usable_map = {}
+    overrides = {}
     for sid in sorted(_CHAIN_SETS.keys()):
-        pin_name = "{}_pin_{}".format(prefix, sid)
-        def_name = "{}_default_{}".format(prefix, sid)
-        usable_name = "{}_usable_{}".format(prefix, sid)
-        util.helper_target(string_flag, name = pin_name, build_setting_default = pins.get(sid, ""))
-        util.helper_target(string_flag, name = def_name, build_setting_default = defaults.get(sid, ""))
-        util.helper_target(string_flag, name = usable_name, build_setting_default = usables.get(sid, "*"))
-        pin_map[":" + pin_name] = sid
-        default_map[":" + def_name] = sid
-        usable_map[":" + usable_name] = sid
+        if sid in pins:
+            overrides["p:" + sid] = pins[sid]
+        if sid in defaults:
+            overrides["d:" + sid] = defaults[sid]
+        if sid in usables:
+            overrides["u:" + sid] = usables[sid]
+    state_setting_name = "{}_state_setting".format(prefix)
+    util.helper_target(
+        string_flag,
+        name = state_setting_name,
+        build_setting_default = merge_variant_state("", overrides),
+    )
 
     state_name = "{}_state".format(prefix)
     spec = {
@@ -302,10 +306,8 @@ def _wire_chain_resolvers(prefix, pins = {}, defaults = {}, usables = {}):
     util.helper_target(
         variant_state,
         name = state_name,
+        state = ":" + state_setting_name,
         sets = _CHAIN_SETS,
-        pins = pin_map,
-        defaults = default_map,
-        usables = usable_map,
         flags = {bool_labels[item]: "@repo//_variants:{}|{}".format(item, item) for item in _CHAIN_ALL_ITEMS},
         string_flags = {sf_label: json.encode(spec)},
     )
@@ -518,26 +520,26 @@ def _test_cross_repo_leak_393(name):
     """#393: a transitioned repo's usable narrowing ignores a sibling repo's CLI flag on an unpinned set."""
     sibling_cpu = name + "_sibling_cpu"
     util.helper_target(bool_flag, name = sibling_cpu, build_setting_default = False)
-    pin_s1 = name + "_pin_s1"
-    usable_s1 = name + "_usable_s1"
-    usable_s2 = name + "_usable_s2"
-    util.helper_target(string_flag, name = pin_s1, build_setting_default = "extra_gpu")
-    util.helper_target(string_flag, name = usable_s1, build_setting_default = "extra_gpu")
+    state_setting = name + "_state_setting"
 
     # S2 is [extra_cpu, group_gpu-test]; pinning extra_gpu excludes extra_cpu so usable_s2 is "group_gpu-test".
-    util.helper_target(string_flag, name = usable_s2, build_setting_default = "group_gpu-test")
+    util.helper_target(
+        string_flag,
+        name = state_setting,
+        build_setting_default = merge_variant_state("", {
+            "p:s1": "extra_gpu",
+            "u:s1": "extra_gpu",
+            "u:s2": "group_gpu-test",
+        }),
+    )
 
     util.helper_target(
         variant_state,
         name = name + "_state",
+        state = ":" + state_setting,
         sets = {
             "s1": ["extra_cpu", "extra_gpu"],
             "s2": ["extra_cpu", "group_gpu-test"],
-        },
-        pins = {":" + pin_s1: "s1"},
-        usables = {
-            ":" + usable_s1: "s1",
-            ":" + usable_s2: "s2",
         },
         flags = {":" + sibling_cpu: "@runtime//_variants:extra_cpu|extra_cpu"},
     )
@@ -635,25 +637,17 @@ def _expect_raw_tuple_impl(expected):
 
 def _register_pin_inheritance_tests():
     """Register consumer-pinned -> __build pin-inheritance and reset tests."""
-    util.helper_target(string_flag, name = "_pin_inh_pin_s1", build_setting_default = "")
-    util.helper_target(string_flag, name = "_pin_inh_default_s1", build_setting_default = "")
-    util.helper_target(string_flag, name = "_pin_inh_usable_s1", build_setting_default = "*")
-    util.helper_target(string_flag, name = "_pin_inh_usable_s2", build_setting_default = "*")
+    util.helper_target(string_flag, name = "_pin_inh_state_setting", build_setting_default = "")
     util.helper_target(bool_flag, name = "_pin_inh_build_flag", build_setting_default = False)
     util.helper_target(bool_flag, name = "_pin_inh_bf_x", build_setting_default = False)
 
     util.helper_target(
         variant_state,
         name = "_pin_inh_state",
+        state = ":_pin_inh_state_setting",
         sets = {
             "s1": ["g-a", "g-b"],
             "s2": ["g-a", "x"],
-        },
-        pins = {":_pin_inh_pin_s1": "s1"},
-        defaults = {":_pin_inh_default_s1": "s1"},
-        usables = {
-            ":_pin_inh_usable_s1": "s1",
-            ":_pin_inh_usable_s2": "s2",
         },
         flags = {":_pin_inh_bf_x": "@repo//_variants:x|x"},
     )
@@ -716,6 +710,31 @@ def _register_pin_inheritance_tests():
         ":test_reset_restores_all_usable",
     ]
 
+# buildifier: disable=unused-variable
+def _test_merge_variant_state_canonical_impl(env, target):
+    """merge_variant_state merges over incoming keys, drops defaults, and sorts canonically."""
+    s_a = merge_variant_state("", {"u:s2": "", "p:s1": "g-b"})
+    s_b = merge_variant_state("", {"p:s1": "g-b", "u:s2": ""})
+    env.expect.that_str(s_a).equals(s_b)
+    env.expect.that_dict(decode_variant_state(s_a)).contains_exactly({"p:s1": "g-b", "u:s2": ""})
+
+    # Merging __build overrides preserves upstream pin.
+    merged = merge_variant_state(s_a, {"d:s1": "g-a", "u:s1": ""})
+    env.expect.that_dict(decode_variant_state(merged)).contains_exactly({
+        "d:s1": "g-a",
+        "p:s1": "g-b",
+        "u:s1": "",
+        "u:s2": "",
+    })
+
+    # Clearing back to defaults canonicalizes to "".
+    env.expect.that_str(merge_variant_state(s_a, {"p:s1": "", "u:s2": "*"})).equals("")
+    env.expect.that_dict(decode_variant_state("")).contains_exactly({})
+
+def _test_merge_variant_state_canonical(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_merge_variant_state_canonical_impl)
+
 def variant_semantics_test_suite(name):
     """Registers generator, table-driven semantics, and cross-repo variant safety-net tests.
 
@@ -724,6 +743,7 @@ def variant_semantics_test_suite(name):
     """
     test_names = _register_pin_inheritance_tests()
     for test_name, test_fn in [
+        ("test_merge_variant_state_canonical", _test_merge_variant_state_canonical),
         ("test_render_lock_build_overlapping_and_disjoint", _test_render_lock_build_overlapping_and_disjoint),
         ("test_render_lock_build_three_set_chain", _test_render_lock_build_three_set_chain),
         ("test_cross_repo_leak_393", _test_cross_repo_leak_393),

@@ -1,7 +1,7 @@
 """Variant-reset planning and `_lock/reset.bzl` rendering.
 
-A repo's transition sets pycross's variant settings (`_pin_*`, `_default_*`,
-`_usable_*` and the repos' `_variants` flags). A package whose install and
+A repo's transition sets pycross's variant settings (`//_lock:_state` and the
+repos' `_variants` flags). A package whose install and
 whole dependency closure don't depend on them is installed with those settings
 reset (`pycross_reset_wheel_library`), so every repo shares one install.
 Packages that may fall back to an sdist build only reset where a wheel
@@ -288,22 +288,17 @@ def conflict_pairs(conflict_sets):
                     pairs[(a, b)] = True
     return pairs
 
-def render_reset_bzl(set_suffixes, flag_labels, string_flag_labels = None):
+def render_reset_bzl(flag_labels, string_flag_labels = None):
     """Renders `_lock/reset.bzl`: the variant-reset transition and rule.
 
     Args:
-        set_suffixes: The workspace's conflict set suffixes.
         flag_labels: Every member repo's `_variants` bool_flag labels.
         string_flag_labels: Optional list of member repos' `_variants` string_flag labels.
 
     Returns:
         The file content.
     """
-    outputs = []
-    for suffix in sorted(set_suffixes):
-        outputs.append((json.encode("//_lock:_pin_{}".format(suffix)), '""'))
-        outputs.append((json.encode("//_lock:_default_{}".format(suffix)), '""'))
-        outputs.append((json.encode("//_lock:_usable_{}".format(suffix)), '"*"'))
+    outputs = [(json.encode("//_lock:_state"), '""')]
     for label in sorted({label: True for label in flag_labels}.keys()):
         outputs.append((json.encode(label), "False"))
     for label in sorted({label: True for label in (string_flag_labels or [])}.keys()):

@@ -1090,15 +1090,15 @@ def _test_transition_settings_impl(env, target):
     """A transitioned repo limits unpinned sets to usable items and drops rival defaults."""
 
     def settings(info, variant_pins = {}, has_other_flags = False):
-        return transition_settings(info, variant_pins, "ws", "repo", has_other_flags).fixed_settings
+        return transition_settings(info, variant_pins, "repo", has_other_flags).state_overrides
 
     # Auto-pinned to gpu. cpu (its rival) is all it requests from the second set,
     # and it requests nothing from the third.
     info = _overlapping_variant_info({0: ["extra_app_gpu"], 1: []}, pin = {0: "extra_app_gpu"})
     env.expect.that_dict(settings(info)).contains_exactly({
-        "@ws//_lock:_pin_" + _S0: "extra_app_gpu",
-        "@ws//_lock:_usable_" + _S1: "",
-        "@ws//_lock:_usable_" + _S2: "",
+        "p:" + _S0: "extra_app_gpu",
+        "u:" + _S1: "",
+        "u:" + _S2: "",
     })
 
     # A flag pins gpu; the repo also requests cpu and gpu-test. Only gpu-test
@@ -1108,8 +1108,8 @@ def _test_transition_settings_impl(env, target):
         default = {1: "extra_app_cpu"},
     )
     env.expect.that_dict(settings(info, variant_pins = {_S0: "extra_app_gpu"}, has_other_flags = True)).contains_exactly({
-        "@ws//_lock:_pin_" + _S0: "extra_app_gpu",
-        "@ws//_lock:_usable_" + _S1: "group_app_gpu-test",
+        "p:" + _S0: "extra_app_gpu",
+        "u:" + _S1: "group_app_gpu-test",
     })
 
     # A repo with no transition sets nothing.
@@ -1118,7 +1118,7 @@ def _test_transition_settings_impl(env, target):
 
     # Outside the transition, `is_<flag>` follows the flag pin, not the rival default.
     info = _overlapping_variant_info({0: ["extra_app_cpu", "extra_app_gpu"], 1: ["extra_app_cpu"]}, default = {1: "extra_app_cpu"})
-    result = transition_settings(info, {_S0: "extra_app_gpu"}, "ws", "repo", True)
+    result = transition_settings(info, {_S0: "extra_app_gpu"}, "repo", True)
     build = variants_build(info, "ws", "repo", pins_by_set = result.pins_by_set, excluded = result.excluded)
     env.expect.that_str(build).contains('name = "_selected_extra_app_gpu"')
     env.expect.that_bool('name = "_selected_extra_app_cpu"' in build).equals(False)
@@ -1623,9 +1623,11 @@ def _test_render_transition_bzl_and_maybe_build_impl(env, _target):
         "pypi",
         ["--@rules_python//python/config_settings:python_version=3.12"],
         {},
-        {"@ws//_lock:_pin_set": "extra_a"},
+        variant_state_label = "@ws//_lock:_state",
+        variant_state_overrides = {"p:set": "extra_a"},
     )
     env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_library_proxy_rule")')
+    env.expect.that_str(bzl).contains("merge_variant_state(settings[_VARIANT_STATE_LABEL], _VARIANT_STATE_OVERRIDES)")
     env.expect.that_str(bzl).contains("pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition)")
     env.expect.that_str(bzl).contains("pycross_transitioning_file_proxy = make_file_proxy_rule(cfg = _repo_transition)")
 
