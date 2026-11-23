@@ -869,6 +869,38 @@ def _test_pycross_wheel_library_sdist_annotated_site_paths_impl(env, target):
     install_action = env.expect.that_target(target).action_named("PycrossWheelInstall")
     install_action.argv().contains_at_least(["--expected-site-path", "real_pkg"])
 
+def _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel_file",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_metadata,
+        name = name + "_wheel",
+        wheel = name + "_wheel_file",
+        site_paths = ["real_pkg"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        package_name = "my_pkg",
+        package_version = "1.0",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:venvs_site_packages")): "no",
+        },
+        impl = _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths_impl,
+    )
+
+def _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths_impl(env, target):
+    install_action = env.expect.that_target(target).action_named("PycrossWheelInstall")
+    install_action.argv().not_contains("--expected-site-path")
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -908,5 +940,6 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_library_bin_only_venv_symlinks,
             _test_pycross_wheel_library_sdist_advisory_site_paths,
             _test_pycross_wheel_library_sdist_annotated_site_paths,
+            _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths,
         ],
     )

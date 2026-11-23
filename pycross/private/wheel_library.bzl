@@ -295,9 +295,12 @@ def _pycross_wheel_library_impl(ctx):
     if not include_paths and wheel_pkg_info:
         include_paths = wheel_pkg_info.include_paths
 
-    # Only build venv LIB links (and verify installed top-level paths) from exact
-    # wheel metadata or explicit site_paths annotations. Repo-time sdist guesses
-    # stay advisory for modules_mapping while keeping [imp] on sys.path.
+    venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
+
+    # Only build venv LIB links (and verify installed top-level paths under
+    # venvs_site_packages=yes) from exact wheel metadata or explicit site_paths
+    # annotations. Repo-time sdist guesses stay advisory for modules_mapping
+    # while keeping [imp] on sys.path.
     venv_site_paths = site_paths if site_paths_exact else []
 
     precompile_cache_tag = _register_wheel_install_action(
@@ -305,7 +308,7 @@ def _pycross_wheel_library_impl(ctx):
         out,
         entry_points,
         dist_info_dir,
-        expected_site_paths = venv_site_paths,
+        expected_site_paths = venv_site_paths if venvs_site_packages_enabled else [],
     )
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
@@ -315,8 +318,6 @@ def _pycross_wheel_library_impl(ctx):
         ctx.label.name,
         "site-packages",  # we put lib files in this subdirectory.
     )
-
-    venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
 
     # Build venv symlink entries for rules_python's venvs_site_packages support.
     # Each top-level package gets a symlink from the venv's site-packages/<tlp>

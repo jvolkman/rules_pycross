@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -27,9 +28,7 @@ from installer.utils import Scheme
 from installer.utils import construct_record_file
 from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.inspect_package import _EXCLUDED_ROOT_MODULES
-from pycross.private.tools.inspect_package import _extract_module_name
-from pycross.private.tools.inspect_package import _resolve_top_level_paths
+from pycross.private.tools.inspect_package import find_installed_site_paths
 from pycross_patch import apply_patch_or_exit
 
 _COMPILE_SCRIPT = """\
@@ -255,49 +254,6 @@ def _validate_wheel_identity(
         )
 
 
-def _actual_site_paths(lib_dir: Path) -> set[str]:
-    """Compute the real top-level site-packages paths installed under `lib_dir`.
-
-    Mirrors `inspect_package._find_wheel_paths` so regular packages, namespace
-    packages, top-level modules, and auditwheel `<pkg>.libs` directories are
-    classified identically to prebuilt wheel inspection.
-    """
-    if not lib_dir.is_dir():
-        return set()
-
-    all_files: set[str] = set()
-    top_level_dirs: set[str] = set()
-    root_files: set[str] = set()
-
-    for root, dirs, files in os.walk(lib_dir):
-        rel_root = Path(root).relative_to(lib_dir)
-        if rel_root == Path("."):
-            dirs[:] = sorted(d for d in dirs if not d.endswith(".dist-info") and d != "__pycache__")
-            for fn in files:
-                root_files.add(fn)
-            continue
-
-        top_dir = rel_root.parts[0]
-        top_level_dirs.add(top_dir)
-        dirs[:] = sorted(d for d in dirs if d != "__pycache__")
-        for fn in files:
-            rel_posix = (rel_root / fn).as_posix()
-            all_files.add(rel_posix)
-
-    def _read_file(rel_path: str) -> str | None:
-        target = lib_dir / rel_path
-        if not target.is_file():
-            return None
-        return target.read_text(encoding="utf-8", errors="replace")
-
-    pkgs = _resolve_top_level_paths(all_files, top_level_dirs, _read_file)
-    for fn in root_files:
-        name = _extract_module_name(fn)
-        if name and name not in _EXCLUDED_ROOT_MODULES:
-            pkgs.add(fn)
-    return pkgs
-
-
 def _is_excluded_site_path(site_path: str, install_exclude_globs: List[str]) -> bool:
     for pattern in install_exclude_globs:
         if fnmatch.fnmatchcase(site_path, pattern) or fnmatch.fnmatchcase(site_path + "/", pattern):
@@ -315,24 +271,33 @@ def _validate_site_paths(
     install_exclude_globs: List[str],
     package_name: str | None,
 ) -> None:
-    """Verify that expected/annotated `site_paths` match the installed wheel layout."""
+    """Verify expected/annotated `site_paths` against the installed wheel layout.
+
+    Fails if any expected path is missing from the installed wheel (which would
+    create dangling venv symlinks). Warns if the wheel installs additional
+    top-level paths not covered by `expected_site_paths` (allowing deliberate
+    annotated subsets and post-install patches that add modules).
+    """
     active_expected = [p for p in expected_site_paths if not _is_excluded_site_path(p, install_exclude_globs)]
     missing = sorted(p for p in active_expected if not (lib_dir / p).exists())
-    actual = _actual_site_paths(lib_dir)
+    actual = find_installed_site_paths(lib_dir)
     uncovered = sorted(a for a in actual if not any(a == p or a.startswith(p + "/") for p in active_expected))
     if not missing and not uncovered:
         return
 
     pkg_desc = package_name or lib_dir.parent.name
-    details: list[str] = []
     if missing:
-        details.append(f"expected paths not found in wheel: {missing}")
-    if uncovered:
-        details.append(f"installed paths missing from expected site_paths: {uncovered}")
-    suggested = sorted(actual)
-    raise SystemExit(
-        f"error: site_paths mismatch for '{pkg_desc}' ({'; '.join(details)}). "
-        f"Annotate site_paths = {suggested!r} for '{pkg_desc}'."
+        details = [f"expected paths not found in wheel: {missing}"]
+        if uncovered:
+            details.append(f"installed paths not in site_paths: {uncovered}")
+        raise SystemExit(
+            f"error: site_paths mismatch for '{pkg_desc}' ({'; '.join(details)}). "
+            f"Annotate site_paths = {actual!r} for '{pkg_desc}'."
+        )
+
+    sys.stderr.write(
+        f"warning: '{pkg_desc}' installed additional top-level paths not in site_paths: {uncovered}. "
+        f"Annotate site_paths = {actual!r} for '{pkg_desc}' to include them in the venv.\n"
     )
 
 

@@ -2,6 +2,7 @@ import argparse
 import ast
 import configparser
 import json
+import os
 import sys
 import tarfile
 import tempfile
@@ -560,6 +561,57 @@ def _inspect_patched_sdist(
         return content, site_paths
 
 
+def _classify_site_paths(
+    all_files: set[str],
+    top_level_dirs: set[str],
+    root_files: set[str],
+    read_file: Optional[FileReader] = None,
+) -> list[str]:
+    """Classify site-packages entries into concrete top-level importable paths."""
+    pkgs = _resolve_top_level_paths(all_files, top_level_dirs, read_file)
+    for f in root_files:
+        name = _extract_module_name(f)
+        if name and name not in _EXCLUDED_ROOT_MODULES:
+            pkgs.add(f)
+    return sorted(pkgs)
+
+
+def find_installed_site_paths(lib_dir: Path) -> list[str]:
+    """Return concrete top-level site_paths installed under a site-packages directory.
+
+    Shares classification with wheel inspection (`_find_wheel_paths`) so regular
+    packages, namespace packages, top-level modules, and auditwheel `<pkg>.libs`
+    directories stay consistent between repo-time inspection and install-time
+    validation.
+    """
+    if not lib_dir.is_dir():
+        return []
+
+    all_files: set[str] = set()
+    top_level_dirs: set[str] = set()
+    root_files: set[str] = set()
+
+    for root, dirs, files in os.walk(lib_dir):
+        rel_root = Path(root).relative_to(lib_dir)
+        if rel_root == Path("."):
+            dirs[:] = sorted(d for d in dirs if not d.endswith(".dist-info") and d != "__pycache__")
+            root_files.update(files)
+            continue
+
+        top_level_dirs.add(rel_root.parts[0])
+        dirs[:] = sorted(d for d in dirs if d != "__pycache__")
+        for fn in files:
+            all_files.add((rel_root / fn).as_posix())
+
+    def read_file(rel_path: str) -> Optional[str]:
+        target = lib_dir / rel_path
+        if not target.is_file():
+            return None
+        return target.read_text(encoding="utf-8", errors="replace")
+
+    return _classify_site_paths(all_files, top_level_dirs, root_files, read_file)
+
+
 def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
     all_files: set[str] = set()
     top_level_dirs: set[str] = set()
@@ -615,17 +667,10 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
         def read_file(path: str) -> Optional[str]:
             return z.read(members[path]).decode("utf-8", "replace") if path in members else None
 
-        pkgs = _resolve_top_level_paths(all_files, top_level_dirs, read_file)
+        site_paths = _classify_site_paths(all_files, top_level_dirs, root_files, read_file)
 
         if entry_points_member is not None:
             bin_paths.update(_parse_entry_points(z.read(entry_points_member).decode("utf-8")))
-
-    for f in root_files:
-        name = _extract_module_name(f)
-        if name and name not in _EXCLUDED_ROOT_MODULES:
-            pkgs.add(f)
-
-    site_paths = sorted(pkgs)
 
     return site_paths, sorted(bin_paths), sorted(data_paths), sorted(include_paths)
 
