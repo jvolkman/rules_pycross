@@ -1,6 +1,6 @@
 """Generator, table-driven semantics, and cross-repo safety-net tests for conflict variants."""
 
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo", "bool_flag", "string_flag")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test")
 load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
@@ -20,15 +20,91 @@ def _variant_tuple_impl(ctx):
     values = {}
     for target, set_id in ctx.attr.resolvers.items():
         values[set_id] = target[config_common.FeatureFlagInfo].value
+    if ctx.attr.build_flag:
+        values["_build_flag"] = "true" if ctx.attr.build_flag[BuildSettingInfo].value else "false"
     return [_VariantTupleInfo(values = values)]
 
 _variant_tuple = rule(
     implementation = _variant_tuple_impl,
     attrs = {
+        "build_flag": attr.label(
+            providers = [BuildSettingInfo],
+        ),
         "resolvers": attr.label_keyed_string_dict(
             providers = [config_common.FeatureFlagInfo],
         ),
     },
+    provides = [_VariantTupleInfo],
+)
+
+# ── Transition rules for consumer-pinned → __build inheritance & reset ──
+
+_PIN_INH_PIN_S1 = "//tests/unit:_pin_inh_pin_s1"
+_PIN_INH_DEFAULT_S1 = "//tests/unit:_pin_inh_default_s1"
+_PIN_INH_USABLE_S1 = "//tests/unit:_pin_inh_usable_s1"
+_PIN_INH_USABLE_S2 = "//tests/unit:_pin_inh_usable_s2"
+_PIN_INH_BUILD_FLAG = "//tests/unit:_pin_inh_build_flag"
+
+def _consumer_pin_transition_impl(_settings, _attr):
+    return {
+        _PIN_INH_PIN_S1: "g-b",
+        _PIN_INH_USABLE_S2: "",
+    }
+
+_consumer_pin_transition = transition(
+    implementation = _consumer_pin_transition_impl,
+    inputs = [],
+    outputs = [_PIN_INH_PIN_S1, _PIN_INH_USABLE_S2],
+)
+
+def _flagged_build_transition_impl(_settings, _attr):
+    return {
+        _PIN_INH_BUILD_FLAG: True,
+        _PIN_INH_DEFAULT_S1: "g-a",
+        _PIN_INH_USABLE_S1: "",
+    }
+
+_flagged_build_transition = transition(
+    implementation = _flagged_build_transition_impl,
+    inputs = [],
+    outputs = [_PIN_INH_BUILD_FLAG, _PIN_INH_DEFAULT_S1, _PIN_INH_USABLE_S1],
+)
+
+def _reset_state_transition_impl(_settings, _attr):
+    return {
+        _PIN_INH_PIN_S1: "",
+        _PIN_INH_DEFAULT_S1: "",
+        _PIN_INH_USABLE_S1: "*",
+        _PIN_INH_USABLE_S2: "*",
+    }
+
+_reset_state_transition = transition(
+    implementation = _reset_state_transition_impl,
+    inputs = [],
+    outputs = [_PIN_INH_PIN_S1, _PIN_INH_DEFAULT_S1, _PIN_INH_USABLE_S1, _PIN_INH_USABLE_S2],
+)
+
+def _forward_tuple_impl(ctx):
+    return [ctx.attr.dep[_VariantTupleInfo]]
+
+_consumer_pin_wrapper = rule(
+    implementation = _forward_tuple_impl,
+    attrs = {"dep": attr.label(mandatory = True, providers = [_VariantTupleInfo])},
+    cfg = _consumer_pin_transition,
+    provides = [_VariantTupleInfo],
+)
+
+_flagged_build_wrapper = rule(
+    implementation = _forward_tuple_impl,
+    attrs = {"dep": attr.label(mandatory = True, providers = [_VariantTupleInfo])},
+    cfg = _flagged_build_transition,
+    provides = [_VariantTupleInfo],
+)
+
+_reset_state_wrapper = rule(
+    implementation = _forward_tuple_impl,
+    attrs = {"dep": attr.label(mandatory = True, providers = [_VariantTupleInfo])},
+    cfg = _reset_state_transition,
     provides = [_VariantTupleInfo],
 )
 
@@ -551,13 +627,102 @@ def _test_default_only_repo_fails_on_sibling_rival_flag(name):
         },
     )
 
+def _expect_raw_tuple_impl(expected):
+    def _impl(env, target):
+        env.expect.that_dict(target[_VariantTupleInfo].values).contains_exactly(expected)
+
+    return _impl
+
+def _register_pin_inheritance_tests():
+    """Register consumer-pinned -> __build pin-inheritance and reset tests."""
+    util.helper_target(string_flag, name = "_pin_inh_pin_s1", build_setting_default = "")
+    util.helper_target(string_flag, name = "_pin_inh_default_s1", build_setting_default = "")
+    util.helper_target(string_flag, name = "_pin_inh_usable_s1", build_setting_default = "*")
+    util.helper_target(string_flag, name = "_pin_inh_usable_s2", build_setting_default = "*")
+    util.helper_target(bool_flag, name = "_pin_inh_build_flag", build_setting_default = False)
+    util.helper_target(bool_flag, name = "_pin_inh_bf_x", build_setting_default = False)
+
+    util.helper_target(
+        variant_state,
+        name = "_pin_inh_state",
+        sets = {
+            "s1": ["g-a", "g-b"],
+            "s2": ["g-a", "x"],
+        },
+        pins = {":_pin_inh_pin_s1": "s1"},
+        defaults = {":_pin_inh_default_s1": "s1"},
+        usables = {
+            ":_pin_inh_usable_s1": "s1",
+            ":_pin_inh_usable_s2": "s2",
+        },
+        flags = {":_pin_inh_bf_x": "@repo//_variants:x|x"},
+    )
+    util.helper_target(
+        variant_set_projection,
+        name = "_pin_inh_res_s1",
+        state = ":_pin_inh_state",
+        set_key = "s1",
+    )
+    util.helper_target(
+        variant_set_projection,
+        name = "_pin_inh_res_s2",
+        state = ":_pin_inh_state",
+        set_key = "s2",
+    )
+    util.helper_target(
+        _variant_tuple,
+        name = "_pin_inh_probe",
+        build_flag = ":_pin_inh_build_flag",
+        resolvers = {
+            ":_pin_inh_res_s1": "s1",
+            ":_pin_inh_res_s2": "s2",
+        },
+    )
+
+    # 1. Consumer-pinned -> plain __build (no transition) inherits consumer pin.
+    util.helper_target(_consumer_pin_wrapper, name = "_pin_inh_plain_build", dep = ":_pin_inh_probe")
+    analysis_test(
+        name = "test_consumer_pin_inherited_by_plain_build",
+        target = ":_pin_inh_plain_build",
+        impl = _expect_raw_tuple_impl({"s1": "g-b", "s2": "", "_build_flag": "false"}),
+    )
+
+    # 2. Consumer-pinned -> __build with its own transition (explicit flag + default/usable,
+    #    no pin) inherits consumer pin and applies its own flag.
+    util.helper_target(_flagged_build_wrapper, name = "_pin_inh_flagged_inner", dep = ":_pin_inh_probe")
+    util.helper_target(_consumer_pin_wrapper, name = "_pin_inh_flagged_build", dep = ":_pin_inh_flagged_inner")
+    analysis_test(
+        name = "test_consumer_pin_inherited_by_flagged_build",
+        target = ":_pin_inh_flagged_build",
+        impl = _expect_raw_tuple_impl({"s1": "g-b", "s2": "", "_build_flag": "true"}),
+    )
+
+    # 3. Consumer-pinned with usable_s2="" -> reset transition restores usable="*"
+    #    (not ""), so an ambient flag for s2 selects "x" again.
+    util.helper_target(_reset_state_wrapper, name = "_pin_inh_reset_inner", dep = ":_pin_inh_probe")
+    util.helper_target(_consumer_pin_wrapper, name = "_pin_inh_after_reset", dep = ":_pin_inh_reset_inner")
+    analysis_test(
+        name = "test_reset_restores_all_usable",
+        target = ":_pin_inh_after_reset",
+        impl = _expect_raw_tuple_impl({"s1": "", "s2": "x", "_build_flag": "false"}),
+        config_settings = {
+            str(Label(":_pin_inh_bf_x")): True,
+        },
+    )
+
+    return [
+        ":test_consumer_pin_inherited_by_plain_build",
+        ":test_consumer_pin_inherited_by_flagged_build",
+        ":test_reset_restores_all_usable",
+    ]
+
 def variant_semantics_test_suite(name):
     """Registers generator, table-driven semantics, and cross-repo variant safety-net tests.
 
     Args:
         name: Name of the generated test_suite target.
     """
-    test_names = []
+    test_names = _register_pin_inheritance_tests()
     for test_name, test_fn in [
         ("test_render_lock_build_overlapping_and_disjoint", _test_render_lock_build_overlapping_and_disjoint),
         ("test_render_lock_build_three_set_chain", _test_render_lock_build_three_set_chain),
