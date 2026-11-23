@@ -208,12 +208,13 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
     selected = {}  # qname -> condition label
     for qname, set_suffixes in sorted(defaults.items()):
         needs_selects = True
-        unselected = unselected_condition(sorted(set_suffixes), workspace_repo, groups, local_prefix = ":")
+        unselected = unselected_condition(sorted(set_suffixes), workspace_repo, local_prefix = ":")
+        groups.update(unselected.groups)
         selected[qname] = ":_selected_{}".format(qname)
         body.extend(config_setting_group(
             "_selected_{}".format(qname),
             "match_any",
-            ["@{}//_lock:is_{}".format(workspace_repo, qname), unselected],
+            ["@{}//_lock:is_{}".format(workspace_repo, qname), unselected.condition],
         ))
 
     # `_unselected_all_<hash>`: all of several conflict sets are unselected.

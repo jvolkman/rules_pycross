@@ -109,10 +109,13 @@ def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys,
         helper_prefix: Prefix for intermediate helper targets.
         packages: Lock packages dict, or None.
         used: Optional dict tracking emitted helper loads (`"selects"`).
+
+    Returns:
+        Dict of `{group_name: set_suffixes}` for any `_unselected_all_*` groups referenced.
     """
     available_set = {k: True for k in (available_keys or [])}
     if not target_dict or (not available_set and "" in target_dict):
-        return
+        return {}
 
     if len(target_dict) == 1 and "" in target_dict:
         only_key = target_dict[""]
@@ -120,7 +123,7 @@ def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys,
             fail("Single-branch target '{}' not found in available_keys {}".format(only_key, available_keys))
         avail_cond = availability_condition(lines, helper_prefix, only_key, packages, workspace_repo, used = used)
         lines.extend(_maybe_select_alias(maybe_name, avail_cond, pkg_target))
-        return
+        return {}
 
     emitted_helpers = {}
     branch_targets = {}
@@ -146,10 +149,12 @@ def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys,
             branches.append(("@{}//_lock:is_{}".format(workspace_repo, constraint), branch_target))
 
     default_target = None
+    unselected_groups = {}
     if "" not in branch_targets:
         unselected = unselected_branch(branch_targets.keys(), no_variant_fallbacks, workspace_repo)
         if unselected:
-            branches.append((unselected[0], NO_VARIANT_PREFIX + unselected[1]))
+            branches.append((unselected.condition, NO_VARIANT_PREFIX + unselected.error_set))
+            unselected_groups.update(unselected.unselected_groups)
         default_target = "//:_empty_library"
 
     lines.extend(alias(
@@ -157,6 +162,7 @@ def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys,
         select_expr(branches, default = default_target, indent = 1),
         actual_is_expr = True,
     ))
+    return unselected_groups
 
 def render_maybe_build(maybe_mapping_targets, packages, workspace_repo):
     """Render `__maybe/BUILD.bazel` with platform-specific aliases reusing `//:_empty_library`.

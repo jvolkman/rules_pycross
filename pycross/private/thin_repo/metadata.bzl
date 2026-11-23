@@ -185,7 +185,8 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
         subdir: Subdirectory name under the repo (default `"_cargo"`).
 
     Returns:
-        Generated `<subdir>/BUILD.bazel` file content, or None if no packages match.
+        `struct(build, unselected_groups)` with generated `<subdir>/BUILD.bazel` content
+        and any required `_unselected_all_*` groups, or None if no packages match.
     """
     effective_backends = LEGACY_CARGO_HOOK_BACKENDS if hook_backends == None else hook_backends
     if not effective_backends:
@@ -197,6 +198,7 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
     ]
 
     has_targets = False
+    unselected_groups = {}
     for base_pin_name in sorted(grouped_pins.keys()):
         us_name = underscore_name(base_pin_name)
         target_dict = effective_base_target_dict(grouped_pins[base_pin_name])
@@ -216,7 +218,7 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
         if not matched_target_dict:
             continue
 
-        actual_target = target_select(
+        sel = target_select(
             matched_target_dict,
             "@{}//{}:".format(workspace_repo, subdir),
             workspace_repo,
@@ -224,22 +226,10 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
             all_target_dict = target_dict,
             fallback_target = NO_MATCH_ERROR_TARGET,
         )
-
-        lines.extend(alias(us_name, actual_target, actual_is_expr = True))
+        unselected_groups.update(sel.unselected_groups)
+        lines.extend(alias(us_name, sel.expr, actual_is_expr = True))
         has_targets = True
 
     if not has_targets:
         return None
-    return "\n".join(lines)
-
-def cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None, cargo_backends = None):
-    """Backwards-compat wrapper rendering `_cargo/BUILD.bazel` via `hook_subdir_build`."""
-    return hook_subdir_build(
-        grouped_pins,
-        packages,
-        override_configs,
-        workspace_repo,
-        no_variant_fallbacks = no_variant_fallbacks,
-        hook_backends = cargo_backends,
-        subdir = "_cargo",
-    )
+    return struct(build = "\n".join(lines), unselected_groups = unselected_groups)

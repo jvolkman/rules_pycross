@@ -11,36 +11,39 @@ def variant_fallbacks(sets_by_constraint):
             constraint that needs a variant.
 
     Returns:
-        struct(sets, groups). `groups` collects the `_unselected_all_<hash>`
-        targets that selects reference, for variants_build to emit.
+        `struct(sets)` mapping each variant-gated constraint to its conflict set suffixes.
     """
-    return struct(sets = sets_by_constraint, groups = {})
+    return struct(sets = sets_by_constraint)
 
 def unselected_all_name(set_suffixes):
     """Return the deterministic `_unselected_all_<hash>` target name for `set_suffixes`."""
     return "_unselected_all_%x" % (hash("|".join(set_suffixes)) & 0xffffffff)
 
-def unselected_condition(set_suffixes, workspace_repo, groups, local_prefix = "//_variants:"):
+def unselected_condition(set_suffixes, workspace_repo, local_prefix = "//_variants:"):
     """Return the condition label matching when every conflict set in `set_suffixes` is unselected.
 
     For a single set, points directly at `@<workspace_repo>//_lock:_unselected_<set>`.
-    For multiple sets, records an `_unselected_all_<hash>` group in `groups` and returns
-    its label under `local_prefix`.
+    For multiple sets, returns a `_unselected_all_<hash>` label under `local_prefix`
+    alongside the `{group_name: set_suffixes}` dict for `variants_build` to emit.
 
     Args:
         set_suffixes: Sorted non-empty list of conflict set suffixes.
         workspace_repo: Name of the workspace (backing) repo.
-        groups: Mutable dict collecting `{group_name: set_suffixes}` to emit in `_variants/BUILD.bazel`.
         local_prefix: Label prefix for multi-set `_unselected_all_*` groups (`"//_variants:"` or `":"`).
 
     Returns:
-        Config setting label string.
+        `struct(condition, groups)` with the config_setting label and any required `_unselected_all_*` groups.
     """
     if len(set_suffixes) == 1:
-        return "@{}//_lock:_unselected_{}".format(workspace_repo, set_suffixes[0])
+        return struct(
+            condition = "@{}//_lock:_unselected_{}".format(workspace_repo, set_suffixes[0]),
+            groups = {},
+        )
     name = unselected_all_name(set_suffixes)
-    groups[name] = set_suffixes
-    return local_prefix + name
+    return struct(
+        condition = local_prefix + name,
+        groups = {name: set_suffixes},
+    )
 
 def unselected_branch(constraints, no_variant_fallbacks, workspace_repo):
     """The select() branch for "no variant selected", or None.
@@ -55,7 +58,7 @@ def unselected_branch(constraints, no_variant_fallbacks, workspace_repo):
         workspace_repo: Name of the workspace (backing) repo.
 
     Returns:
-        (condition label, conflict set for the error target), or None.
+        `struct(condition, error_set, unselected_groups)`, or None.
     """
     if not no_variant_fallbacks:
         return None
@@ -72,8 +75,12 @@ def unselected_branch(constraints, no_variant_fallbacks, workspace_repo):
     for set_suffix in set_suffixes:
         if counts[set_suffix] > counts[error_set]:
             error_set = set_suffix
-    cond = unselected_condition(set_suffixes, workspace_repo, no_variant_fallbacks.groups)
-    return (cond, error_set)
+    res = unselected_condition(set_suffixes, workspace_repo)
+    return struct(
+        condition = res.condition,
+        error_set = error_set,
+        unselected_groups = res.groups,
+    )
 
 def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     """Render a target label or `select({...})` mapping constraints to lock targets.
@@ -89,14 +96,18 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
         aggregated_keys: Set/dict of base keys that have extras, or None.
 
     Returns:
-        Starlark expression string (encoded label or `select({...})`).
+        `struct(expr, label, unselected_groups)` where `expr` is the Starlark expression
+        string (encoded label or `select({...})`), `label` is the raw target label when
+        unconditional (else None), and `unselected_groups` maps any required
+        `_unselected_all_*` group names to their set suffixes.
     """
     effective_all = all_target_dict if all_target_dict != None else target_dict
     if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
         t = target_dict[""]
         if is_aggregated:
             t = aggregated_key(t, aggregated_keys)
-        return json.encode(prefix + t)
+        label = prefix + t
+        return struct(expr = json.encode(label), label = label, unselected_groups = {})
 
     branches = []
     for constraint in effective_all.keys():
@@ -123,17 +134,23 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
     # Variant defaults come from this repo's transition (`_default_<set>`), not from
     # //conditions:default.
     default_target = None
+    unselected_groups = {}
     if "" not in effective_all:
         unselected = unselected_branch(effective_all.keys(), no_variant_fallbacks, workspace_repo)
         if unselected:
-            branches.append((unselected[0], NO_VARIANT_PREFIX + unselected[1]))
+            branches.append((unselected.condition, NO_VARIANT_PREFIX + unselected.error_set))
+            unselected_groups.update(unselected.unselected_groups)
         if fallback_target:
             default_target = fallback_target
 
-    return select_expr(branches, default = default_target, indent = 1)
+    return struct(
+        expr = select_expr(branches, default = default_target, indent = 1),
+        label = None,
+        unselected_groups = unselected_groups,
+    )
 
 def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET, aggregated_keys = None):
-    """Emit an intermediate select alias if needed, return the actual expression for the proxy.
+    """Emit an intermediate select alias if needed, returning the actual expression and label.
 
     When transitions are active (has_transition is True) and target_dict has variants
     or resolution-marker forks (would generate a select()), we emit an intermediate alias in the
@@ -155,10 +172,12 @@ def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, 
         aggregated_keys: Set/dict of base keys that have extras, or None.
 
     Returns:
-        Starlark expression string (with trailing comma) for the proxy's `actual` attr.
+        `struct(expr, label, unselected_groups)` where `expr` is the Starlark expression
+        (without a trailing comma), `label` is the target label (always non-None when
+        `has_transition` is True or `target_dict` is unconditional), and `unselected_groups`
+        collects any required `_unselected_all_*` groups.
     """
-    effective_all = all_target_dict if all_target_dict != None else target_dict
-    actual = target_select(
+    sel = target_select(
         target_dict,
         prefix,
         workspace_repo,
@@ -168,7 +187,8 @@ def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, 
         fallback_target = fallback_target,
         aggregated_keys = aggregated_keys,
     )
-    if has_transition and not (len(effective_all) == 1 and "" in effective_all and "" in target_dict):
-        actual_lines.extend(alias(alias_name, actual, actual_is_expr = True))
-        return "{},".format(json.encode("{}:{}".format(actual_pkg_ref, alias_name)))
-    return "{},".format(actual)
+    if has_transition and sel.label == None:
+        actual_lines.extend(alias(alias_name, sel.expr, actual_is_expr = True))
+        label = "{}:{}".format(actual_pkg_ref, alias_name)
+        return struct(expr = json.encode(label), label = label, unselected_groups = sel.unselected_groups)
+    return sel
