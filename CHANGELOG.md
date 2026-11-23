@@ -61,6 +61,14 @@ All notable changes to this project will be documented in this file.
   to all sdist links (including configure/feature probes). Remove linkopts
   duplicated on build rules, or point `native_deps` at a headers-only target if
   a dependency's `linkopts` shouldn't apply.
+- **`pycross_wheel_library` internal `venvs_site_packages` wiring.** Moved the
+  internal `experimental_venvs_site_packages` attribute to a private
+  `_venvs_site_packages` attribute read directly via `BuildSettingInfo`,
+  dropping the private load of `@rules_python//python/private:flags.bzl`.
+- **Deprecated `pycross.configure_toolchains(platforms = ...)`.** The attribute
+  is a no-op in v2 (target platforms come from Bazel's `--platforms` flag and
+  registered `rules_python` toolchains) and now prints a deprecation warning
+  when set.
 - **`dev_dependency = True` lock repos** register in
   `root_module_direct_dev_deps` so `bazel mod tidy` places them under dev
   dependencies.

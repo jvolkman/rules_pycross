@@ -180,10 +180,9 @@ Use one target per library, as with `cc_import`, and connect them with
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 
-pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-bin_paths">bin_paths</a>, <a href="#pycross_wheel_library-data_paths">data_paths</a>, <a href="#pycross_wheel_library-experimental_venvs_site_packages">experimental_venvs_site_packages</a>,
-                      <a href="#pycross_wheel_library-include_paths">include_paths</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>, <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>,
-                      <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-precompile">precompile</a>, <a href="#pycross_wheel_library-precompile_invalidation_mode">precompile_invalidation_mode</a>,
-                      <a href="#pycross_wheel_library-precompile_optimize_level">precompile_optimize_level</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
+pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-bin_paths">bin_paths</a>, <a href="#pycross_wheel_library-data_paths">data_paths</a>, <a href="#pycross_wheel_library-include_paths">include_paths</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>,
+                      <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>, <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-precompile">precompile</a>,
+                      <a href="#pycross_wheel_library-precompile_invalidation_mode">precompile_invalidation_mode</a>, <a href="#pycross_wheel_library-precompile_optimize_level">precompile_optimize_level</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
 Installs a Python wheel into a TreeArtifact directory and exposes it as a `PyInfo` library.
@@ -197,7 +196,6 @@ Installs a Python wheel into a TreeArtifact directory and exposes it as a `PyInf
 | <a id="pycross_wheel_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-bin_paths"></a>bin_paths |  The list of bin paths provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-data_paths"></a>data_paths |  The list of data paths provided by this wheel.   | List of strings | optional |  `[]`  |
-| <a id="pycross_wheel_library-experimental_venvs_site_packages"></a>experimental_venvs_site_packages |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_python+//python/config_settings:venvs_site_packages"`  |
 | <a id="pycross_wheel_library-include_paths"></a>include_paths |  The list of include paths provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-package_name"></a>package_name |  The name of the package. Used for providing PycrossPackageInfo.   | String | optional |  `""`  |

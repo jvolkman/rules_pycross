@@ -36,6 +36,10 @@ def _pycross_impl(module_ctx):
             "Both python_interpreter_target and python_defs_file must be set",
         )
 
+    if toolchains_tag and toolchains_tag.platforms:
+        # buildifier: disable=print
+        print("WARNING: pycross.configure_toolchains(platforms = ...) is deprecated and has no effect; remove it from MODULE.bazel.")
+
     toolchains_attrs = {
         k: getattr(toolchains_tag, k)
         for k in CONFIGURE_TOOLCHAINS_ATTRS.keys()
@@ -67,7 +71,7 @@ pycross = module_extension(
             },
         ),
         "configure_toolchains": tag_class(
-            doc = "Restrict the target platforms and Python versions, and set platform version constraints.",
+            doc = "Restrict the Python versions and set platform version constraints.",
             attrs = CONFIGURE_TOOLCHAINS_ATTRS,
         ),
     },

@@ -6,12 +6,6 @@ load("@rules_python//python:py_info.bzl", "PyInfo")
 
 # buildifier: disable=bzl-visibility
 load(
-    "@rules_python//python/private:flags.bzl",
-    "VenvsSitePackages",
-)
-
-# buildifier: disable=bzl-visibility
-load(
     "@rules_python//python/private:py_info.bzl",
     "VenvSymlinkEntry",
     "VenvSymlinkKind",
@@ -295,7 +289,7 @@ def _pycross_wheel_library_impl(ctx):
     if not include_paths and wheel_pkg_info:
         include_paths = wheel_pkg_info.include_paths
 
-    venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
+    venvs_site_packages_enabled = ctx.attr._venvs_site_packages[BuildSettingInfo].value == "yes"
 
     # Only build venv LIB links (and verify installed top-level paths under
     # venvs_site_packages=yes) from exact wheel metadata or explicit site_paths
@@ -438,7 +432,7 @@ _WHEEL_LIBRARY_ATTRS = dict({
     "_precompile_invalidation_mode": attr.label(
         default = Label("//pycross/settings:precompile_invalidation_mode"),
     ),
-    "experimental_venvs_site_packages": attr.label(
+    "_venvs_site_packages": attr.label(
         default = Label("@rules_python//python/config_settings:venvs_site_packages"),
     ),
 }, **PY_COMMON_ATTRS)
