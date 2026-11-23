@@ -3,7 +3,7 @@ package(default_visibility = ["//visibility:public"])
 load(":lock.bzl", "targets")
 
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
-load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")
+load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_set_projection", "variant_state")
 
 targets()
 
@@ -22,12 +22,20 @@ string_flag(
     build_setting_default = "*",
 )
 
-variant_resolver(
-    name = "_resolver_extra_app_cpu_extra_app_gpu",
-    pin = ":_pin_extra_app_cpu_extra_app_gpu",
-    default_setting = ":_default_extra_app_cpu_extra_app_gpu",
-    usable = ":_usable_extra_app_cpu_extra_app_gpu",
-    items = ["extra_app_cpu","extra_app_gpu"],
+variant_state(
+    name = "_variant_state",
+    sets = {
+        "extra_app_cpu_extra_app_gpu": ["extra_app_cpu","extra_app_gpu"],
+    },
+    pins = {
+        ":_pin_extra_app_cpu_extra_app_gpu": "extra_app_cpu_extra_app_gpu",
+    },
+    defaults = {
+        ":_default_extra_app_cpu_extra_app_gpu": "extra_app_cpu_extra_app_gpu",
+    },
+    usables = {
+        ":_usable_extra_app_cpu_extra_app_gpu": "extra_app_cpu_extra_app_gpu",
+    },
     flags = {
         "@golden_sdist_reset//_variants:extra_cpu": "@golden_sdist_reset//_variants:extra_cpu|extra_app_cpu",
         "@golden_sdist_reset//_variants:extra_gpu": "@golden_sdist_reset//_variants:extra_gpu|extra_app_gpu",
@@ -35,6 +43,12 @@ variant_resolver(
     string_flags = {
         "@golden_sdist_reset//_variants:_variants": "{\"display\":\"@golden_sdist_reset//_variants\",\"map\":{\"extra_cpu\":[\"extra_app_cpu\"],\"extra_gpu\":[\"extra_app_gpu\"]},\"valid\":[\"extra_cpu\",\"extra_gpu\"]}",
     },
+)
+
+variant_set_projection(
+    name = "_resolver_extra_app_cpu_extra_app_gpu",
+    state = ":_variant_state",
+    set_key = "extra_app_cpu_extra_app_gpu",
 )
 
 config_setting(

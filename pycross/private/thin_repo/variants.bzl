@@ -1,7 +1,7 @@
 """Variant flag collection, transition settings, and `_variants/BUILD.bazel` generation."""
 
 load("//pycross/private:build_text.bzl", "alias", "config_setting_group")
-load("//pycross/private:util.bzl", "variant_item_qname")
+load("//pycross/private:util.bzl", "excluded_variant_items", "variant_item_qname")
 load(":selects.bzl", "unselected_condition")
 
 def collect_variants(variant_sets):
@@ -75,16 +75,10 @@ def excluded_items(variant_info, pins_by_set):
     Returns:
         {qname: True}.
     """
-    excluded = {}
-    pinned = pins_by_set.values()
-    for vset in variant_info.sets.values():
-        for qname in pinned:
-            if qname not in vset.qnames:
-                continue
-            for other in vset.qnames:
-                if other != qname:
-                    excluded[other] = True
-    return excluded
+    return excluded_variant_items(
+        [vset.qnames for vset in variant_info.sets.values()],
+        pins_by_set.values(),
+    )
 
 def usable_settings(variant_info, pins_by_set, excluded, workspace_repo):
     """`_usable_<set>` settings for a transitioned repo.

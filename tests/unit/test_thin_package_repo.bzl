@@ -4,10 +4,10 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "overlapping_rivals_for_testing", "run_package_repo_hooks_for_testing")
+load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "run_package_repo_hooks_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "coerce_transition_values", "is_platform_specific", "marker_evaluator_name", "split_setting_value", "url_filename")
+load("//pycross/private:util.bzl", "coerce_transition_values", "excluded_variant_items", "is_platform_specific", "marker_evaluator_name", "split_setting_value", "url_filename")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
@@ -1484,13 +1484,10 @@ def _test_modules_mapping_deps_selection_impl(env, target):
     env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s1))
     env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s2))
 
-    # 6. overlapping_rivals_for_testing maps overlapping conflict sets to their shared qnames
-    #    (including multi-item overlaps) and ignores disjoint sets.
-    vset_s1 = {"qnames": ["a", "b"]}
-    vset_s2 = {"qnames": ["a", "b", "c"]}
-    vset_s3_disjoint = {"qnames": ["d", "e"]}
-    rivals = overlapping_rivals_for_testing(vset_s2, [vset_s1, vset_s2, vset_s3_disjoint])
-    env.expect.that_dict(rivals).contains_exactly({"a_b": ["a", "b"]})
+    # 6. excluded_variant_items returns rivals across overlapping conflict sets and ignores disjoint sets.
+    env.expect.that_dict(
+        excluded_variant_items([["a", "b"], ["a", "b", "c"], ["d", "e"]], ["a"]),
+    ).contains_exactly({"b": True, "c": True})
 
 def _test_modules_mapping_deps_selection(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

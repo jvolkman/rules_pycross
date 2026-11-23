@@ -17,7 +17,7 @@ The file structure is as follows:
 
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
-load(":build_text.bzl", "alias", "config_setting_group", "flag_setting")
+load(":build_text.bzl", "alias", "flag_setting")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
 load(":util.bzl", "is_wheel_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
@@ -97,22 +97,6 @@ def _merge_dependencies(first_data, entries):
 # Visible for testing
 merge_dependencies_for_testing = _merge_dependencies
 
-def _overlapping_rivals(vset, variant_sets):
-    """Return {other_suffix: sorted_shared_qnames} for conflict sets overlapping `vset`."""
-    set_suffix = "_".join(sorted(vset["qnames"]))
-    rivals = {}
-    for other_vset in variant_sets:
-        other_suffix = "_".join(sorted(other_vset["qnames"]))
-        if other_suffix == set_suffix:
-            continue
-        shared = [q for q in sorted(vset["qnames"]) if q in other_vset["qnames"]]
-        if shared:
-            rivals[other_suffix] = shared
-    return rivals
-
-# Visible for testing
-overlapping_rivals_for_testing = _overlapping_rivals
-
 def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_variant_flags):
     """Render `_lock/BUILD.bazel` for a workspace package repo."""
     lock_build_lines = [
@@ -121,82 +105,104 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
         'load(":lock.bzl", "targets")',
         "",
     ]
+
+    needs_item_projection = any([len(resolvers) > 1 for resolvers in qname_to_resolvers.values()])
     if variant_items:
         lock_build_lines.append('load("@bazel_skylib//rules:common_settings.bzl", "string_flag")')
-        lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
+        if needs_item_projection:
+            lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_item_projection", "variant_set_projection", "variant_state")')
+        else:
+            lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_set_projection", "variant_state")')
         lock_build_lines.append("")
-
-    # Check if we need config_setting_group for items in multiple sets.
-    needs_config_setting_group = False
-    for _qname, resolvers in qname_to_resolvers.items():
-        if len(resolvers) > 1:
-            needs_config_setting_group = True
-            break
-    if needs_config_setting_group:
-        lock_build_lines.extend([
-            'load("@bazel_skylib//lib:selects.bzl", "selects")',
-            "",
-        ])
 
     lock_build_lines.extend([
         "targets()",
         "",
     ])
 
-    # Emit variant_resolver targets for each conflict set (two stages for
-    # overlapping sets so defaults can check rival explicit selections without
-    # cycles). There are no static defaults here: the thin repos select variants. Their _variants bool_flags
-    # feed the resolver directly (one flag can enable several items, e.g.
-    # `group_test` in a repo with two projects), and their transitions set
-    # `_pin_<set>` (from `uv.repo(flags/settings)`) or `_default_<set>` (from
-    # the repo's default-groups). Precedence: pin > flags > default. A
-    # transitioned repo also sets `_usable_<set>` to the items it can use, so
-    # flags and defaults for other items are ignored there.
-    for vset in variant_sets:
-        set_suffix = "_".join(sorted(vset["qnames"]))
-        resolver_name = "_resolver_" + set_suffix
-        rivals = _overlapping_rivals(vset, variant_sets)
+    if variant_sets:
+        # Collect unique set keys, consolidated bool_flag mappings, and
+        # per-member string_flag mappings across all conflict sets.
+        sets_by_suffix = {}  # set_suffix -> sorted qnames
+        all_flags = {}  # flag_label -> [unique qnames]
+        member_flag_maps = {}  # member -> {flag -> [unique qnames]}
+        for vset in variant_sets:
+            sorted_qnames = sorted(vset["qnames"])
+            set_suffix = "_".join(sorted_qnames)
+            sets_by_suffix[set_suffix] = sorted_qnames
+            for flag_label, qnames in vset["flags"].items():
+                dest = all_flags.setdefault(flag_label, [])
+                for q in qnames:
+                    if q not in dest:
+                        dest.append(q)
+            for member, fmap in vset.get("member_flags", {}).items():
+                m_dest = member_flag_maps.setdefault(member, {})
+                for flag, qnames in fmap.items():
+                    dest = m_dest.setdefault(flag, [])
+                    for q in qnames:
+                        if q not in dest:
+                            dest.append(q)
+
+        # There are no static defaults here: thin repos select variants. Their
+        # `_variants` bool_flags and string_flags feed `_variant_state` once,
+        # and their transitions set `_pin_<set>` (from `uv.repo(flags/settings)`
+        # or auto-pin), `_default_<set>` (from default-groups), and
+        # `_usable_<set>` (narrowing to items the repo can use).
+        for set_suffix in sorted(sets_by_suffix.keys()):
+            lock_build_lines.extend([
+                "string_flag(",
+                '    name = "_pin_{}",'.format(set_suffix),
+                '    build_setting_default = "",',
+                ")",
+                "",
+                "string_flag(",
+                '    name = "_default_{}",'.format(set_suffix),
+                '    build_setting_default = "",',
+                ")",
+                "",
+                "string_flag(",
+                '    name = "_usable_{}",'.format(set_suffix),
+                '    build_setting_default = "*",',
+                ")",
+                "",
+            ])
 
         lock_build_lines.extend([
-            "string_flag(",
-            '    name = "_pin_{}",'.format(set_suffix),
-            '    build_setting_default = "",',
-            ")",
-            "",
-            "string_flag(",
-            '    name = "_default_{}",'.format(set_suffix),
-            '    build_setting_default = "",',
-            ")",
-            "",
-            "string_flag(",
-            '    name = "_usable_{}",'.format(set_suffix),
-            '    build_setting_default = "*",',
-            ")",
-            "",
+            "variant_state(",
+            '    name = "_variant_state",',
+            "    sets = {",
         ])
-
-        # Overlapping sets split into two stages so `_resolver_<set>` can check
-        # rival sets' explicit selections without creating a target cycle.
-        flag_resolver_name = "_explicit_" + set_suffix if rivals else resolver_name
+        for set_suffix, qnames in sorted(sets_by_suffix.items()):
+            lock_build_lines.append('        "{}": {},'.format(set_suffix, json.encode(qnames)))
         lock_build_lines.extend([
-            "variant_resolver(",
-            '    name = "{}",'.format(flag_resolver_name),
-            '    pin = ":_pin_{}",'.format(set_suffix),
+            "    },",
+            "    pins = {",
         ])
-        if not rivals:
-            lock_build_lines.append('    default_setting = ":_default_{}",'.format(set_suffix))
+        for set_suffix in sorted(sets_by_suffix.keys()):
+            lock_build_lines.append('        ":_pin_{}": "{}",'.format(set_suffix, set_suffix))
         lock_build_lines.extend([
-            '    usable = ":_usable_{}",'.format(set_suffix),
-            "    items = {},".format(json.encode(sorted(vset["qnames"]))),
+            "    },",
+            "    defaults = {",
+        ])
+        for set_suffix in sorted(sets_by_suffix.keys()):
+            lock_build_lines.append('        ":_default_{}": "{}",'.format(set_suffix, set_suffix))
+        lock_build_lines.extend([
+            "    },",
+            "    usables = {",
+        ])
+        for set_suffix in sorted(sets_by_suffix.keys()):
+            lock_build_lines.append('        ":_usable_{}": "{}",'.format(set_suffix, set_suffix))
+        lock_build_lines.extend([
+            "    },",
             "    flags = {",
         ])
-        for flag_label, qnames in sorted(vset["flags"].items()):
+        for flag_label, qnames in sorted(all_flags.items()):
             lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
         lock_build_lines.append("    },")
         if member_variant_flags:
             lock_build_lines.append("    string_flags = {")
             for member in sorted(member_variant_flags.keys()):
-                flag_map = vset["member_flags"].get(member, {})
+                flag_map = member_flag_maps.get(member, {})
                 spec = {
                     "display": "@{}//_variants".format(member),
                     "valid": sorted(member_variant_flags[member].keys()),
@@ -209,41 +215,36 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
             "",
         ])
 
-        if rivals:
+        for set_suffix in sorted(sets_by_suffix.keys()):
+            resolver_name = "_resolver_" + set_suffix
             lock_build_lines.extend([
-                "variant_resolver(",
+                "variant_set_projection(",
                 '    name = "{}",'.format(resolver_name),
-                '    explicit = ":_explicit_{}",'.format(set_suffix),
-                '    default_setting = ":_default_{}",'.format(set_suffix),
-                '    usable = ":_usable_{}",'.format(set_suffix),
-                "    items = {},".format(json.encode(sorted(vset["qnames"]))),
-                "    rival_resolvers = {",
-            ])
-            for other_suffix, shared in sorted(rivals.items()):
-                lock_build_lines.append('        ":_explicit_{}": "{}",'.format(other_suffix, " ".join(shared)))
-            lock_build_lines.extend([
-                "    },",
+                '    state = ":_variant_state",',
+                '    set_key = "{}",'.format(set_suffix),
                 ")",
                 "",
             ])
+            lock_build_lines.extend(flag_setting("_unselected_{}".format(set_suffix), ":" + resolver_name, "", inline = True))
 
-        lock_build_lines.extend(flag_setting("_unselected_{}".format(set_suffix), ":" + resolver_name, "", inline = True))
-
-    # Emit config_settings referencing the resolver(s).
+    # Emit config_settings referencing the per-set or per-item projection.
     for qname in sorted(variant_items.keys()):
         resolvers = qname_to_resolvers.get(qname, [])
         if len(resolvers) == 1:
             # Simple case: item is in exactly one conflict set.
             lock_build_lines.extend(flag_setting("is_{}".format(qname), ":" + resolvers[0], qname, inline = True))
         elif len(resolvers) > 1:
-            # Item appears in multiple conflict sets: OR them together.
-            for j, resolver in enumerate(resolvers):
-                lock_build_lines.extend(flag_setting("_is_{}_via_{}".format(qname, j), ":" + resolver, qname, inline = True))
-            lock_build_lines.extend(config_setting_group(
-                "is_{}".format(qname),
-                "match_any",
-                [":_is_{}_via_{}".format(qname, j) for j in range(len(resolvers))],
-            ))
+            # Item appears in multiple conflict sets: project directly from `_variant_state`.
+            item_proj_name = "_item_" + qname
+            lock_build_lines.extend([
+                "variant_item_projection(",
+                '    name = "{}",'.format(item_proj_name),
+                '    state = ":_variant_state",',
+                '    item = "{}",'.format(qname),
+                ")",
+                "",
+            ])
+            lock_build_lines.extend(flag_setting("is_{}".format(qname), ":" + item_proj_name, "true", inline = True))
 
     return "\n".join(lock_build_lines)
 

@@ -9,7 +9,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:package_repo.bzl", "render_lock_build_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_resolver")
+load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_set_projection", "variant_state")
 
 _VariantTupleInfo = provider(
     doc = "Resolved variant values across a set of resolvers.",
@@ -45,7 +45,7 @@ def _extract_block(text, name):
 
 # buildifier: disable=unused-variable
 def _test_render_lock_build_overlapping_and_disjoint_impl(env, target):
-    """Overlapping sets emit two-stage _explicit_/_resolver_ with rival_resolvers; disjoint sets stay single-stage."""
+    """All conflict sets share one variant_state; sets use variant_set_projection and multi-set items use variant_item_projection."""
     variant_sets = [
         {
             "qnames": ["group_g-a", "group_g-b"],
@@ -103,44 +103,38 @@ def _test_render_lock_build_overlapping_and_disjoint_impl(env, target):
         member_variant_flags,
     )
 
-    # Set 1 ([group_g-a, group_g-b]) has _explicit_ (pin/flags/string_flags/usable, NO default_setting)
-    # and _resolver_ (explicit/default_setting/usable/items/rival_resolvers).
-    exp1 = _extract_block(rendered, "_explicit_group_g-a_group_g-b")
-    env.expect.that_str(exp1).contains('pin = ":_pin_group_g-a_group_g-b",')
-    env.expect.that_str(exp1).contains('usable = ":_usable_group_g-a_group_g-b",')
-    env.expect.that_str(exp1).contains("flags = {")
-    env.expect.that_str(exp1).contains("string_flags = {")
-    env.expect.that_bool("default_setting" in exp1).equals(False)
+    # Single joint variant_state holds all sets, settings, and consolidated flags once.
+    state = _extract_block(rendered, "_variant_state")
+    env.expect.that_str(state).contains('"group_g-a_group_g-b": ["group_g-a","group_g-b"],')
+    env.expect.that_str(state).contains('"extra_x_group_g-a": ["extra_x","group_g-a"],')
+    env.expect.that_str(state).contains('"extra_p_extra_q": ["extra_p","extra_q"],')
+    env.expect.that_str(state).contains('":_pin_group_g-a_group_g-b": "group_g-a_group_g-b",')
+    env.expect.that_str(state).contains('":_default_extra_x_group_g-a": "extra_x_group_g-a",')
+    env.expect.that_str(state).contains('":_usable_extra_p_extra_q": "extra_p_extra_q",')
+    env.expect.that_str(state).contains('"@app//_variants:group_g-a": "@app//_variants:group_g-a|group_g-a",')
+    env.expect.that_int(rendered.count('"@app//_variants:_variants":')).equals(1)
+    env.expect.that_bool("_explicit_" in rendered).equals(False)
+    env.expect.that_bool("rival_resolvers" in rendered).equals(False)
+    env.expect.that_bool("selects.config_setting_group" in rendered).equals(False)
 
+    # Each set emits a thin variant_set_projection under its `_resolver_<set>` name.
     res1 = _extract_block(rendered, "_resolver_group_g-a_group_g-b")
-    env.expect.that_str(res1).contains('explicit = ":_explicit_group_g-a_group_g-b",')
-    env.expect.that_str(res1).contains('default_setting = ":_default_group_g-a_group_g-b",')
-    env.expect.that_str(res1).contains('usable = ":_usable_group_g-a_group_g-b",')
-    env.expect.that_str(res1).contains('items = ["group_g-a","group_g-b"],')
-    env.expect.that_str(res1).contains('":_explicit_extra_x_group_g-a": "group_g-a",')
-
-    # Set 2 ([extra_x, group_g-a]) mirrors Set 1.
-    exp2 = _extract_block(rendered, "_explicit_extra_x_group_g-a")
-    env.expect.that_str(exp2).contains('pin = ":_pin_extra_x_group_g-a",')
-    env.expect.that_bool("default_setting" in exp2).equals(False)
-
-    res2 = _extract_block(rendered, "_resolver_extra_x_group_g-a")
-    env.expect.that_str(res2).contains('explicit = ":_explicit_extra_x_group_g-a",')
-    env.expect.that_str(res2).contains('default_setting = ":_default_extra_x_group_g-a",')
-    env.expect.that_str(res2).contains('":_explicit_group_g-a_group_g-b": "group_g-a",')
-
-    # Disjoint set ([extra_p, extra_q]) gets a single resolver directly (no _explicit_, no rival_resolvers).
-    env.expect.that_bool("_explicit_extra_p_extra_q" in rendered).equals(False)
+    env.expect.that_str(res1).contains('state = ":_variant_state",')
+    env.expect.that_str(res1).contains('set_key = "group_g-a_group_g-b",')
     res_disjoint = _extract_block(rendered, "_resolver_extra_p_extra_q")
-    env.expect.that_str(res_disjoint).contains('pin = ":_pin_extra_p_extra_q",')
-    env.expect.that_str(res_disjoint).contains('default_setting = ":_default_extra_p_extra_q",')
-    env.expect.that_str(res_disjoint).contains('usable = ":_usable_extra_p_extra_q",')
-    env.expect.that_bool("rival_resolvers" in res_disjoint).equals(False)
+    env.expect.that_str(res_disjoint).contains('state = ":_variant_state",')
+    env.expect.that_str(res_disjoint).contains('set_key = "extra_p_extra_q",')
 
-    # Shared item `group_g-a` emits via config_settings + match_any group.
-    env.expect.that_str(rendered).contains('name = "_is_group_g-a_via_0",')
-    env.expect.that_str(rendered).contains('name = "_is_group_g-a_via_1",')
-    env.expect.that_str(rendered).contains('name = "is_group_g-a",')
+    # Multi-set item `group_g-a` uses a variant_item_projection; single-set items match `_resolver_*` directly.
+    item_ga = _extract_block(rendered, "_item_group_g-a")
+    env.expect.that_str(item_ga).contains('state = ":_variant_state",')
+    env.expect.that_str(item_ga).contains('item = "group_g-a",')
+    is_ga = _extract_block(rendered, "is_group_g-a")
+    env.expect.that_str(is_ga).contains('flag_values = {":_item_group_g-a": "true"},')
+    is_gb = _extract_block(rendered, "is_group_g-b")
+    env.expect.that_str(is_gb).contains('flag_values = {":_resolver_group_g-a_group_g-b": "group_g-b"},')
+    env.expect.that_bool("_item_group_g-b" in rendered).equals(False)
+    env.expect.that_bool("_via_" in rendered).equals(False)
 
 def _test_render_lock_build_overlapping_and_disjoint(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -148,7 +142,7 @@ def _test_render_lock_build_overlapping_and_disjoint(name):
 
 # buildifier: disable=unused-variable
 def _test_render_lock_build_three_set_chain_impl(env, target):
-    """A 3-set chain wires both neighbors into the middle set's rival_resolvers."""
+    """A 3-set chain wires all 3 sets into one variant_state and projects only the two shared items."""
     variant_sets = [
         {"qnames": ["group_g-a", "group_g-b"], "flags": {}, "member_flags": {}},
         {"qnames": ["extra_x", "group_g-a"], "flags": {}, "member_flags": {}},
@@ -164,17 +158,16 @@ def _test_render_lock_build_three_set_chain_impl(env, target):
 
     rendered = render_lock_build_for_testing(variant_items, variant_sets, qname_to_resolvers, {})
 
-    mid = _extract_block(rendered, "_resolver_extra_x_group_g-a")
-    env.expect.that_str(mid).contains('":_explicit_extra_x_extra_y": "extra_x",')
-    env.expect.that_str(mid).contains('":_explicit_group_g-a_group_g-b": "group_g-a",')
+    state = _extract_block(rendered, "_variant_state")
+    env.expect.that_str(state).contains('"group_g-a_group_g-b": ["group_g-a","group_g-b"],')
+    env.expect.that_str(state).contains('"extra_x_group_g-a": ["extra_x","group_g-a"],')
+    env.expect.that_str(state).contains('"extra_x_extra_y": ["extra_x","extra_y"],')
 
-    end1 = _extract_block(rendered, "_resolver_group_g-a_group_g-b")
-    env.expect.that_str(end1).contains('":_explicit_extra_x_group_g-a": "group_g-a",')
-    env.expect.that_bool("_explicit_extra_x_extra_y" in end1).equals(False)
-
-    end3 = _extract_block(rendered, "_resolver_extra_x_extra_y")
-    env.expect.that_str(end3).contains('":_explicit_extra_x_group_g-a": "extra_x",')
-    env.expect.that_bool("_explicit_group_g-a_group_g-b" in end3).equals(False)
+    env.expect.that_str(rendered).contains('name = "_item_group_g-a",')
+    env.expect.that_str(rendered).contains('name = "_item_extra_x",')
+    env.expect.that_bool("_item_group_g-b" in rendered).equals(False)
+    env.expect.that_bool("_item_extra_y" in rendered).equals(False)
+    env.expect.that_bool("_explicit_" in rendered).equals(False)
 
 def _test_render_lock_build_three_set_chain(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -199,7 +192,7 @@ _CHAIN_SETS = {
 _CHAIN_ALL_ITEMS = ["g-a", "g-b", "x", "y"]
 
 def _wire_chain_resolvers(prefix, pins = {}, defaults = {}, usables = {}):
-    """Wire a 3-set overlapping chain of variant_resolvers and return (tuple_target, flag_labels)."""
+    """Wire a 3-set overlapping chain via one variant_state + projections and return (tuple_target, flag_labels, sf_label)."""
     bool_labels = {}
     for item in _CHAIN_ALL_ITEMS:
         fname = "{}_bf_{}".format(prefix, item)
@@ -210,56 +203,45 @@ def _wire_chain_resolvers(prefix, pins = {}, defaults = {}, usables = {}):
     util.helper_target(string_flag, name = sf_name, build_setting_default = "")
     sf_label = ":" + sf_name
 
-    # First stage: explicit resolvers (pins + bool_flags + string_flags + usable).
-    explicit_labels = {}
-    usable_labels = {}
-    for sid, items in sorted(_CHAIN_SETS.items()):
+    pin_map = {}
+    default_map = {}
+    usable_map = {}
+    for sid in sorted(_CHAIN_SETS.keys()):
         pin_name = "{}_pin_{}".format(prefix, sid)
+        def_name = "{}_default_{}".format(prefix, sid)
         usable_name = "{}_usable_{}".format(prefix, sid)
         util.helper_target(string_flag, name = pin_name, build_setting_default = pins.get(sid, ""))
-        util.helper_target(string_flag, name = usable_name, build_setting_default = usables.get(sid, "*"))
-        usable_labels[sid] = ":" + usable_name
-
-        exp_name = "{}_explicit_{}".format(prefix, sid)
-        spec = {
-            "display": "@repo//_variants",
-            "valid": list(_CHAIN_ALL_ITEMS),
-            "map": {item: [item] for item in items},
-        }
-        util.helper_target(
-            variant_resolver,
-            name = exp_name,
-            items = items,
-            pin = ":" + pin_name,
-            usable = ":" + usable_name,
-            flags = {bool_labels[item]: "@repo//_variants:{}|{}".format(item, item) for item in items},
-            string_flags = {sf_label: json.encode(spec)},
-        )
-        explicit_labels[sid] = ":" + exp_name
-
-    # Second stage: final resolvers with defaults and rival_resolvers.
-    resolver_map = {}
-    for sid, items in sorted(_CHAIN_SETS.items()):
-        def_name = "{}_default_{}".format(prefix, sid)
         util.helper_target(string_flag, name = def_name, build_setting_default = defaults.get(sid, ""))
+        util.helper_target(string_flag, name = usable_name, build_setting_default = usables.get(sid, "*"))
+        pin_map[":" + pin_name] = sid
+        default_map[":" + def_name] = sid
+        usable_map[":" + usable_name] = sid
 
-        rivals = {}
-        for other_sid, other_items in sorted(_CHAIN_SETS.items()):
-            if other_sid == sid:
-                continue
-            shared = [q for q in items if q in other_items]
-            if shared:
-                rivals[explicit_labels[other_sid]] = " ".join(shared)
+    state_name = "{}_state".format(prefix)
+    spec = {
+        "display": "@repo//_variants",
+        "valid": list(_CHAIN_ALL_ITEMS),
+        "map": {item: [item] for item in _CHAIN_ALL_ITEMS},
+    }
+    util.helper_target(
+        variant_state,
+        name = state_name,
+        sets = _CHAIN_SETS,
+        pins = pin_map,
+        defaults = default_map,
+        usables = usable_map,
+        flags = {bool_labels[item]: "@repo//_variants:{}|{}".format(item, item) for item in _CHAIN_ALL_ITEMS},
+        string_flags = {sf_label: json.encode(spec)},
+    )
 
+    resolver_map = {}
+    for sid in sorted(_CHAIN_SETS.keys()):
         res_name = "{}_resolver_{}".format(prefix, sid)
         util.helper_target(
-            variant_resolver,
+            variant_set_projection,
             name = res_name,
-            explicit = explicit_labels[sid],
-            default_setting = ":" + def_name,
-            usable = usable_labels[sid],
-            items = items,
-            rival_resolvers = rivals,
+            state = ":" + state_name,
+            set_key = sid,
         )
         resolver_map[":" + res_name] = sid
 
@@ -470,33 +452,36 @@ def _test_cross_repo_leak_393(name):
     util.helper_target(string_flag, name = usable_s2, build_setting_default = "group_gpu-test")
 
     util.helper_target(
-        variant_resolver,
-        name = name + "_explicit_s1",
-        items = ["extra_cpu", "extra_gpu"],
-        pin = ":" + pin_s1,
-        usable = ":" + usable_s1,
+        variant_state,
+        name = name + "_state",
+        sets = {
+            "s1": ["extra_cpu", "extra_gpu"],
+            "s2": ["extra_cpu", "group_gpu-test"],
+        },
+        pins = {":" + pin_s1: "s1"},
+        usables = {
+            ":" + usable_s1: "s1",
+            ":" + usable_s2: "s2",
+        },
         flags = {":" + sibling_cpu: "@runtime//_variants:extra_cpu|extra_cpu"},
     )
     util.helper_target(
-        variant_resolver,
-        name = name + "_explicit_s2",
-        items = ["extra_cpu", "group_gpu-test"],
-        usable = ":" + usable_s2,
-        flags = {":" + sibling_cpu: "@runtime//_variants:extra_cpu|extra_cpu"},
+        variant_set_projection,
+        name = name + "_resolver_s1",
+        state = ":" + name + "_state",
+        set_key = "s1",
     )
     util.helper_target(
-        variant_resolver,
+        variant_set_projection,
         name = name + "_resolver_s2",
-        explicit = ":" + name + "_explicit_s2",
-        usable = ":" + usable_s2,
-        items = ["extra_cpu", "group_gpu-test"],
-        rival_resolvers = {":" + name + "_explicit_s1": "extra_cpu"},
+        state = ":" + name + "_state",
+        set_key = "s2",
     )
     util.helper_target(
         _variant_tuple,
         name = name + "_tuple",
         resolvers = {
-            ":" + name + "_explicit_s1": "s1",
+            ":" + name + "_resolver_s1": "s1",
             ":" + name + "_resolver_s2": "s2",
         },
     )
