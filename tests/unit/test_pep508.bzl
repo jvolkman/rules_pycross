@@ -10,10 +10,10 @@ load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:pep508_marker_values.bzl", "format_full_version_for_testing")
+load("//pycross/private:target_platform.bzl", "PycrossTargetPlatformInfo", "pycross_target_platform")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:target_platform.bzl", "PycrossTargetPlatformInfo", "pycross_target_platform")
+load("//pycross/private:util.bzl", "marker_evaluator_name", "marker_uses_extra")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_chooser.bzl", "pycross_wheel_chooser", "pycross_wheel_matched", "select_best_wheel")
@@ -514,18 +514,25 @@ def _test_target_platform_linux_x86_32_and_pypy(name):
         impl = _test_target_platform_linux_x86_32_and_pypy_impl,
     )
 
-def _test_format_full_version_impl(env, _target):
-    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 14, micro = 2, releaselevel = "final", serial = 0))).equals("3.14.2")
-    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 14, micro = 0, releaselevel = "candidate", serial = 1))).equals("3.14.0rc1")
-    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 15, micro = 0, releaselevel = "alpha", serial = 0))).equals("3.15.0a0")
-    env.expect.that_str(format_full_version_for_testing(struct(major = 3, minor = 14, micro = 0, releaselevel = "beta", serial = 2))).equals("3.14.0b2")
+def _test_marker_uses_extra_impl(env, _target):
+    env.expect.that_bool(marker_uses_extra("extra == 'test'")).equals(True)
+    env.expect.that_bool(marker_uses_extra("sys_platform == 'linux' and extra == 'dev'")).equals(True)
+    env.expect.that_bool(marker_uses_extra("sys_platform == 'linux'")).equals(False)
+    env.expect.that_bool(marker_uses_extra("'foo' in extras")).equals(False)
+    env.expect.that_bool(marker_uses_extra("platform_version == 'extra'")).equals(False)
+    env.expect.that_str(marker_evaluator_name("'foo' in extras", "dev")).equals(
+        marker_evaluator_name("'foo' in extras", ""),
+    )
+    env.expect.that_str(marker_evaluator_name("extra == 'dev'", "dev")).not_equals(
+        marker_evaluator_name("extra == 'dev'", ""),
+    )
 
-def _test_format_full_version(name):
+def _test_marker_uses_extra(name):
     util.helper_target(native.filegroup, name = name + "_subject")
     analysis_test(
         name = name,
         target = name + "_subject",
-        impl = _test_format_full_version_impl,
+        impl = _test_marker_uses_extra_impl,
     )
 
 # ============================================================================
@@ -550,7 +557,7 @@ def pep508_test_suite(name):
             _test_target_platform_win_arm64,
             _test_target_platform_win_x86_32,
             _test_target_platform_linux_x86_32_and_pypy,
-            _test_format_full_version,
+            _test_marker_uses_extra,
             _test_cycle_reachable,
             _test_cycle_marker_gated,
             _test_cycle_self_reachable,

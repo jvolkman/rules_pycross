@@ -10,6 +10,7 @@ not explicitly provided.
 """
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@pypackaging.bzl", "pypackaging")
 
 # Maps @platforms//os constraint values to PEP 508 sys_platform values.
 # Synced with rules_python's pep508_env.bzl sys_platform_select_map.
@@ -119,31 +120,6 @@ def flag_value(target):
         return target[BuildSettingInfo].value
     return ""
 
-_RELEASE_LEVEL_MAP = {
-    "alpha": "a",
-    "beta": "b",
-    "candidate": "rc",
-    "final": "",
-}
-
-def _format_full_version(version_info):
-    """Format a full version string from interpreter_version_info (PEP 508)."""
-    releaselevel = version_info.releaselevel
-    if not releaselevel or releaselevel == "final":
-        kind = ""
-        serial = ""
-    else:
-        kind = _RELEASE_LEVEL_MAP.get(releaselevel, releaselevel[0])
-        serial = str(version_info.serial) if version_info.serial != None else ""
-
-    return "{major}.{minor}.{micro}{kind}{serial}".format(
-        major = version_info.major,
-        minor = version_info.minor,
-        micro = version_info.micro,
-        kind = kind,
-        serial = serial,
-    )
-
 def marker_value_attrs():
     """Returns default attr values for PEP 508 marker dimensions.
 
@@ -250,7 +226,7 @@ def collect_markers(ctx):
         vi = runtime.interpreter_version_info if (not has_explicit_py_version and hasattr(runtime, "interpreter_version_info")) else None
         if vi:
             python_version = "{}.{}".format(vi.major, vi.minor)
-            full_ver = _format_full_version(vi)
+            full_ver = pypackaging.markers.format_full_version(vi)
             python_full_version = full_ver
             if not implementation_version:
                 implementation_version = full_ver
@@ -316,6 +292,3 @@ marker_value = rule(
     },
     doc = """Converts a string (possibly configurable via select()) into a FeatureFlagInfo provider.""",
 )
-
-# Visible for testing
-format_full_version_for_testing = _format_full_version

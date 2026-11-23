@@ -1,7 +1,7 @@
 """PEP 508 dependency and resolution-marker evaluator rendering for `_lock/lock.bzl`."""
 
 load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
-load("//pycross/private:util.bzl", "marker_evaluator_name", "parse_package_key")
+load("//pycross/private:util.bzl", "marker_evaluator_name", "marker_uses_extra", "parse_package_key")
 load(":common.bzl", "ind")
 
 def format_variants_attr(resolvers):
@@ -34,9 +34,9 @@ def collect_unique_markers(packages):
             if not marker:
                 continue
 
-            # Optimization: if "extra" is not in the marker string, it doesn't reference the extra variable.
-            # We can share a single evaluator by setting extra to "".
-            effective_extra = extra if "extra" in marker else ""
+            # Optimization: if the marker doesn't reference `extra`, share a
+            # single evaluator by setting extra to "".
+            effective_extra = extra if (extra and marker_uses_extra(marker)) else ""
             markers[(marker, effective_extra)] = True
 
         # Availability markers come from root project dependency edges, which

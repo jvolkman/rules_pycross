@@ -356,7 +356,10 @@ bzl_library(
 bzl_library(
     name = "pep508_marker_values",
     srcs = ["pep508_marker_values.bzl"],
-    deps = ["@bazel_skylib//rules:common_settings"],
+    deps = [
+        "@bazel_skylib//rules:common_settings",
+        "@pypackaging.bzl//:pypackaging",
+    ],
 )
 
 bzl_library(

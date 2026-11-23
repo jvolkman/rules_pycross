@@ -204,8 +204,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             if not dep or not dep.ok:
                 # Conditional non-variant edge to a non-resettable dep: safe to
                 # reset whenever the marker does not match.
-                effective_extra = parts.extra if "extra" in md["marker"] else ""
-                eval_name = marker_evaluator_name(md["marker"], effective_extra)
+                eval_name = marker_evaluator_name(md["marker"], parts.extra)
                 nomatch[eval_name] = True
                 items.append(":{}_nomatch".format(eval_name))
                 continue
@@ -216,8 +215,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
                 continue
 
             # A conditional edge only needs the dep's gate where the edge applies.
-            effective_extra = parts.extra if "extra" in md["marker"] else ""
-            eval_name = marker_evaluator_name(md["marker"], effective_extra)
+            eval_name = marker_evaluator_name(md["marker"], parts.extra)
             nomatch[eval_name] = True
             edge_key = (eval_name, md["key"])
             if edge_key not in edge_gates:

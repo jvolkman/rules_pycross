@@ -24,7 +24,7 @@ Usage in generated lock.bzl:
 
 load("//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")
 load("//pycross/private:proxy.bzl", "pycross_library_proxy")
-load("//pycross/private:util.bzl", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "marker_evaluator_name", "marker_uses_extra", "parse_package_key", "sanitize_name")
 
 def find_unconditional_deps(member, other_members, edges):
     """Finds all members unconditionally reachable from member within the cycle.
@@ -243,7 +243,8 @@ def single_incoming_marker(member, unconditional_deps, group_members, edges):
             m = edge.get("marker")
             if not m:
                 return None
-            src_extra = parse_package_key(src).extra if "extra" in m else ""
+            src_extra = parse_package_key(src).extra
+            src_extra = src_extra if (src_extra and marker_uses_extra(m)) else ""
             edge_gate = (m, src_extra)
             if gate == None:
                 gate = edge_gate
