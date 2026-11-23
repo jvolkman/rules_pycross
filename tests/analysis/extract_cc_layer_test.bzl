@@ -5,7 +5,17 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/build:cc_toolchain_util.bzl", "convert_flags_for_testing")
+load("//pycross/private:wheel_library.bzl", "pycross_wheel_library")
+
+# buildifier: disable=bzl-visibility
+load(
+    "//pycross/private/build:cc_toolchain_util.bzl",
+    "absolutize_additional_input_paths_for_testing",
+    "convert_flags_for_testing",
+)
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/build:wheel_cc_import.bzl", "pycross_wheel_cc_import")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
@@ -23,6 +33,7 @@ def _mock_cc_layer_impl(ctx):
     )
     return [
         DefaultInfo(files = depset([cc_layer.config_json])),
+        OutputGroupInfo(transitive_files = cc_layer.transitive_files),
     ]
 
 _mock_cc_layer = rule(
@@ -222,6 +233,102 @@ def _test_convert_msvc_flags_impl(env, target):
     converted = convert_flags_for_testing("msvc-cl", ["/nologo", "/IC:/Users/foo/include", "-O2"])
     env.expect.that_collection(converted).contains_exactly(["-nologo", "-IC:/Users/foo/include", "-O2"]).in_order()
 
+def _test_extract_cc_layer_native_link_flags(name):
+    util.helper_target(
+        cc_library,
+        name = name + "_base",
+        additional_linker_inputs = ["mock.h"],
+        linkopts = [
+            "-lbase_dep",
+            "-framework",
+            "Accelerate",
+            "-Wl,--version-script=$(execpath mock.h)",
+        ],
+    )
+    util.helper_target(
+        cc_library,
+        name = name + "_left",
+        linkopts = ["-lleft_dep"],
+        deps = [name + "_base"],
+    )
+    util.helper_target(
+        cc_library,
+        name = name + "_right",
+        linkopts = ["-lright_dep"],
+        deps = [name + "_base"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_wheel_lib",
+        wheel = "test-1.0-py3-none-any.whl",
+    )
+    util.helper_target(
+        pycross_wheel_cc_import,
+        name = name + "_wheel_cc",
+        includes = ["pkg/include"],
+        linkopts = ["-Wl,-rpath,$ORIGIN/../pkg/lib"],
+        wheel_library = name + "_wheel_lib",
+    )
+    util.helper_target(
+        _mock_cc_layer,
+        name = name + "_subject",
+        native_deps = [name + "_left", name + "_right", name + "_wheel_cc"],
+        linkopts = ["-lrule_last"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_extract_cc_layer_native_link_flags_impl,
+    )
+
+def _test_extract_cc_layer_native_link_flags_impl(env, target):
+    cfg = _cc_config(target)
+    for key in ("LDFLAGS", "LDSHAREDFLAGS"):
+        val = cfg[key]
+        env.expect.where(key = key).that_str(val).contains("-lleft_dep")
+        env.expect.where(key = key).that_str(val).contains("-lright_dep")
+        env.expect.where(key = key).that_str(val).contains("-lbase_dep -framework Accelerate -Wl,--version-script=$$EXT_BUILD_ROOT$$/tests/analysis/mock.h")
+        env.expect.where(key = key).that_str(val).contains("-Wl,-rpath,$ORIGIN/../pkg/lib")
+        env.expect.where(key = key).that_bool(val.endswith(" -lrule_last")).equals(True)
+
+        # Topological link order: dependents precede shared dependency, and diamond `_base` is deduplicated.
+        env.expect.where(key = key).that_bool(val.index("-lleft_dep") < val.index("-lbase_dep")).equals(True)
+        env.expect.where(key = key).that_bool(val.index("-lright_dep") < val.index("-lbase_dep")).equals(True)
+        env.expect.where(key = key).that_int(val.count("-lbase_dep")).equals(1)
+
+    transitive_paths = [f.short_path for f in target[OutputGroupInfo].transitive_files.to_list()]
+    env.expect.that_collection(transitive_paths).contains("tests/analysis/mock.h")
+
+def _test_absolutize_additional_input_paths(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_absolutize_additional_input_paths_impl)
+
+# buildifier: disable=unused-variable
+def _test_absolutize_additional_input_paths_impl(env, target):
+    paths = ["a/pkg/foo.lds", "pkg/foo.lds.bak", "pkg/foo.lds", "external/repo/a.lds", "bazel-out/k8-opt/bin/x.def"]
+    cases = [
+        ("pkg/foo.lds", "$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        ("-Tpkg/foo.lds", "-T$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        ("-Wl,-Tpkg/foo.lds", "-Wl,-T$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        ("-Wl,-T,pkg/foo.lds", "-Wl,-T,$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        ("-Wl,--version-script=pkg/foo.lds", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        ("/DEF:bazel-out/k8-opt/bin/x.def", "/DEF:$$EXT_BUILD_ROOT$$/bazel-out/k8-opt/bin/x.def"),
+        ("@pkg/foo.lds", "@$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        # buildifier: disable=external-path
+        ("-Wl,--version-script=external/repo/a.lds", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/external/repo/a.lds"),
+        # Trailing boundary check avoids prefix-matching `pkg/foo.lds` inside `pkg/foo.lds.bak`.
+        ("-Wl,--version-script=pkg/foo.lds.bak", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/pkg/foo.lds.bak"),
+        # Longest-first avoids matching `pkg/foo.lds` inside `a/pkg/foo.lds`.
+        ("-Wl,--version-script=a/pkg/foo.lds", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/a/pkg/foo.lds"),
+        # Already-prefixed and absolute paths stay unchanged.
+        ("-Wl,--version-script=$$EXT_BUILD_ROOT$$/pkg/foo.lds", "-Wl,--version-script=$$EXT_BUILD_ROOT$$/pkg/foo.lds"),
+        ("-Wl,--version-script=/abs/pkg/foo.lds", "-Wl,--version-script=/abs/pkg/foo.lds"),
+        ("-Wl,-rpath,$ORIGIN/../lib", "-Wl,-rpath,$ORIGIN/../lib"),
+    ]
+    for flag, expected in cases:
+        got = absolutize_additional_input_paths_for_testing(flag, paths)
+        env.expect.where(flag = flag).that_str(got).equals(expected)
+
 def extract_cc_layer_test_suite(name):
     test_suite(
         name = name,
@@ -230,6 +337,8 @@ def extract_cc_layer_test_suite(name):
             _test_extract_cc_layer_user_flags,
             _test_extract_cc_layer_main_repo_includes,
             _test_extract_cc_layer_native_libraries,
+            _test_extract_cc_layer_native_link_flags,
+            _test_absolutize_additional_input_paths,
             _test_extract_cc_layer_template_vars,
             _test_extract_cc_layer_copts_no_shadowing,
             _test_convert_msvc_flags,
