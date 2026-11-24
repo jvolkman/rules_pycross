@@ -29,7 +29,7 @@ def _config_impl(ctx):
     if ctx.attr.env_style != "none":
         mixed_case = ctx.attr.env_style in ["mixed", "partial"]
         keys = ["Path", "Include", "Lib"] if mixed_case else ["PATH", "INCLUDE", "LIB"]
-        compile_entries = [env_entry(key = keys[0], value = "external/review_msvc/bin;$PATH")]
+        compile_entries = [env_entry(key = keys[0], value = "external/review_msvc/bin")]
         compile_entries.append(env_entry(key = keys[1], value = "external/review_msvc/include"))
         features.append(feature(name = "wrapper_environment", enabled = True, env_sets = [
             env_set(actions = compile_actions, env_entries = compile_entries),

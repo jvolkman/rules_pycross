@@ -225,18 +225,23 @@ def _resolve_msvc_environment(ctx: BuildContext, environment: Dict[str, str], in
     """Resolve directories in MSVC's PATH, INCLUDE, and LIB before building.
 
     Make relative paths absolute under the Bazel execroot and replace
-    $$EXT_BUILD_ROOT$$ placeholders with that root. Expand $PATH entries using
-    the existing build PATH. This keeps paths valid when the build runs from
-    the sdist directory.
+    $$EXT_BUILD_ROOT$$ placeholders with that root. Normalize resolved SDK paths
+    and append the existing build PATH after SDK PATH entries. This keeps paths
+    valid when the build runs from the sdist without normalizing inherited PATH.
     """
     result = {}
     for key, value in environment.items():
         entries = []
-        for entry in value.split(os.pathsep):
-            if key == "PATH" and entry == "$PATH":
-                entries.append(inherited_path)
-            else:
-                entries.append(resolve_sandbox_path(ctx.prefix, entry))
+        source_entries = value.split(os.pathsep) if value else []
+        # Resolve SDK paths from the execroot and normalize nonempty entries.
+        # Keep empty entries unchanged instead of normalizing them to ".".
+        for entry in source_entries:
+            resolved = resolve_sandbox_path(ctx.prefix, entry)
+            entries.append(os.path.normpath(resolved) if resolved else "")
+        # Keep existing build tools available after SDK tools so the selected
+        # MSVC compiler takes priority.
+        if key == "PATH" and inherited_path:
+            entries.append(inherited_path)
         result[key] = os.pathsep.join(entries)
     return result
 
@@ -380,10 +385,12 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         "PYCROSS_INCLUDE_PATH": os.pathsep.join(include_paths),
     }
     if native_msvc:
-        msvc_env = _resolve_msvc_environment(ctx, cc_config["msvc_env"], inherited_path)
+        raw_msvc_env = cc_config["msvc_env"]
+        msvc_env = _resolve_msvc_environment(ctx, raw_msvc_env, inherited_path)
         # Custom toolchains can omit SDK variables. Tell setuptools to use the
-        # prepared SDK only when the full environment is available.
-        if all(msvc_env.get(key) for key in ("PATH", "INCLUDE", "LIB")):
+        # prepared SDK only when the full environment is available; inherited
+        # PATH alone does not establish that the toolchain supplied an SDK PATH.
+        if raw_msvc_env.get("PATH") and all(msvc_env.get(key) for key in ("PATH", "INCLUDE", "LIB")):
             msvc_env["DISTUTILS_USE_SDK"] = "1"
         build_env_update.update(msvc_env)
     else:

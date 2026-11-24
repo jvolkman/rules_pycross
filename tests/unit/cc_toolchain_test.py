@@ -1,4 +1,5 @@
 import json
+import ntpath
 import os
 import shlex
 import shutil
@@ -11,6 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from pycross.private.build.tools.utils.cc_toolchain import _resolve_msvc_environment
 from pycross.private.build.tools.utils.cc_toolchain import get_wrapper_flags
 from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
 from pycross.private.build.tools.utils.cc_toolchain import unversioned_library_name
@@ -299,7 +301,7 @@ class CcToolchainTest(unittest.TestCase):
             "ARFLAGS": "",
             "include_dirs": ["$$EXT_BUILD_ROOT$$/dep include"],
             "msvc_env": {
-                "PATH": "external/MSVC tools/bin;$$EXT_BUILD_ROOT$$/SDK bin;$PATH",
+                "PATH": "external/MSVC tools/bin;$$EXT_BUILD_ROOT$$/SDK bin",
                 "INCLUDE": f"external/MSVC tools/include;{static_sdk_dir / 'include'}",
                 "LIB": "bazel-out/sdk/lib;$$EXT_BUILD_ROOT$$/MSVC libs",
             },
@@ -352,7 +354,68 @@ class CcToolchainTest(unittest.TestCase):
         for tool in ("cl.exe", "link.exe"):
             self.assertEqual(Path(shutil.which(tool, path=search_path)), tool_dir / tool)
 
-    def test_setup_cc_layer_expands_leading_msvc_path_without_wrappers(self):
+    def test_resolve_msvc_environment_normalizes_sdk_paths(self):
+        ctx = MockBuildContext(Path("C:/execroot"))
+        inherited_path = "D:/custom/../bin;E://user tools//bin"
+        environment = {
+            "PATH": "C:/Program Files/MSVC/../bin;$$EXT_BUILD_ROOT$$/SDK/../SDK bin;external/SDK café/bin;;",
+            "INCLUDE": "C:/Windows SDK/include/../ucrt;external/Unicode café/../headers;"
+            "$$EXT_BUILD_ROOT$$/headers space;;",
+            "LIB": "external/MSVC lib/../x64;C:/Program Files/MSVC lib/../lib;",
+        }
+
+        with (
+            patch("pycross.private.build.tools.utils.cc_toolchain.os", wraps=os) as cc_os,
+            patch("pycross.private.build.tools.utils.context.os", wraps=os) as context_os,
+        ):
+            cc_os.path = ntpath
+            cc_os.pathsep = ";"
+            context_os.path = ntpath
+            resolved = _resolve_msvc_environment(ctx, environment, inherited_path)
+
+        self.assertEqual(
+            resolved["PATH"],
+            r"C:\Program Files\bin;C:\execroot\SDK bin;C:\execroot\external\SDK café\bin;;;" + inherited_path,
+        )
+        self.assertEqual(
+            resolved["INCLUDE"],
+            r"C:\Windows SDK\ucrt;C:\execroot\external\headers;C:\execroot\headers space;;",
+        )
+        self.assertEqual(resolved["LIB"], r"C:\execroot\external\x64;C:\Program Files\lib;")
+
+    def test_resolve_msvc_environment_appends_inherited_path_after_sdk_paths(self):
+        ctx = MockBuildContext(Path("C:/execroot"))
+        inherited_path = "D:/inherited/../bin;E://user tools//bin"
+        cases = (
+            (
+                "sdk-first",
+                "C:/SDK/temp/../bin;external/SDK tools",
+                inherited_path,
+                r"C:\SDK\bin;C:\execroot\external\SDK tools;" + inherited_path,
+            ),
+            ("empty-sdk-path", "", inherited_path, inherited_path),
+            ("empty-inherited-fallback", "C:/SDK/temp/../bin", "", r"C:\SDK\bin"),
+            (
+                "preserve-empty-sdk-entries",
+                "C:/SDK/temp/../bin;;",
+                inherited_path,
+                r"C:\SDK\bin;;;" + inherited_path,
+            ),
+        )
+
+        with (
+            patch("pycross.private.build.tools.utils.cc_toolchain.os", wraps=os) as cc_os,
+            patch("pycross.private.build.tools.utils.context.os", wraps=os) as context_os,
+        ):
+            cc_os.path = ntpath
+            cc_os.pathsep = ";"
+            context_os.path = ntpath
+            for label, sdk_path, inherited, expected in cases:
+                with self.subTest(label=label):
+                    self.assertEqual(_resolve_msvc_environment(ctx, {"PATH": sdk_path}, inherited)["PATH"], expected)
+            self.assertEqual(_resolve_msvc_environment(ctx, {}, inherited_path), {})
+
+    def test_setup_cc_layer_puts_sdk_tools_before_inherited_path_without_wrappers(self):
         execroot = self.temp_path.resolve()
         sdk_tools = execroot / "sdk tools"
         user_tools = execroot / "user tools"
@@ -373,7 +436,7 @@ class CcToolchainTest(unittest.TestCase):
             "LDSHAREDFLAGS": "",
             "AR": "lib.exe",
             "ARFLAGS": "",
-            "msvc_env": {"PATH": "$PATH;sdk tools", "INCLUDE": "", "LIB": ""},
+            "msvc_env": {"PATH": "sdk tools", "INCLUDE": "", "LIB": ""},
         }
         with patch("pycross.private.build.tools.utils.cc_toolchain.os", wraps=os) as cc_os:
             cc_os.name = "nt"
@@ -381,13 +444,13 @@ class CcToolchainTest(unittest.TestCase):
             setup_cc_layer(ctx, cc_config)
 
         paths = ctx.build_env["PATH"].split(";")
-        self.assertEqual(paths[0], str(user_tools))
-        self.assertEqual(paths[1], str(execroot / "sdk tools"))
+        self.assertEqual(paths[0], str(execroot / "sdk tools"))
+        self.assertEqual(paths[1], str(user_tools))
         self.assertNotIn(str(ctx.temp_dir / "cc_layer" / "bin"), paths)
         self.assertEqual(ctx.sysconfig_vars["CC"], str(sdk_tools / "cl.exe"))
         self.assertEqual(ctx.sysconfig_vars["CXX"], str(sdk_tools / "cl.exe"))
         self.assertEqual(list((ctx.temp_dir / "cc_layer" / "bin").iterdir()), [])
-        self.assertEqual(Path(shutil.which("cl.exe", path=os.pathsep.join(paths))), user_tools / "cl.exe")
+        self.assertEqual(Path(shutil.which("cl.exe", path=os.pathsep.join(paths))), sdk_tools / "cl.exe")
         self.assertNotIn("DISTUTILS_USE_SDK", ctx.build_env)
 
     def test_incomplete_msvc_environment_does_not_enable_sdk(self):
@@ -422,7 +485,10 @@ class CcToolchainTest(unittest.TestCase):
                     cc_os.pathsep = ";"
                     setup_cc_layer(ctx, cc_config)
                 for key, value in msvc_env.items():
-                    expected = str(self.temp_path / value) if value else ""
+                    if key == "PATH":
+                        expected = inherited_path if not value else f"{self.temp_path / value};{inherited_path}"
+                    else:
+                        expected = str(self.temp_path / value) if value else ""
                     self.assertEqual(ctx.build_env[key], expected)
                 if "PATH" not in msvc_env:
                     self.assertEqual(ctx.build_env["PATH"], inherited_path)

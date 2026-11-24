@@ -15,11 +15,11 @@ def _environment_test_impl(env, target, style):
         env.expect.that_collection(msvc_env.keys()).contains_exactly([])
     elif style == "partial":
         env.expect.that_collection(msvc_env.keys()).contains_exactly(["PATH", "INCLUDE"])
-        env.expect.that_str(msvc_env["PATH"]).equals("external/review_msvc/bin;$PATH")
+        env.expect.that_str(msvc_env["PATH"]).equals("external/review_msvc/bin")
         env.expect.that_str(msvc_env["INCLUDE"]).equals("external/review_msvc/include")
     else:
         env.expect.that_collection(msvc_env.keys()).contains_exactly(["PATH", "INCLUDE", "LIB"])
-        env.expect.that_str(msvc_env["PATH"]).equals("external/review_msvc/bin;$PATH")
+        env.expect.that_str(msvc_env["PATH"]).equals("external/review_msvc/bin")
         env.expect.that_str(msvc_env["INCLUDE"]).equals("external/review_msvc/include")
         env.expect.that_str(msvc_env["LIB"]).equals("external/review_msvc/lib")
 
