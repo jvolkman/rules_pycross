@@ -934,14 +934,17 @@ def _whl(name, filename):
 
 _RESET_SETS = [["extra_app_cpu", "extra_app_gpu"]]
 
-def _reset_lock(packages):
+def _reset_lock(packages, cycle_groups = None):
     repo_map = {}
     for pkg in packages.values():
         for c in pkg.get("wheel_candidates", []):
             repo_map[c["file_reference"]["key"]] = "@r//{}:wheel".format(c["file_reference"]["key"])
         if pkg.get("sdist_file"):
             repo_map[pkg["sdist_file"]["key"]] = "@r//{}:sdist".format(pkg["sdist_file"]["key"])
-    return render_lock_bzl({"packages": packages}, repo_map, "ws__pkgs", reset_conflict_sets = _RESET_SETS)
+    lock = {"packages": packages}
+    if cycle_groups:
+        lock["cycle_groups"] = cycle_groups
+    return render_lock_bzl(lock, repo_map, "ws__pkgs", reset_conflict_sets = _RESET_SETS)
 
 def _library(res, key):
     """The rule kind and gate of a package's library target."""
@@ -996,14 +999,276 @@ def _test_reset_plan_impl(env, target):
     env.expect.that_str(_library(res, "above-gated@1.0")[0]).equals("pycross_wheel_library")
     env.expect.that_str(_library(res, "patched@1.0")[0]).equals("pycross_wheel_library")
 
-    # Packages without wheels and cycle members (and what depends on them) stay.
+    # Packages without wheels stay; pure-wheel cycle members and callers above them reset.
     env.expect.that_str(_library(res, "above-no-wheel@1.0")[0]).equals("pycross_wheel_library")
-    env.expect.that_str(_library(res, "above-cyc@1.0")[0]).equals("pycross_wheel_library")
-    env.expect.that_bool("pycross_resettable_wheel_library(\n        name = \"_raw_cyc@1.0\"" in res).equals(False)
+    env.expect.that_collection(_library(res, "_raw_cyc@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "above-cyc@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
 
 def _test_reset_plan(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_reset_plan_impl)
+
+# buildifier: disable=unused-variable
+def _test_reset_cycles_impl(env, target):
+    """Cycle members reset their _raw_ installs independently; callers reset across pure SCCs."""
+    res = _reset_lock({
+        # 1. Pure-wheel cycle: both _raw_ targets and upstream caller reset unconditionally.
+        "pure-a@1.0": {
+            "wheel_candidates": [_whl("pa", "pure_a-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_pure",
+            "marker_dependencies": [{"key": "pure-b@1.0"}],
+        },
+        "pure-b@1.0": {
+            "wheel_candidates": [_whl("pb", "pure_b-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_pure",
+            "marker_dependencies": [{"key": "pure-a@1.0", "marker": "sys_platform == 'win32'"}],
+        },
+        "above-pure@1.0": {
+            "wheel_candidates": [_whl("ap", "above_pure-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "pure-a@1.0"}],
+        },
+        # 2. Variant-gated intra-SCC edge: _raw_ wheel installs still reset, caller does not.
+        "var-a@1.0": {
+            "wheel_candidates": [_whl("va", "var_a-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_var",
+            "marker_dependencies": [{"key": "var-b@1.0", "marker": "extra == '__variant_extra_app_cpu'"}],
+        },
+        "var-b@1.0": {
+            "wheel_candidates": [_whl("vb", "var_b-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_var",
+            "marker_dependencies": [{"key": "var-a@1.0"}],
+        },
+        "above-var@1.0": {
+            "wheel_candidates": [_whl("av", "above_var-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "var-a@1.0"}],
+        },
+        # 3. Mixed cycle with one sdist-only member: wheel member's _raw_ resets, caller does not.
+        "mix-a@1.0": {
+            "wheel_candidates": [_whl("ma", "mix_a-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_mix",
+            "marker_dependencies": [{"key": "mix-b@1.0"}],
+        },
+        "mix-b@1.0": {
+            "sdist_file": {"key": "mb_sdist"},
+            "cycle_group": "cycle_mix",
+            "marker_dependencies": [{"key": "mix-a@1.0"}],
+        },
+        "above-mix@1.0": {
+            "wheel_candidates": [_whl("am", "above_mix-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "mix-a@1.0"}],
+        },
+        # 4. Two sdist-fallback cycle members: caller gets match_all _reset_cycle_ gate.
+        "gate-a@1.0": {
+            "wheel_candidates": [_whl("ga", "gate_a-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
+            "sdist_file": {"key": "ga_sdist"},
+            "cycle_group": "cycle_gate",
+            "marker_dependencies": [{"key": "gate-b@1.0"}],
+        },
+        "gate-b@1.0": {
+            "wheel_candidates": [_whl("gb", "gate_b-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
+            "sdist_file": {"key": "gb_sdist"},
+            "cycle_group": "cycle_gate",
+            "marker_dependencies": [{"key": "gate-a@1.0"}],
+        },
+        "above-gate@1.0": {
+            "wheel_candidates": [_whl("ag", "above_gate-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "gate-a@1.0"}],
+        },
+        # 5. Chained pure-wheel cycles (SCC1 -> SCC2): both SCCs and caller reset.
+        "c1-a@1.0": {
+            "wheel_candidates": [_whl("c1a", "c1_a-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_c1",
+            "marker_dependencies": [{"key": "c1-b@1.0"}, {"key": "c2-a@1.0"}],
+        },
+        "c1-b@1.0": {
+            "wheel_candidates": [_whl("c1b", "c1_b-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_c1",
+            "marker_dependencies": [{"key": "c1-a@1.0"}],
+        },
+        "c2-a@1.0": {
+            "wheel_candidates": [_whl("c2a", "c2_a-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_c2",
+            "marker_dependencies": [{"key": "c2-b@1.0"}],
+        },
+        "c2-b@1.0": {
+            "wheel_candidates": [_whl("c2b", "c2_b-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_c2",
+            "marker_dependencies": [{"key": "c2-a@1.0"}],
+        },
+        "above-chain@1.0": {
+            "wheel_candidates": [_whl("ach", "above_chain-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "c1-a@1.0"}],
+        },
+        # 6. Negative chain: SCC1 depends unconditionally on non-resettable SCC2.
+        "bad-sdist@1.0": {
+            "sdist_file": {"key": "bad_sdist"},
+            "cycle_group": "cycle_bad2",
+            "marker_dependencies": [{"key": "bad-w@1.0"}],
+        },
+        "bad-w@1.0": {
+            "wheel_candidates": [_whl("bw", "bad_w-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_bad2",
+            "marker_dependencies": [{"key": "bad-sdist@1.0"}],
+        },
+        "bad1-a@1.0": {
+            "wheel_candidates": [_whl("b1a", "bad1_a-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_bad1",
+            "marker_dependencies": [{"key": "bad1-b@1.0"}, {"key": "bad-w@1.0"}],
+        },
+        "bad1-b@1.0": {
+            "wheel_candidates": [_whl("b1b", "bad1_b-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_bad1",
+            "marker_dependencies": [{"key": "bad1-a@1.0"}],
+        },
+        "above-bad-chain@1.0": {
+            "wheel_candidates": [_whl("abc", "above_bad_chain-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "bad1-a@1.0"}],
+        },
+        # 7. Cycle member with conditional non-variant external edge to non-resettable dep.
+        "sdist-leaf@1.0": {"sdist_file": {"key": "sl_sdist"}},
+        "cond-a@1.0": {
+            "wheel_candidates": [_whl("ca", "cond_a-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_cond",
+            "marker_dependencies": [
+                {"key": "cond-b@1.0"},
+                {"key": "sdist-leaf@1.0", "marker": "sys_platform == 'win32'"},
+            ],
+        },
+        "cond-b@1.0": {
+            "wheel_candidates": [_whl("cb", "cond_b-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_cond",
+            "marker_dependencies": [{"key": "cond-a@1.0"}],
+        },
+        "above-cond@1.0": {
+            "wheel_candidates": [_whl("ac", "above_cond-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "cond-a@1.0"}],
+        },
+        # 8. Positive extras-only cycle member (same-cycle wheel base), external non-cycle base,
+        #    external cycle base, and non-cycle extra whose base is a cycle member.
+        "ex-same@1.0": {
+            "wheel_candidates": [_whl("es", "ex_same-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_ex_same",
+            "marker_dependencies": [{"key": "ex-same[x]@1.0"}],
+        },
+        "ex-same[x]@1.0": {
+            "cycle_group": "cycle_ex_same",
+            "marker_dependencies": [{"key": "ex-same@1.0"}],
+        },
+        "above-ex-same@1.0": {
+            "wheel_candidates": [_whl("aes", "above_ex_same-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "ex-same[x]@1.0"}],
+        },
+        "plain-base@1.0": {
+            "wheel_candidates": [_whl("plb", "plain_base-1.0-py3-none-any.whl")],
+        },
+        "plain-base[x]@1.0": {
+            "cycle_group": "cycle_ex_ext",
+            "marker_dependencies": [{"key": "ex-ext-peer@1.0"}],
+        },
+        "ex-ext-peer@1.0": {
+            "wheel_candidates": [_whl("eep", "ex_ext_peer-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_ex_ext",
+            "marker_dependencies": [{"key": "plain-base[x]@1.0"}],
+        },
+        "above-ex-ext@1.0": {
+            "wheel_candidates": [_whl("aee", "above_ex_ext-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "plain-base[x]@1.0"}],
+        },
+        "pure-a[x]@1.0": {
+            "cycle_group": "cycle_ex_cycbase",
+            "marker_dependencies": [{"key": "ex-cyc-peer@1.0"}],
+        },
+        "ex-cyc-peer@1.0": {
+            "wheel_candidates": [_whl("ecp", "ex_cyc_peer-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_ex_cycbase",
+            "marker_dependencies": [{"key": "pure-a[x]@1.0"}],
+        },
+        "above-ex-cycbase@1.0": {
+            "wheel_candidates": [_whl("aecb", "above_ex_cycbase-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "pure-a[x]@1.0"}],
+        },
+        "pure-b[y]@1.0": {},
+        "above-noncyc-extra@1.0": {
+            "wheel_candidates": [_whl("ance", "above_noncyc_extra-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "pure-b[y]@1.0"}],
+        },
+    }, cycle_groups = {
+        "cycle_pure": ["pure-a@1.0", "pure-b@1.0"],
+    })
+
+    env.expect.that_collection(_library(res, "_raw_pure-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "_raw_pure-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "above-pure@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+
+    # Lock-level cycle_groups renders the public cycle wrapper alongside the resettable _raw_ target.
+    env.expect.that_str(res).contains('pycross_cycle_member_marker_deps(\n        name = "pure-a@1.0",\n        raw_name = "_raw_pure-a@1.0",')
+
+    env.expect.that_collection(_library(res, "_raw_var-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "_raw_var-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(res, "above-var@1.0")[0]).equals("pycross_wheel_library")
+
+    env.expect.that_collection(_library(res, "_raw_mix-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(res, "_raw_mix-b@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(res, "above-mix@1.0")[0]).equals("pycross_wheel_library")
+
+    gate_a = '":_wheel_cs_gate-a@1.0_gate_a_1_0_cp312_cp312_manylinux_2_17_x86_64_whl"'
+    gate_b = '":_wheel_cs_gate-b@1.0_gate_b_1_0_cp312_cp312_manylinux_2_17_x86_64_whl"'
+    env.expect.that_collection(_library(res, "_raw_gate-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", gate_a]).in_order()
+    env.expect.that_collection(_library(res, "_raw_gate-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", gate_b]).in_order()
+    env.expect.that_collection(_library(res, "above-gate@1.0")).contains_exactly([
+        "pycross_resettable_wheel_library",
+        '":_reset_cycle_cycle_gate"',
+    ]).in_order()
+    cycle_gate_block = res.split('name = "_reset_cycle_cycle_gate",')[1].split(")")[0]
+    env.expect.that_str(cycle_gate_block).contains(gate_a)
+    env.expect.that_str(cycle_gate_block).contains(gate_b)
+
+    env.expect.that_collection(_library(res, "_raw_c1-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "_raw_c2-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "above-chain@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+
+    # Negative chain: bad1-a depends on non-resettable SCC2 (so bad1-a and above-bad-chain stay unreset),
+    # while bad1-b and bad-w still reset their own _raw_ wheel installs independently.
+    env.expect.that_str(_library(res, "_raw_bad1-a@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_collection(_library(res, "_raw_bad1-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "_raw_bad-w@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(res, "above-bad-chain@1.0")[0]).equals("pycross_wheel_library")
+
+    # Conditional non-variant external edge to non-resettable dep propagates _nomatch to both raw and caller.
+    cond_kind, cond_gate = _library(res, "_raw_cond-a@1.0")
+    env.expect.that_str(cond_kind).equals("pycross_resettable_wheel_library")
+    env.expect.that_str(cond_gate).contains("_nomatch")
+    env.expect.that_collection(_library(res, "above-cond@1.0")).contains_exactly(["pycross_resettable_wheel_library", cond_gate]).in_order()
+
+    # Positive extras cases: same-cycle base, external plain base, external cycle base, and non-cycle extra of cycle base.
+    env.expect.that_collection(_library(res, "_raw_ex-same@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "above-ex-same@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "above-ex-ext@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "above-ex-cycbase@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "above-noncyc-extra@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+
+    # Extras-only cycle member whose same-cycle base is sdist-only must not trigger a reset.bzl load.
+    sdist_extra_res = _reset_lock({
+        "ext@1.0": {
+            "sdist_file": {"key": "ext_sdist"},
+            "cycle_group": "cycle_ext",
+            "marker_dependencies": [{"key": "ext[x]@1.0"}],
+        },
+        "ext[x]@1.0": {
+            "cycle_group": "cycle_ext",
+            "marker_dependencies": [{"key": "ext@1.0"}],
+        },
+        "above-ext@1.0": {
+            "wheel_candidates": [_whl("ae", "above_ext-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "ext[x]@1.0"}],
+        },
+    })
+    env.expect.that_bool('load(":reset.bzl"' in sdist_extra_res).equals(False)
+    env.expect.that_str(_library(sdist_extra_res, "above-ext@1.0")[0]).equals("pycross_wheel_library")
+
+def _test_reset_cycles(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_reset_cycles_impl)
 
 # buildifier: disable=unused-variable
 def _test_reset_gates_impl(env, target):
@@ -1495,6 +1760,7 @@ def resolved_lock_renderer_test_suite(name):
         tests = [
             _test_render_lock,
             _test_reset_plan,
+            _test_reset_cycles,
             _test_reset_gates,
             _test_reset_bzl,
             _test_scoped_variants_and_grouped_deps,
