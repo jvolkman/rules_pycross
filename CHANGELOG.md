@@ -55,12 +55,6 @@ All notable changes to this project will be documented in this file.
   expressed as override values.
 - **`pycross_generate_cargo_lock` prefers registered `rules_rust` `cargo`.**
   Pass `-- --cargo cargo` to invoke `cargo` from `PATH` instead.
-- **Transitive `native_deps` `linkopts` propagation.** `extract_cc_layer` now
-  forwards transitive `linkopts` and `additional_linker_inputs` from
-  `native_deps` `CcInfo` (including `cc_library` and `pycross_wheel_cc_import`)
-  to all sdist links (including configure/feature probes). Remove linkopts
-  duplicated on build rules, or point `native_deps` at a headers-only target if
-  a dependency's `linkopts` shouldn't apply.
 - **`pycross_wheel_library` internal `venvs_site_packages` wiring.** Moved the
   internal `experimental_venvs_site_packages` attribute to a private
   `_venvs_site_packages` attribute read directly via `BuildSettingInfo`,

@@ -134,8 +134,8 @@ files such as `libcudart.so.12` are fine: sdist builds can still link them with
 `-lcudart`.
 
 The built extension still has to find the library at runtime, for example
-through an `$ORIGIN`-relative RPATH (which can be passed via `linkopts`) or
-because the other package loads it first.
+through an `$ORIGIN`-relative RPATH or because the other package loads it
+first.
 
 Use one target per library, as with `cc_import`, and connect them with
 `deps`.
@@ -165,8 +165,8 @@ Use one target per library, as with `cc_import`, and connect them with
                   "Bazel `cc_*` link actions; sdist builds link what the build system asks for.",
         ),
         "linkopts": attr.string_list(
-            doc = "Extra linker flags propagated to Bazel `cc_*` targets and sdist builds that link against " +
-                  "this library. Passed verbatim without Make-variable expansion (use `$ORIGIN`, not `$$ORIGIN`).",
+            doc = "Extra flags for Bazel `cc_*` targets that link against this library. sdist builds " +
+                  "don't read them; use the build rule's `linkopts` instead.",
         ),
         "deps": attr.label_list(
             doc = "Other C/C++ targets this library depends on, such as other `pycross_wheel_cc_import` targets.",
