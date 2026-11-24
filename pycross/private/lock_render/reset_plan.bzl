@@ -116,11 +116,14 @@ def marker_depends_on_variants(marker, conflict_pairs):
     Returns:
         True if the marker's result can vary with the selected variants.
     """
-    if "__variant_" not in marker:
+    if "__variant_" not in marker and _VARIANT_TOKEN_PREFIX not in marker:
         return False
     tree = pypackaging.markers.parse(marker)
     stack = [[tree, 0, []]]
-    for _ in range(1 << 20):
+
+    # Each step either consumes one element of a parsed list or pops one list;
+    # both counts are bounded by len(marker).
+    for _ in range(2 * len(marker) + 1):
         frame = stack[-1]
         node = frame[0]
         if frame[1] < len(node):
@@ -136,7 +139,10 @@ def marker_depends_on_variants(marker, conflict_pairs):
         if not stack:
             return folded == "V"
         stack[-1][2].append(folded)
-    fail("marker too deeply nested: " + marker)
+    fail("marker_depends_on_variants exceeded step bound: " + marker)
+
+def _is_extras_proxy(key, pkg):
+    return not pkg.get("wheel_candidates") and bool(parse_package_key(key).extra)
 
 def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = None):
     """Decides which packages install with reset variant settings, and their gates.
@@ -169,10 +175,15 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
     edge_gates = {}  # (eval_name, dep_key) -> label, shared across packages
 
     cycle_members_by_group = {}  # group_name -> sorted list of member pkg_keys
+    total_edges = 0
     for pkg_key in sorted(packages.keys()):
-        cg = packages[pkg_key].get("cycle_group")
+        pkg = packages[pkg_key]
+        cg = pkg.get("cycle_group")
         if cg:
             cycle_members_by_group.setdefault(cg, []).append(pkg_key)
+        total_edges += len(pkg.get("marker_dependencies", []))
+        if _is_extras_proxy(pkg_key, pkg):
+            total_edges += 1
 
     def group(name, kind, labels):
         gate_lines.extend(config_setting_group(name, kind, labels, indent = 1))
@@ -184,7 +195,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         pkg = packages[key]
         parts = parse_package_key(key)
         resolved = resolved_wheel_candidates(pkg, repo_map)
-        is_extras_proxy = not pkg.get("wheel_candidates") and parts.extra
+        is_extras_proxy = _is_extras_proxy(key, pkg)
         if pkg.get("post_install_patches") or pkg.get("build_target"):
             return no
         base = None
@@ -271,8 +282,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         wheel_members = []
         extras_members = []
         for m in members:
-            pkg = packages[m]
-            if not pkg.get("wheel_candidates") and parse_package_key(m).extra:
+            if _is_extras_proxy(m, packages[m]):
                 extras_members.append(m)
             else:
                 wheel_members.append(m)
@@ -321,6 +331,10 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         cg = packages[key].get("cycle_group")
         return ("cycle", cg) if cg else ("pkg", key)
 
+    # Each condensed node is expanded at most once (pushing one post-order
+    # frame) and each outgoing edge pushes at most one frame, plus the initial
+    # root push and final empty-stack check.
+    max_dfs_steps = len(packages) + total_edges + 2
     done_nodes = {}
     visiting_nodes = {}
     for root in sorted(packages.keys()):
@@ -328,7 +342,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         if root_node in done_nodes:
             continue
         stack = [(root_node, False)]
-        for _ in range(1 << 20):
+        for _ in range(max_dfs_steps):
             if not stack:
                 break
             node, expanded = stack.pop()
@@ -351,8 +365,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             members = cycle_members_by_group[ident] if kind == "cycle" else [ident]
             for m in members:
                 pkg = packages[m]
-                parts = parse_package_key(m)
-                if not pkg.get("wheel_candidates") and parts.extra:
+                if _is_extras_proxy(m, pkg):
                     base_key = base_package_key(m)
                     if base_key in packages and not (kind == "cycle" and is_in_same_cycle(base_key, pkg, packages)):
                         dep_node = node_of(base_key)
@@ -367,6 +380,8 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
                     dep_node = node_of(dep_key)
                     if dep_node not in done_nodes and dep_node not in visiting_nodes:
                         stack.append((dep_node, False))
+        if stack:
+            fail("reset_plan DFS exceeded step bound for root: " + root)
 
     for eval_name in sorted(nomatch):
         gate_lines.extend(flag_setting("{}_nomatch".format(eval_name), ":" + eval_name, "false", indent = 1, use_native = True))
