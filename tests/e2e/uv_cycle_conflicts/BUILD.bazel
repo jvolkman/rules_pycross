@@ -1,0 +1,41 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+exports_files(glob(["*.whl"]))
+
+[
+    py_test(
+        name = "test_" + repo + "_" + pkg,
+        srcs = ["test_imports.py"],
+        args = [
+            ver if pkg != "above" else "any",
+            mods,
+        ],
+        main = "test_imports.py",
+        deps = ["@%s//%s" % (repo, pkg)],
+    )
+    for repo, ver in [
+        ("cpu_only", "1.1.1"),
+        ("gpu_only", "2.0.0"),
+    ]
+    for pkg, mods in [
+        ("cyc_x", "cyc_x,cyc_y,iniconfig"),
+        ("cyc_y", "cyc_x,cyc_y,iniconfig"),
+        ("above", "above,cyc_p,cyc_q"),
+    ]
+]
+
+py_test(
+    name = "test_diamond",
+    srcs = ["test_imports.py"],
+    args = [
+        "any",
+        "cyc_x,cyc_y,cyc_p,cyc_q,above,iniconfig",
+    ],
+    main = "test_imports.py",
+    deps = [
+        "@cpu_only//cyc_q",
+        "@cpu_only//cyc_x",
+        "@gpu_only//above",
+        "@gpu_only//cyc_y",
+    ],
+)

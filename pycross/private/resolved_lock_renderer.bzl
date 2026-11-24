@@ -5,7 +5,8 @@ It uses PEP 508 marker expressions for platform-conditional dependencies
 and a wheel chooser for platform-specific wheel selection.
 
 Naming conventions for generated targets:
-  - `_raw_<pkg_key>`: The underlying `pycross_wheel_library` target.
+  - `_raw_<pkg_key>`: The underlying `pycross_wheel_library` (or
+    `pycross_resettable_wheel_library` when variant reset applies) target.
   - `<pkg_key>`: For cycle members, this is a `pycross_library_proxy` (created by
     `pycross_cycle_member_marker_deps`) that wraps the raw target and adds conditional deps.
     For extras-only packages (e.g., `name[extra]@version`), this is a `pycross_library_proxy`

@@ -55,10 +55,14 @@ All notable changes to this project will be documented in this file.
   expressed as override values.
 - **`pycross_generate_cargo_lock` prefers registered `rules_rust` `cargo`.**
   Pass `-- --cargo cargo` to invoke `cargo` from `PATH` instead.
-- **`pycross_wheel_library` internal `venvs_site_packages` wiring.** Moved the
-  internal `experimental_venvs_site_packages` attribute to a private
-  `_venvs_site_packages` attribute read directly via `BuildSettingInfo`,
-  dropping the private load of `@rules_python//python/private:flags.bzl`.
+- **Removed `pycross_wheel_library.experimental_venvs_site_packages`.** Configure
+  venv layout via `--@rules_python//python/config_settings:venvs_site_packages`
+  instead (`pycross_wheel_library` now reads it through a private attribute and
+  no longer loads `@rules_python//python/private:flags.bzl`).
+- **Backend authors: custom build rules must accept `COMMON_BUILD_ATTRS`
+  (including `build_requires`).** `pycross_sdist_repo` now passes
+  `build_requires` for versioned `build-system.requires` so version checks run
+  during build-rule analysis rather than repo fetch time.
 - **Deprecated `pycross.configure_toolchains(platforms = ...)`.** The attribute
   is a no-op in v2 (target platforms come from Bazel's `--platforms` flag and
   registered `rules_python` toolchains) and now prints a deprecation warning
@@ -83,14 +87,20 @@ All notable changes to this project will be documented in this file.
   `supports-path-mapping` and skips pure-Python wheels, extracted build tools
   are shared across sdist targets, and POSIX `/bin/sh` wrappers replace
   per-compile Python wrappers.
-- **Trimmed internal lock metadata.** Auto-generated `<workspace>__build` repos
-  omit `//_variants` unless declared, `@<repo>_lock_json//:data.json` drops
-  unused `files` and `remote_files` fields, and `__pkgs//_lock` drops unused
+- **Trimmed internal lock metadata.** Thin repos no longer emit
+  `pin_versions.json`, auto-generated `<workspace>__build` repos omit
+  `//_variants` unless declared, `@<repo>_lock_json//:data.json` drops unused
+  `files` and `remote_files` fields, and `__pkgs//_lock` drops unused
   `_available_*` targets and replaces `_explicit_*` / `_pin_*` / `_default_*` /
   `_usable_*` with `_variant_state` and `_state`.
 
 ### Fixed
 
+- **Windows sdist builds (#396, #401).** Shortened Windows sdist extraction
+  paths, cleared read-only attributes on Windows cleanups, and forwarded the
+  selected MSVC toolchain environment (`PATH`, `INCLUDE`, `LIB`) with native
+  Windows virtualenv handling into wheel builds. (Windows support remains
+  best-effort with no Windows CI.)
 - **Sdist builds and CC layer.** Fixed `CXXFLAGS` flag shadowing, `native_deps`
   defines and PIC archives, `pkg_config_files` across all builders, user
   `build_env` preservation, `meson`/`cmake` edge cases, native musl builds, and

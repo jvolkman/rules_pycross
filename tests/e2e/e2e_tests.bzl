@@ -32,6 +32,7 @@ def define_e2e_tests():
         "simple_index",
         "uv_conflicts",
         "uv_cycle",
+        "uv_cycle_conflicts",
         "uv_cycle_stress",
         "uv_cycle_stress_mixed",
         "uv_forked_build_tools",
