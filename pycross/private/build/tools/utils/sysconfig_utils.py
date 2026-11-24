@@ -83,14 +83,14 @@ def _query_interpreter(
         import sys
         sys.path = [p for p in sys.path if p]
         import importlib, json, sysconfig
-        sysconfigdata_name = sysconfig._get_sysconfigdata_name()
-        if sysconfigdata_name:
+        if sys.platform == "win32":
+            # Windows computes its config vars at runtime instead of using _sysconfigdata.
+            result = sysconfig.get_config_vars()
+        else:
             try:
-                result = dict(importlib.import_module(sysconfigdata_name).build_time_vars)
+                result = dict(importlib.import_module(sysconfig._get_sysconfigdata_name()).build_time_vars)
             except ImportError:
                 result = {}
-        else:
-            result = {}
         result["installed_base"] = sysconfig.get_config_var("installed_base") or sys.base_prefix
         result["installed_platbase"] = sysconfig.get_config_var("installed_platbase") or sys.base_exec_prefix
         print(json.dumps(result))

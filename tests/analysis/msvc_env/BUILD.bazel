@@ -1,0 +1,63 @@
+load("@rules_cc//cc/toolchains:cc_toolchain.bzl", "cc_toolchain")
+load(":probe.bzl", "probe", "probe_config")
+load(":probe_test.bzl", "probe_test_suite")
+
+package(default_visibility = ["//visibility:public"])
+
+platform(
+    name = "win",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+filegroup(name = "empty")
+
+[probe_config(
+    name = "config_" + style,
+    env_style = style,
+) for style in [
+    "none",
+    "mixed",
+    "upper",
+    "partial",
+]]
+
+[cc_toolchain(
+    name = "cc_" + style,
+    all_files = ":empty",
+    ar_files = ":empty",
+    as_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    toolchain_config = ":config_" + style,
+    toolchain_identifier = "msvc-review",
+) for style in [
+    "none",
+    "mixed",
+    "upper",
+    "partial",
+]]
+
+[toolchain(
+    name = "tc_" + style,
+    target_compatible_with = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+    toolchain = ":cc_" + style,
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+) for style in [
+    "none",
+    "mixed",
+    "upper",
+    "partial",
+]]
+
+probe(name = "subject")
+
+probe_test_suite(name = "tests")

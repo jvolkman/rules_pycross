@@ -5,6 +5,7 @@ import sys
 import traceback
 
 from pycross.private.build.tools.utils.context import BuildContext
+from pycross.private.build.tools.utils.venv_utils import venv_python_path
 
 
 def run_pep517_build(ctx: BuildContext) -> str:
@@ -14,7 +15,8 @@ def run_pep517_build(ctx: BuildContext) -> str:
     workarounds (e.g., injecting versioneer.py for Pandas) should be implemented
     as pre_build_hooks rather than added here.
     """
-    path_dirs = [ctx.tools_dir.absolute(), (ctx.env_dir / "bin").absolute(), ctx.bin_dir.absolute()]
+    python_executable = venv_python_path(ctx.env_dir).absolute()
+    path_dirs = [ctx.tools_dir.absolute(), python_executable.parent, ctx.bin_dir.absolute()]
     path_entries = [str(pd) for pd in path_dirs]
     existing_path = ctx.build_env.get("PATH")
     if existing_path:
@@ -97,7 +99,7 @@ def run_pep517_build(ctx: BuildContext) -> str:
     try:
         builder = ProjectBuilder(
             source_dir=ctx.sdist_dir,
-            python_executable=str(ctx.env_dir / "bin" / "python"),
+            python_executable=str(python_executable),
             runner=_subprocess_runner,
         )
         wheel_file = builder.build(

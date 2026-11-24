@@ -35,9 +35,7 @@ class QueryInterpreterTest(unittest.TestCase):
         """The result should include standard sysconfig build_time_vars."""
         result = _query_interpreter(Path(sys.executable))
         self.assertIsNotNone(result)
-        # These are standard sysconfig vars that should always be present on Linux/macOS
-        if sys.platform != "win32":
-            self.assertIn("EXT_SUFFIX", result)
+        self.assertEqual(result["EXT_SUFFIX"], sysconfig.get_config_var("EXT_SUFFIX"))
 
 
 class LoadTargetSysconfigTest(unittest.TestCase):
@@ -187,8 +185,8 @@ class BasePrefixPthTest(unittest.TestCase):
 
         content = self.pth_file.read_text()
         self.assertIn("import sys; ", content)
-        self.assertIn('sys.base_prefix = "/usr/local/python3"', content)
-        self.assertIn('sys.base_exec_prefix = "/usr/local/python3"', content)
+        self.assertIn(f"sys.base_prefix = {ascii(str(base_prefix))}", content)
+        self.assertIn(f"sys.base_exec_prefix = {ascii(str(platbase_prefix))}", content)
 
     def test_base_and_platbase_can_differ(self):
         """base_prefix and platbase_prefix can point to different locations."""
@@ -199,8 +197,8 @@ class BasePrefixPthTest(unittest.TestCase):
         self._write_base_prefix_pth(prefix, base_prefix, platbase_prefix, self.site_dir)
 
         content = self.pth_file.read_text()
-        self.assertIn('sys.base_prefix = "/usr/local/python3"', content)
-        self.assertIn('sys.base_exec_prefix = "/usr/local/python3-plat"', content)
+        self.assertIn(f"sys.base_prefix = {ascii(str(base_prefix))}", content)
+        self.assertIn(f"sys.base_exec_prefix = {ascii(str(platbase_prefix))}", content)
 
     def test_no_pth_written_when_both_none(self):
         """No .pth file should be written when both prefixes are None."""
@@ -248,7 +246,8 @@ class PlatformOverridesTest(unittest.TestCase):
     def test_apply_sysconfig_overrides_preserves_user_build_env(self):
         with TemporaryDirectory() as tmp:
             env_dir = Path(tmp) / "env"
-            (env_dir / "lib" / "python3.12" / "site-packages").mkdir(parents=True)
+            lib_dir = env_dir / "Lib" if os.name == "nt" else env_dir / "lib" / "python3.12"
+            (lib_dir / "site-packages").mkdir(parents=True)
 
             ctx = SimpleNamespace(
                 env_dir=env_dir,

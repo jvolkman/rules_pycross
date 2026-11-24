@@ -7,6 +7,7 @@ load(
     "//pycross/private/build:cc_toolchain_util.bzl",
     "absolutize_path_in_str",
     "configure_features",
+    "create_msvc_environment",
     "get_flags_info",
     "get_headers",
     "get_libraries",
@@ -218,6 +219,8 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
         target_cpu = target_cpu,
         meson_properties = expanded_meson_properties,
     )
+    if target_os == "windows" and cpp_toolchain.compiler == "msvc-cl":
+        cc_config["msvc_env"] = create_msvc_environment(ctx, cpp_toolchain, feature_configuration)
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_cc_config.json")
     ctx.actions.write(config_json, json.encode(cc_config))

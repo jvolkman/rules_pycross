@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import unittest
+import venv
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ from pycross.private.build.tools.utils.lifecycle import _apply_pre_build_patches
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
 from pycross.private.build.tools.utils.lifecycle import setup_pkg_config
 from pycross.private.build.tools.utils.pep517_runner import run_pep517_build
+from pycross.private.build.tools.utils.venv_utils import venv_python_path
 
 
 class LifecycleTest(unittest.TestCase):
@@ -171,8 +173,12 @@ class Pep517RunnerTest(unittest.TestCase):
             "    sys.exit(42)\n"
         )
         self.env_dir = self.root / "env"
-        (self.env_dir / "bin").mkdir(parents=True)
-        (self.env_dir / "bin" / "python").symlink_to(sys.executable)
+        if os.name == "nt":
+            venv.EnvBuilder().create(self.env_dir)
+        else:
+            python_exe = venv_python_path(self.env_dir)
+            python_exe.parent.mkdir(parents=True)
+            python_exe.symlink_to(sys.executable)
         self.temp_build = self.root / "tmp"
         self.temp_build.mkdir()
         self.wheel_dir = self.root / "wheel"
@@ -209,13 +215,15 @@ class Pep517RunnerTest(unittest.TestCase):
                 log_file = self.temp_build / "build_failed.log"
                 log_file.unlink(missing_ok=True)
                 stderr_buf = io.StringIO()
+                ctx = self._ctx()
                 with (
                     patch.dict(os.environ, {"RULES_PYCROSS_DEBUG": debug_val}),
                     patch("sys.stderr", stderr_buf),
                 ):
                     with self.assertRaises(Exception):
-                        run_pep517_build(self._ctx())
+                        run_pep517_build(ctx)
 
+                self.assertEqual(ctx.build_env["PATH"].split(os.pathsep)[1], str(venv_python_path(self.env_dir).parent))
                 self.assertTrue(log_file.exists())
                 log_text = log_file.read_text()
                 self.assertIn("exit code 42", log_text)

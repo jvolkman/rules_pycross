@@ -3,6 +3,7 @@ import shlex
 from pathlib import Path
 
 from pycross.private.build.tools.utils.context import BuildContext
+from pycross.private.build.tools.utils.venv_utils import venv_python_path
 
 
 def _has_bazel_runfiles(path: Path) -> bool:
@@ -59,7 +60,7 @@ def setup_path_tools(ctx: BuildContext) -> None:
             dest_path.symlink_to(abs_tool_path)
             continue
 
-        venv_python = ctx.env_dir / "bin" / "python"
+        venv_python = venv_python_path(ctx.env_dir)
         # Use a POSIX /bin/sh wrapper directly exec'ing the venv Python. This
         # bypasses Linux's 127-character shebang limit without spawning an
         # intermediate Python process.

@@ -12,6 +12,7 @@ from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ra
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 from pycross.private.build.tools.utils.lifecycle import setup_pkg_config
+from pycross.private.build.tools.utils.venv_utils import venv_python_path
 
 
 def _escape_meson_str(value: str) -> str:
@@ -206,7 +207,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     if pybind11_config_path.exists():
         binaries_lines.append(f"pybind11-config = '{_escape_meson_str(pybind11_config_path.as_posix())}'")
 
-    binaries_lines.append(f"python = '{_escape_meson_str((ctx.env_dir / 'bin' / 'python').as_posix())}'")
+    binaries_lines.append(f"python = '{_escape_meson_str(venv_python_path(ctx.env_dir).as_posix())}'")
 
     binaries_section = "\n".join(binaries_lines)
 
