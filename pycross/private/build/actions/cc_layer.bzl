@@ -11,7 +11,6 @@ load(
     "get_flags_info",
     "get_headers",
     "get_libraries",
-    "get_link_flags",
     "get_tools_info",
 )
 
@@ -146,11 +145,10 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
 
     copts = [_expand_locations_and_vars("copts", ctx, copt, native_deps, make_vars) for copt in copts]
     linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt, native_deps, make_vars) for linkopt in linkopts]
-    dep_link_info = get_link_flags(native_deps)
     flags = get_flags_info(
         ctx,
         copts,
-        dep_link_info.flags + linkopts,
+        linkopts,
         native_deps = native_deps,
         cc_toolchain = cpp_toolchain,
         feature_configuration = feature_configuration,
@@ -165,7 +163,7 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
     include_dirs = []
     static_libs = []
     shared_libs = []
-    transitive_files = [dep_link_info.additional_inputs]
+    transitive_files = []
 
     target_os, target_cpu = _get_target_os_and_cpu(ctx)
     if cpp_toolchain.all_files:

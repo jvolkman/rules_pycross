@@ -150,8 +150,8 @@ files such as `libcudart.so.12` are fine: sdist builds can still link them with
 `-lcudart`.
 
 The built extension still has to find the library at runtime, for example
-through an `$ORIGIN`-relative RPATH (which can be passed via `linkopts`) or
-because the other package loads it first.
+through an `$ORIGIN`-relative RPATH or because the other package loads it
+first.
 
 Use one target per library, as with `cc_import`, and connect them with
 `deps`.
@@ -166,7 +166,7 @@ Use one target per library, as with `cc_import`, and connect them with
 | <a id="pycross_wheel_cc_import-alwayslink"></a>alwayslink |  Link every object file in `static_library`, as in `cc_import`. This applies to Bazel `cc_*` link actions; sdist builds link what the build system asks for.   | Boolean | optional |  `False`  |
 | <a id="pycross_wheel_cc_import-includes"></a>includes |  Include directories, relative to the wheel's site-packages (e.g. 'torch/include').   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_cc_import-interface_library"></a>interface_library |  An interface library for `shared_library` (e.g. a `.tbd` or `.lib` file), relative to site-packages.   | String | optional |  `""`  |
-| <a id="pycross_wheel_cc_import-linkopts"></a>linkopts |  Extra linker flags propagated to Bazel `cc_*` targets and sdist builds that link against this library. Passed verbatim without Make-variable expansion (use `$ORIGIN`, not `$$ORIGIN`).   | List of strings | optional |  `[]`  |
+| <a id="pycross_wheel_cc_import-linkopts"></a>linkopts |  Extra flags for Bazel `cc_*` targets that link against this library. sdist builds don't read them; use the build rule's `linkopts` instead.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_cc_import-make_variable"></a>make_variable |  If set, export a TemplateVariableInfo with this name mapped to the absolutized include path, for use in build configuration such as Meson cross files. Requires exactly one entry in `includes`.   | String | optional |  `""`  |
 | <a id="pycross_wheel_cc_import-shared_library"></a>shared_library |  A shared library (`.so` or `.dylib`) to link against, relative to site-packages (e.g. 'torch/lib/libtorch.so').   | String | optional |  `""`  |
 | <a id="pycross_wheel_cc_import-static_library"></a>static_library |  A static library (`.a`) to link against, relative to site-packages (e.g. 'numpy/_core/lib/libnpymath.a').   | String | optional |  `""`  |

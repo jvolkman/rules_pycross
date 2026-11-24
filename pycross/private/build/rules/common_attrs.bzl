@@ -120,7 +120,7 @@ COMMON_BUILD_ATTRS = {
 
 CC_BUILD_ATTRS = {
     "native_deps": attr.label_list(
-        doc = "C/C++ libraries whose headers, libraries, and linkopts are made available to the build.",
+        doc = "C/C++ libraries whose headers and libraries are made available to the build.",
         providers = [CcInfo],
         aspects = [collect_wheel_shared_libraries],
     ),
@@ -128,7 +128,7 @@ CC_BUILD_ATTRS = {
         doc = "Extra C/C++ compiler flags, appended after the toolchain flags.",
     ),
     "linkopts": attr.string_list(
-        doc = "Extra linker flags, appended after the toolchain flags and native_deps' linkopts.",
+        doc = "Extra linker flags, appended after the toolchain flags.",
     ),
     "pkg_config_files": attr.label_list(
         doc = "pkg-config `.pc` files made available to the build (e.g. from `pycross_cc_pkg_config`).",
