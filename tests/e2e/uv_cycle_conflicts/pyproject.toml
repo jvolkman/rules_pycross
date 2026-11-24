@@ -1,0 +1,20 @@
+[project]
+name = "app"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["cyc-x", "cyc-y", "cyc-p", "cyc-q", "above"]
+
+[project.optional-dependencies]
+cpu = ["iniconfig==1.1.1"]
+gpu = ["iniconfig==2.0.0"]
+
+[tool.uv]
+package = false
+conflicts = [[{ extra = "cpu" }, { extra = "gpu" }]]
+
+[tool.uv.sources]
+cyc-x = { path = "./cyc_x-1.0.0-py3-none-any.whl" }
+cyc-y = { path = "./cyc_y-1.0.0-py3-none-any.whl" }
+cyc-p = { path = "./cyc_p-1.0.0-py3-none-any.whl" }
+cyc-q = { path = "./cyc_q-1.0.0-py3-none-any.whl" }
+above = { path = "./above-1.0.0-py3-none-any.whl" }
