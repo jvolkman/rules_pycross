@@ -42,7 +42,7 @@ All notable changes to this project will be documented in this file.
   `@repo//pkg:[extra]`, matching `uv` and Poetry.
 - **Native `linux_<arch>` wheel preference (`pypackaging.bzl` 0.4.1).**
   `linux_<arch>` wheels now rank ahead of `manylinux_*` and `musllinux_*` tags
-  (matching upstream `packaging`). Also bumped `toml.bzl` to `0.6.0`.
+  (matching upstream `packaging`). Also bumped `toml.bzl` to `0.6.1`.
 - **Root-wins override precedence.** Root-module backend overrides now win over
   dependency modules, and duplicate overrides in the same module fail instead of
   silently shadowing.
