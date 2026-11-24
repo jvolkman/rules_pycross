@@ -315,6 +315,7 @@ class CcToolchainTest(unittest.TestCase):
             cc_os.pathsep = ";"
             with chdir(execroot):
                 ctx = load_build_context(str(config_path))
+            ctx.sysconfig_vars.update({"LDSHARED": "link.exe /DLL", "LDCXXSHARED": "link.exe /DLL"})
             self.assertEqual(ctx.temp_dir, execroot / "scratch")
             self.assertEqual(execroot / ctx.build_env["PYCROSS_SDIST_DIR"], ctx.sdist_root_dir)
             ctx.sdist_dir.mkdir(parents=True)
@@ -325,6 +326,13 @@ class CcToolchainTest(unittest.TestCase):
             [Path(path) for path in ctx.build_env["PATH"].split(";")],
             [tool_dir, execroot / "SDK bin", user_tool_dir],
         )
+        self.assertEqual(ctx.sysconfig_vars["CC"], str(tool_dir / "cl.exe"))
+        self.assertEqual(ctx.sysconfig_vars["CXX"], str(tool_dir / "cl.exe"))
+        self.assertEqual(ctx.build_env["CC"], str(tool_dir / "cl.exe"))
+        self.assertEqual(ctx.build_env["CXX"], str(tool_dir / "cl.exe"))
+        self.assertEqual(ctx.sysconfig_vars["LDSHARED"], "link.exe /DLL")
+        self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"], "link.exe /DLL")
+        self.assertEqual(list((ctx.temp_dir / "cc_layer" / "bin").iterdir()), [])
         self.assertEqual(
             [Path(path) for path in ctx.build_env["INCLUDE"].split(";")],
             [tool_dir.parent / "include", static_sdk_dir / "include"],
@@ -376,21 +384,31 @@ class CcToolchainTest(unittest.TestCase):
         self.assertEqual(paths[0], str(user_tools))
         self.assertEqual(paths[1], str(execroot / "sdk tools"))
         self.assertNotIn(str(ctx.temp_dir / "cc_layer" / "bin"), paths)
+        self.assertEqual(ctx.sysconfig_vars["CC"], str(sdk_tools / "cl.exe"))
+        self.assertEqual(ctx.sysconfig_vars["CXX"], str(sdk_tools / "cl.exe"))
+        self.assertEqual(list((ctx.temp_dir / "cc_layer" / "bin").iterdir()), [])
         self.assertEqual(Path(shutil.which("cl.exe", path=os.pathsep.join(paths))), user_tools / "cl.exe")
-        self.assertEqual(ctx.build_env["DISTUTILS_USE_SDK"], "1")
+        self.assertNotIn("DISTUTILS_USE_SDK", ctx.build_env)
 
     def test_incomplete_msvc_environment_does_not_enable_sdk(self):
+        tool_path = self.temp_path / "external" / "MSVC tools" / "bin" / "cl.exe"
+        tool_path.parent.mkdir(parents=True, exist_ok=True)
+        tool_path.touch()
         for msvc_env in (
             {},
-            {"PATH": "", "INCLUDE": "", "LIB": ""},
+            {"PATH": "", "INCLUDE": "headers", "LIB": "libraries"},
+            {"PATH": "prepared", "INCLUDE": "", "LIB": "libraries"},
+            {"PATH": "prepared", "INCLUDE": "headers", "LIB": ""},
             {"PATH": "prepared"},
             {"INCLUDE": "headers", "LIB": "libraries"},
         ):
             with self.subTest(msvc_env=msvc_env):
                 ctx = MockBuildContext(self.temp_path)
+                inherited_path = str(self.temp_path / "inherited tools")
+                ctx.build_env["PATH"] = inherited_path
                 cc_config = {
-                    "CC": "/usr/bin/cc",
-                    "CXX": "/usr/bin/c++",
+                    "CC": "external/MSVC tools/bin/cl.exe",
+                    "CXX": "$$EXT_BUILD_ROOT$$/external/MSVC tools/bin/cl.exe",
                     "CFLAGS": "",
                     "CXXFLAGS": "",
                     "LDFLAGS": "",
@@ -406,7 +424,14 @@ class CcToolchainTest(unittest.TestCase):
                 for key, value in msvc_env.items():
                     expected = str(self.temp_path / value) if value else ""
                     self.assertEqual(ctx.build_env[key], expected)
+                if "PATH" not in msvc_env:
+                    self.assertEqual(ctx.build_env["PATH"], inherited_path)
+                self.assertEqual(ctx.sysconfig_vars["CC"], str(tool_path))
+                self.assertEqual(ctx.sysconfig_vars["CXX"], str(tool_path))
                 self.assertNotIn("DISTUTILS_USE_SDK", ctx.build_env)
+                self.assertEqual(list((ctx.temp_dir / "cc_layer" / "bin").iterdir()), [])
+                self.assertNotIn("LDSHARED", ctx.sysconfig_vars)
+                self.assertNotIn("LDCXXSHARED", ctx.sysconfig_vars)
 
     def test_unversioned_library_name(self):
         self.assertEqual(unversioned_library_name("libcudart.so.12"), "libcudart.so")

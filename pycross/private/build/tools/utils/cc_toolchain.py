@@ -243,6 +243,7 @@ def _resolve_msvc_environment(ctx: BuildContext, environment: Dict[str, str], in
 
 def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     """Populate environment parameters and wrappers for Bazel CC Toolchains."""
+    native_msvc = os.name == "nt" and "msvc_env" in cc_config
     layer_bin_dir = ctx.temp_dir / "cc_layer" / "bin"
     layer_include_dir = ctx.temp_dir / "cc_layer" / "include"
     layer_lib_dir = ctx.temp_dir / "cc_layer" / "lib"
@@ -273,19 +274,32 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         if linker_name and not os.path.lexists(layer_lib_dir / linker_name):
             (layer_lib_dir / linker_name).symlink_to(lib_path.absolute())
 
-    orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
-    orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
     cxxflags = replace_placeholder(ctx.prefix, cc_config["CXXFLAGS"])
     raw_ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"])
     raw_ldsharedflags = replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"])
 
-    wrapped_cc = wrap_compiler(
-        "cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags, ldsharedflags=raw_ldsharedflags
-    )
-    wrapped_cxx = wrap_compiler(
-        "cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags, ldsharedflags=raw_ldsharedflags
-    )
+    if native_msvc:
+        # Resolve native executables against the execroot; builds run from the sdist.
+        cc_path = Path(resolve_sandbox_path(ctx.prefix, cc_config["CC"]))
+        cxx_path = Path(resolve_sandbox_path(ctx.prefix, cc_config["CXX"]))
+    else:
+        # Keep the original compiler paths for the POSIX wrappers to invoke.
+        # cc_path and cxx_path point to those generated wrappers.
+        orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
+        orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
+        cc_path = wrap_compiler(
+            "cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags, ldsharedflags=raw_ldsharedflags
+        )
+        cxx_path = wrap_compiler(
+            "cxx",
+            orig_cxx,
+            cflags,
+            ctx.exec_python,
+            layer_bin_dir,
+            ldflags=raw_ldflags,
+            ldsharedflags=raw_ldsharedflags,
+        )
 
     # When the toolchain already handles C++ header hermeticity (indicated by
     # -nostdlibinc in flags), it provides libc++ headers via -isystem. We must
@@ -303,11 +317,10 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         extra_includes.append(f"-I{inc_dir.absolute()}")
     extra_includes_str = " ".join(extra_includes)
 
-    # The wrappers are the single source of the toolchain's link flags: they
-    # append the executable or shared-library set per link. Build systems apply
-    # the exported LDFLAGS to every link (distutils appends it to LDSHARED, and
-    # it feeds Meson's c_link_args, CMake's linker flags and maturin's link
-    # args), so it only carries what pycross itself adds.
+    # POSIX wrappers add different toolchain options for executable and shared-library links.
+    # Build systems pass LDFLAGS to every link, so keep those options in wrappers to
+    # avoid applying them twice or to the wrong output. LDFLAGS starts with pycross's
+    # library directory; runtime libraries are added below.
     ldflags = f"-L{layer_lib_dir.absolute()}"
 
     # Append C++ static runtime libraries directly by full path to LDFLAGS.
@@ -321,8 +334,8 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
 
     ctx.sysconfig_vars.update(
         {
-            "CC": str(wrapped_cc.absolute()),
-            "CXX": str(wrapped_cxx.absolute()),
+            "CC": str(cc_path.absolute()),
+            "CXX": str(cxx_path.absolute()),
             "CFLAGS": cflags
             + f" -I{layer_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
@@ -330,8 +343,7 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             + f" -I{layer_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
             "LDFLAGS": ldflags,
-            # Bazel's shared-library link flags, exposed for downstream builders
-            # (LDSHARED/LDCXXSHARED rely on the compiler wrappers instead).
+            # Bazel's shared-library link flags, exposed to builders that consume them directly.
             "LDSHAREDFLAGS": raw_ldsharedflags,
             "AR": replace_placeholder(ctx.prefix, cc_config["AR"]),
             "ARFLAGS": replace_placeholder(ctx.prefix, cc_config["ARFLAGS"]),
@@ -352,28 +364,29 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         ctx.sysconfig_vars["LDCXXSHARED"] = " ".join(
             [ctx.sysconfig_vars["CXX"], ctx.sysconfig_vars["LDFLAGS"], "-bundle -undefined dynamic_lookup"]
         )
-    else:
-        # The compiler wrappers already append the toolchain's shared-library
-        # link flags when `-shared` is present, so only pass `-shared` here.
+    elif not native_msvc:
+        # POSIX wrappers append the toolchain's shared-library link flags when
+        # `-shared` is present, so only pass `-shared` here.
         ctx.sysconfig_vars["LDSHARED"] = " ".join([ctx.sysconfig_vars["CC"], "-shared"])
         ctx.sysconfig_vars["LDCXXSHARED"] = " ".join([ctx.sysconfig_vars["CXX"], "-shared"])
 
+    # Set library search paths and the compiler environment for build subprocesses.
     include_paths = [str(layer_include_dir.absolute())] + [
         str(Path(replace_placeholder(ctx.prefix, p)).absolute()) for p in cc_config.get("include_dirs", [])
     ]
     inherited_path = ctx.build_env.get("PATH", "")
-    ctx.build_env.update(
-        {
-            "PATH": os.pathsep.join((str(layer_bin_dir.absolute()), ctx.build_env.get("PATH", ""))),
-            "PYCROSS_LIBRARY_PATH": str(layer_lib_dir.absolute()),
-            "PYCROSS_INCLUDE_PATH": os.pathsep.join(include_paths),
-        }
-    )
-
-    if os.name == "nt" and cc_config.get("msvc_env"):
+    build_env_update = {
+        "PYCROSS_LIBRARY_PATH": str(layer_lib_dir.absolute()),
+        "PYCROSS_INCLUDE_PATH": os.pathsep.join(include_paths),
+    }
+    if native_msvc:
         msvc_env = _resolve_msvc_environment(ctx, cc_config["msvc_env"], inherited_path)
         # Custom toolchains can omit SDK variables. Tell setuptools to use the
         # prepared SDK only when the full environment is available.
-        if all(key in msvc_env for key in ("PATH", "INCLUDE", "LIB")) and msvc_env["PATH"]:
+        if all(msvc_env.get(key) for key in ("PATH", "INCLUDE", "LIB")):
             msvc_env["DISTUTILS_USE_SDK"] = "1"
-        ctx.build_env.update(msvc_env)
+        build_env_update.update(msvc_env)
+    else:
+        build_env_update["PATH"] = os.pathsep.join((str(layer_bin_dir.absolute()), inherited_path))
+
+    ctx.build_env.update(build_env_update)
