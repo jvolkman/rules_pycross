@@ -47,6 +47,7 @@ bzl_library(
     name = "reset_plan",
     srcs = ["reset_plan.bzl"],
     deps = [
+        ":common",
         ":wheels",
         "//pycross/private:build_text",
         "//pycross/private:util",

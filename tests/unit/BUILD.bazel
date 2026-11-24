@@ -153,6 +153,16 @@ py_test(
 )
 
 py_test(
+    name = "context_test",
+    srcs = ["context_test.py"],
+    main = "context_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/build/tools:utils",
+    ],
+)
+
+py_test(
     name = "sdist_test",
     srcs = ["sdist_test.py"],
     main = "sdist_test.py",

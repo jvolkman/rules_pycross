@@ -42,7 +42,7 @@ All notable changes to this project will be documented in this file.
   `@repo//pkg:[extra]`, matching `uv` and Poetry.
 - **Native `linux_<arch>` wheel preference (`pypackaging.bzl` 0.4.1).**
   `linux_<arch>` wheels now rank ahead of `manylinux_*` and `musllinux_*` tags
-  (matching upstream `packaging`). Also bumped `toml.bzl` to `0.6.0`.
+  (matching upstream `packaging`). Also bumped `toml.bzl` to `0.6.1`.
 - **Root-wins override precedence.** Root-module backend overrides now win over
   dependency modules, and duplicate overrides in the same module fail instead of
   silently shadowing.
@@ -73,13 +73,16 @@ All notable changes to this project will be documented in this file.
   `root_module_direct_dev_deps` so `bazel mod tidy` places them under dev
   dependencies.
 - **Repo and analysis performance.** Lockfiles and `pyproject.toml` files parse
-  once per workspace, pure repo rules are `reproducible = True`, universal
-  `py3-none-any` wheels bypass wheel chooser targets, and `pycross_sdist_repo`
-  no longer reads `pin_versions.json` or depends on versioned package keys or
+  once per workspace, pure repo rules are `reproducible = True`, and universal
+  `py3-none-any` wheels bypass wheel chooser targets. Variant reset now covers
+  cycle members, deduplicating `_raw_*` wheel installs independently and
+  resetting callers across SCCs whose members all reset and whose intra-cycle
+  edges don't depend on variants. `pycross_sdist_repo` no longer reads
+  `pin_versions.json` or depends on versioned package keys or
   `extra_build_tools` versions (so lockfile version bumps do not invalidate
   unrelated sdist repos; adding or removing a pin in the build-tools repo still
-  updates `known_packages`). `build-system.requires` version warnings now run
-  during build-rule analysis via `COMMON_BUILD_ATTRS`'s `build_requires`
+  updates `known_packages`), and `build-system.requires` version warnings now
+  run during build-rule analysis via `COMMON_BUILD_ATTRS`'s `build_requires`
   attribute against the active configuration's resolved `build_deps`/`tool_deps`
   (custom backend rules must include `COMMON_BUILD_ATTRS`).
 - **Build and repair execution performance.** `PycrossRepairWheel` enables

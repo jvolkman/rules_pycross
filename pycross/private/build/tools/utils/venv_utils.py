@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from pycross.private.build.tools.utils.context import BuildContext
+from pycross.private.build.tools.utils.context import remap_sdist_path
 
 
 def venv_python_path(env_dir: Path) -> Path:
@@ -143,6 +144,23 @@ def resolve_base_prefix(
     return None
 
 
+def _build_crossenv_pythonpath(ctx: BuildContext, sys_path: list[str], stdlib: str, pathsep: str, remap: bool) -> str:
+    """Build PYTHONPATH for crossenv's Python process.
+
+    Crossenv sets up Python to build extensions for another platform.
+    Pass the import paths it needs to find pycross and its dependencies,
+    updating source entries to use the shorter directory on Windows.
+    """
+    non_stdlib = [path for path in sys_path if path and not path.startswith(stdlib)]
+    existing = ctx.build_env.get("PYTHONPATH", "")
+    if remap:
+        non_stdlib = [
+            remap_sdist_path(path, ctx.prefix, ctx.original_sdist_root, ctx.sdist_root_dir) for path in non_stdlib
+        ]
+    # An empty first entry adds the working directory to Python's import path.
+    return pathsep.join(non_stdlib) + (pathsep + existing if existing else "")
+
+
 def _write_site_hooks(ctx: BuildContext, site_dir: Path) -> None:
     """Write site_hooks to a file and .pth entry in site_dir."""
     if not ctx.site_hooks:
@@ -235,11 +253,8 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
 
     try:
         stdlib = host_sysconfig.get_path("stdlib")
-        non_stdlib = [p for p in sys.path if p and not p.startswith(stdlib)]
         crossenv_env = ctx.build_env.copy()
-        existing_pythonpath = crossenv_env.get("PYTHONPATH", "")
-        non_stdlib_str = os.pathsep.join(non_stdlib)
-        crossenv_env["PYTHONPATH"] = non_stdlib_str + (os.pathsep + existing_pythonpath if existing_pythonpath else "")
+        crossenv_env["PYTHONPATH"] = _build_crossenv_pythonpath(ctx, sys.path, stdlib, os.pathsep, os.name == "nt")
 
         subprocess.check_output(args=crossenv_args, env=crossenv_env, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as cpe:

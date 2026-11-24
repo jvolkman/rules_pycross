@@ -5,14 +5,19 @@ repos' `_variants` flags). A package whose install and
 whole dependency closure don't depend on them is installed with those settings
 reset (`pycross_reset_wheel_library`), so every repo shares one install.
 Packages that may fall back to an sdist build only reset where a wheel
-matches: the build's tools can depend on the variant. Packages in cycles, with
+matches: the build's tools can depend on the variant. Packages with
 post-install patches or a custom build target, or with variant-gated edges stay
 in the caller's configuration, and so does everything that depends on them.
+Cycle members' underlying `_raw_*` wheel libraries exclude intra-SCC edges and
+reset independently when their own install and external closure are resettable;
+callers outside the cycle reset across the cycle only when every member of the
+SCC is resettable and no intra-SCC edge depends on variants.
 """
 
 load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
-load("//pycross/private:util.bzl", "base_package_key", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key")
+load("//pycross/private:util.bzl", "base_package_key", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load(":common.bzl", "is_in_same_cycle")
 load(":wheels.bzl", "resolved_wheel_candidates", "wheel_match_condition")
 
 _VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
@@ -111,11 +116,14 @@ def marker_depends_on_variants(marker, conflict_pairs):
     Returns:
         True if the marker's result can vary with the selected variants.
     """
-    if "__variant_" not in marker:
+    if "__variant_" not in marker and _VARIANT_TOKEN_PREFIX not in marker:
         return False
     tree = pypackaging.markers.parse(marker)
     stack = [[tree, 0, []]]
-    for _ in range(1 << 20):
+
+    # Each step either consumes one element of a parsed list or pops one list;
+    # both counts are bounded by len(marker).
+    for _ in range(2 * len(marker) + 1):
         frame = stack[-1]
         node = frame[0]
         if frame[1] < len(node):
@@ -131,10 +139,20 @@ def marker_depends_on_variants(marker, conflict_pairs):
         if not stack:
             return folded == "V"
         stack[-1][2].append(folded)
-    fail("marker too deeply nested: " + marker)
+    fail("marker_depends_on_variants exceeded step bound: " + marker)
+
+def _is_extras_proxy(key, pkg):
+    return not pkg.get("wheel_candidates") and bool(parse_package_key(key).extra)
 
 def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = None):
     """Decides which packages install with reset variant settings, and their gates.
+
+    For cycle members, `_raw_<pkg>` excludes intra-SCC edges, so each member's
+    wheel install resets independently whenever its own install and external
+    dependency closure are resettable (`raw_plan`, returned for `package.bzl`).
+    Upstream callers outside the cycle (`plan`) reset across the cycle only when
+    every member of the SCC is resettable and no intra-SCC edge depends on
+    variants.
 
     Args:
         packages: The lock's packages.
@@ -144,12 +162,28 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
 
     Returns:
-        {pkg_key: struct(ok, gate)}. `gate` is a label that must match for the
-        reset to apply (None means always).
+        `{pkg_key: struct(ok, gate)}` describing whether each package's wheel
+        library (`_raw_<pkg_key>` for cycle members, `<pkg_key>` otherwise)
+        resets. `gate` is a label that must match for the reset to apply
+        (`None` means always). Caller-facing SCC eligibility is tracked
+        internally.
     """
-    plan = {}
+    no = struct(ok = False, gate = None)
+    plan = {}  # pkg_key -> caller-facing struct(ok, gate)
+    raw_plan = {}  # pkg_key -> target-facing struct(ok, gate)
     nomatch = {}  # marker evaluator names that need an `_nomatch` config_setting
     edge_gates = {}  # (eval_name, dep_key) -> label, shared across packages
+
+    cycle_members_by_group = {}  # group_name -> sorted list of member pkg_keys
+    total_edges = 0
+    for pkg_key in sorted(packages.keys()):
+        pkg = packages[pkg_key]
+        cg = pkg.get("cycle_group")
+        if cg:
+            cycle_members_by_group.setdefault(cg, []).append(pkg_key)
+        total_edges += len(pkg.get("marker_dependencies", []))
+        if _is_extras_proxy(pkg_key, pkg):
+            total_edges += 1
 
     def group(name, kind, labels):
         gate_lines.extend(config_setting_group(name, kind, labels, indent = 1))
@@ -157,23 +191,30 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             loads["selects"] = True
         return ":" + name
 
-    def compute(key):
-        no = struct(ok = False, gate = None)
+    def compute_single(key, ignore_same_cycle = False):
         pkg = packages[key]
         parts = parse_package_key(key)
         resolved = resolved_wheel_candidates(pkg, repo_map)
-        is_extras_proxy = not pkg.get("wheel_candidates") and parts.extra
-        if pkg.get("cycle_group") or pkg.get("post_install_patches") or pkg.get("build_target"):
+        is_extras_proxy = _is_extras_proxy(key, pkg)
+        if pkg.get("post_install_patches") or pkg.get("build_target"):
             return no
         base = None
         if is_extras_proxy:
-            base = plan.get(base_package_key(key))
+            base_key = base_package_key(key)
+            if ignore_same_cycle and is_in_same_cycle(base_key, pkg, packages):
+                base = raw_plan.get(base_key)
+            else:
+                base = plan.get(base_key)
             if not base or not base.ok:
                 return no
         elif not resolved:
             return no
 
-        deps = pkg.get("marker_dependencies", [])
+        deps = [
+            md
+            for md in pkg.get("marker_dependencies", [])
+            if not (ignore_same_cycle and is_in_same_cycle(md["key"], pkg, packages))
+        ]
         for md in deps:
             if md.get("marker") and marker_depends_on_variants(md["marker"], conflict_pairs):
                 return no
@@ -233,37 +274,118 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             return struct(ok = True, gate = items[0])
         return struct(ok = True, gate = group("_reset_ok_" + key, "match_all", items))
 
+    def compute_cycle(group_name):
+        members = cycle_members_by_group[group_name]
+
+        # Compute base/wheel members before extras-only proxies so a same-cycle
+        # extras proxy sees its base member's raw_plan result.
+        wheel_members = []
+        extras_members = []
+        for m in members:
+            if _is_extras_proxy(m, packages[m]):
+                extras_members.append(m)
+            else:
+                wheel_members.append(m)
+
+        for m in wheel_members + extras_members:
+            raw_plan[m] = compute_single(m, ignore_same_cycle = True)
+
+        # Callers outside the cycle can reset across it only when no intra-SCC
+        # edge depends on variants and every member in the SCC is resettable.
+        scc_ok = True
+        scc_gates = []
+        for m in members:
+            m_raw = raw_plan[m]
+            if not m_raw.ok:
+                scc_ok = False
+                break
+            if m_raw.gate:
+                scc_gates.append(m_raw.gate)
+            pkg = packages[m]
+            for md in pkg.get("marker_dependencies", []):
+                if is_in_same_cycle(md["key"], pkg, packages) and md.get("marker"):
+                    if marker_depends_on_variants(md["marker"], conflict_pairs):
+                        scc_ok = False
+                        break
+            if not scc_ok:
+                break
+
+        if not scc_ok:
+            scc_result = no
+        else:
+            scc_gates = sorted({g: True for g in scc_gates}.keys())
+            if not scc_gates:
+                scc_result = struct(ok = True, gate = None)
+            elif len(scc_gates) == 1:
+                scc_result = struct(ok = True, gate = scc_gates[0])
+            else:
+                scc_result = struct(
+                    ok = True,
+                    gate = group("_reset_cycle_" + sanitize_name(group_name), "match_all", scc_gates),
+                )
+
+        for m in members:
+            plan[m] = scc_result
+
+    def node_of(key):
+        cg = packages[key].get("cycle_group")
+        return ("cycle", cg) if cg else ("pkg", key)
+
+    # Each condensed node is expanded at most once (pushing one post-order
+    # frame) and each outgoing edge pushes at most one frame, plus the initial
+    # root push and final empty-stack check.
+    max_dfs_steps = len(packages) + total_edges + 2
+    done_nodes = {}
+    visiting_nodes = {}
     for root in sorted(packages.keys()):
-        if root in plan:
+        root_node = node_of(root)
+        if root_node in done_nodes:
             continue
-        stack = [(root, False)]
-        visiting = {}
-        for _ in range(1 << 20):
+        stack = [(root_node, False)]
+        for _ in range(max_dfs_steps):
             if not stack:
                 break
-            key, expanded = stack.pop()
-            if key in plan:
+            node, expanded = stack.pop()
+            if node in done_nodes:
                 continue
-            if key not in packages:
-                plan[key] = struct(ok = False, gate = None)
-                continue
+            kind, ident = node
             if expanded:
-                plan[key] = compute(key)
+                if kind == "cycle":
+                    compute_cycle(ident)
+                else:
+                    res = compute_single(ident, ignore_same_cycle = False)
+                    plan[ident] = res
+                    raw_plan[ident] = res
+                done_nodes[node] = True
                 continue
-            if key in visiting:
+            if node in visiting_nodes:
                 continue
-            visiting[key] = True
-            stack.append((key, True))
-            parts = parse_package_key(key)
-            if not packages[key].get("wheel_candidates") and parts.extra:
-                stack.append((base_package_key(key), False))
-            for md in packages[key].get("marker_dependencies", []):
-                if md["key"] not in plan and md["key"] not in visiting:
-                    stack.append((md["key"], False))
+            visiting_nodes[node] = True
+            stack.append((node, True))
+            members = cycle_members_by_group[ident] if kind == "cycle" else [ident]
+            for m in members:
+                pkg = packages[m]
+                if _is_extras_proxy(m, pkg):
+                    base_key = base_package_key(m)
+                    if base_key in packages and not (kind == "cycle" and is_in_same_cycle(base_key, pkg, packages)):
+                        dep_node = node_of(base_key)
+                        if dep_node not in done_nodes and dep_node not in visiting_nodes:
+                            stack.append((dep_node, False))
+                for md in pkg.get("marker_dependencies", []):
+                    dep_key = md["key"]
+                    if dep_key not in packages:
+                        continue
+                    if kind == "cycle" and is_in_same_cycle(dep_key, pkg, packages):
+                        continue
+                    dep_node = node_of(dep_key)
+                    if dep_node not in done_nodes and dep_node not in visiting_nodes:
+                        stack.append((dep_node, False))
+        if stack:
+            fail("reset_plan DFS exceeded step bound for root: " + root)
 
     for eval_name in sorted(nomatch):
         gate_lines.extend(flag_setting("{}_nomatch".format(eval_name), ":" + eval_name, "false", indent = 1, use_native = True))
-    return plan
+    return raw_plan
 
 def conflict_pairs(conflict_sets):
     """Build `{(token_a, token_b): True}` of mutually exclusive normalized variant tokens.
