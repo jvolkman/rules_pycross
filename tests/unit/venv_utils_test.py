@@ -1,10 +1,17 @@
+import os
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from pycross.private.build.tools.utils.venv_utils import build_crossenv_venv
+from pycross.private.build.tools.utils.venv_utils import build_standard_venv
+from pycross.private.build.tools.utils.venv_utils import find_site_dir
 from pycross.private.build.tools.utils.venv_utils import inject_python_wrapper
+from pycross.private.build.tools.utils.venv_utils import venv_python_path
 
 
 class MockBuildContext:
@@ -33,6 +40,7 @@ class VenvUtilsTest(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    @unittest.skipIf(os.name == "nt", "POSIX shell wrapper")
     def test_inject_python_wrapper(self):
         ctx = MockBuildContext(self.temp_path)
         inject_python_wrapper(ctx)
@@ -50,6 +58,7 @@ class VenvUtilsTest(unittest.TestCase):
         self.assertIn('os.environ["PYTHONPATH"]', content)
         self.assertIn("site-packages", content)
 
+    @unittest.skipIf(os.name == "nt", "POSIX crossenv layout")
     def test_build_crossenv_venv_writes_site_hooks(self):
         ctx = MockBuildContext(self.temp_path)
         ctx.target_python = Path("/target/bin/python3")
@@ -68,6 +77,50 @@ class VenvUtilsTest(unittest.TestCase):
         self.assertTrue(hooks_pth.exists())
         self.assertIn("FROM_SITE_HOOK", hooks_py.read_text())
         self.assertIn("_pycross_hooks", hooks_pth.read_text())
+
+    @unittest.skipUnless(os.name == "nt", "Windows venv layout")
+    def test_build_standard_venv_on_windows(self):
+        env_dir = self.temp_path / "new env"
+        sdist_dir = self.temp_path / "sdist"
+        sdist_dir.mkdir()
+        (sdist_dir / "from_sdist.py").touch()
+        build_deps = self.temp_path / "build_deps"
+        (build_deps / "from_build_deps").mkdir(parents=True)
+        (build_deps / "from_build_deps" / "__init__.py").touch()
+        extra_pythonpath = self.temp_path / "extra_pythonpath"
+        extra_pythonpath.mkdir()
+        (extra_pythonpath / "from_pythonpath.py").touch()
+        base_prefix = self.temp_path / "users" / "buildpython"
+        base_prefix.mkdir(parents=True)
+        ctx = SimpleNamespace(
+            exec_python=Path(sys.executable),
+            target_python=Path(sys.executable),
+            prefix=self.temp_path,
+            env_dir=env_dir,
+            sdist_dir=sdist_dir,
+            sysconfig_vars={"installed_base": str(base_prefix), "installed_platbase": sys.base_exec_prefix},
+            python_paths=[build_deps],
+            site_hooks=["import os; os.environ['FROM_SITE_HOOK'] = '1'"],
+            build_env={**os.environ, "PYTHONPATH": str(extra_pythonpath)},
+        )
+        ctx.build_env.pop("PYTHONHOME", None)
+        build_standard_venv(ctx)
+
+        self.assertEqual(venv_python_path(env_dir), env_dir / "Scripts" / "python.exe")
+        self.assertEqual(find_site_dir(env_dir), env_dir / "Lib" / "site-packages")
+        output = subprocess.check_output(
+            [
+                str(venv_python_path(env_dir)),
+                "-c",
+                "import os, sys, from_sdist, from_build_deps, from_pythonpath; "
+                "print(sys.prefix); print(sys.base_prefix); print(os.environ['FROM_SITE_HOOK'])",
+            ],
+            cwd=self.temp_path,
+            env=ctx.build_env,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        self.assertEqual(output.splitlines(), [str(env_dir), str(base_prefix), "1"])
 
 
 if __name__ == "__main__":

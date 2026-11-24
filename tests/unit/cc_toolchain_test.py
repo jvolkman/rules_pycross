@@ -267,8 +267,6 @@ class CcToolchainTest(unittest.TestCase):
     def test_setup_cc_layer_uses_msvc_action_environment(self):
         execroot = self.temp_path.resolve() / "exec root"
         execroot.mkdir()
-        sdist_dir = execroot / "source"
-        sdist_dir.mkdir()
         tool_dir = execroot / "external" / "MSVC tools" / "bin"
         config_path = execroot / "config.json"
         user_tool_dir = self.temp_path / "user tools"
@@ -318,8 +316,9 @@ class CcToolchainTest(unittest.TestCase):
             with chdir(execroot):
                 ctx = load_build_context(str(config_path))
             self.assertEqual(ctx.temp_dir, execroot / "scratch")
-            self.assertEqual(ctx.sdist_root_dir, execroot / "source")
-            with chdir(sdist_dir):
+            self.assertEqual(execroot / ctx.build_env["PYCROSS_SDIST_DIR"], ctx.sdist_root_dir)
+            ctx.sdist_dir.mkdir(parents=True)
+            with chdir(ctx.sdist_dir):
                 setup_cc_layer(ctx, cc_config)
 
         self.assertEqual(

@@ -9,8 +9,17 @@ from typing import Optional
 from pycross.private.build.tools.utils.context import BuildContext
 
 
+def venv_python_path(env_dir: Path) -> Path:
+    """Return the Python executable path for the host's venv layout."""
+    if os.name == "nt":
+        return env_dir / "Scripts" / "python.exe"
+    return env_dir / "bin" / "python"
+
+
 def find_site_dir(env_dir: Path) -> Path:
     """Find virtualenv site-packages directory."""
+    if os.name == "nt":
+        return env_dir / "Lib" / "site-packages"
     lib_dir = env_dir / "lib"
     try:
         return next(lib_dir.glob("python*/site-packages"))
@@ -67,21 +76,23 @@ def write_base_prefix_pth(
     parts = []
     need_os = False
 
+    # Python executes these assignments on startup. Quote the paths so that
+    # Windows backslashes are preserved in the string literals.
     if base_prefix:
         if prefix in base_prefix.parents or base_prefix == prefix:
             rel_base = os.path.relpath(base_prefix, site_dir)
-            parts.append(f'sys.base_prefix = os.path.abspath(os.path.join(sitedir, "{rel_base}"))')
+            parts.append(f"sys.base_prefix = os.path.abspath(os.path.join(sitedir, {ascii(rel_base)}))")
             need_os = True
         else:
-            parts.append(f'sys.base_prefix = "{base_prefix}"')
+            parts.append(f"sys.base_prefix = {ascii(str(base_prefix))}")
 
     if platbase_prefix:
         if prefix in platbase_prefix.parents or platbase_prefix == prefix:
             rel_platbase = os.path.relpath(platbase_prefix, site_dir)
-            parts.append(f'sys.base_exec_prefix = os.path.abspath(os.path.join(sitedir, "{rel_platbase}"))')
+            parts.append(f"sys.base_exec_prefix = os.path.abspath(os.path.join(sitedir, {ascii(rel_platbase)}))")
             need_os = True
         else:
-            parts.append(f'sys.base_exec_prefix = "{platbase_prefix}"')
+            parts.append(f"sys.base_exec_prefix = {ascii(str(platbase_prefix))}")
 
     imports = "import os, sys; " if need_os else "import sys; "
     pth_line = imports + "; ".join(parts) + "\n"
@@ -143,7 +154,7 @@ def _write_site_hooks(ctx: BuildContext, site_dir: Path) -> None:
     with open(site_dir / "_pycross_hooks.pth", "w") as f:
         f.write(
             f"import importlib.util; "
-            f"_s = importlib.util.spec_from_file_location('_pycross_hooks', {repr(str(hooks_file.absolute()))}); "
+            f"_s = importlib.util.spec_from_file_location('_pycross_hooks', {ascii(str(hooks_file.absolute()))}); "
             f"_m = importlib.util.module_from_spec(_s); _s.loader.exec_module(_m)\n"
         )
 
@@ -154,15 +165,18 @@ def build_standard_venv(ctx: BuildContext) -> None:
         str(ctx.exec_python),
         "-m",
         "venv",
-        "--symlinks",
         "--without-pip",
-        str(ctx.env_dir),
     ]
+    # Windows needs a launcher in Scripts. Following a symlink to the base
+    # interpreter can bypass the virtual environment.
+    if os.name != "nt":
+        venv_args.append("--symlinks")
+    venv_args.append(str(ctx.env_dir))
     subprocess.check_output(args=venv_args, env=ctx.build_env, stderr=subprocess.STDOUT)
 
     site_dir = find_site_dir(ctx.env_dir)
     with open(site_dir / "_pycross_sys_prefix.pth", "w") as f:
-        f.write(f'import sys; sys.prefix = sys.exec_prefix = "{ctx.env_dir}"\n')
+        f.write(f"import sys; sys.prefix = sys.exec_prefix = {ascii(str(ctx.env_dir))}\n")
 
     base_prefix = resolve_base_prefix(
         ctx.sysconfig_vars.get("installed_base"),
@@ -181,7 +195,16 @@ def build_standard_venv(ctx: BuildContext) -> None:
 
     _write_site_hooks(ctx, site_dir)
 
-    inject_python_wrapper(ctx)
+    if os.name == "nt":
+        # Pass the same import paths to Windows build subprocesses that the
+        # shell wrapper sets on POSIX.
+        python_paths = [str(site_dir), str(ctx.sdist_dir)]
+        existing_pythonpath = ctx.build_env.get("PYTHONPATH")
+        if existing_pythonpath:
+            python_paths.append(existing_pythonpath)
+        ctx.build_env["PYTHONPATH"] = os.pathsep.join(python_paths)
+    else:
+        inject_python_wrapper(ctx)
 
 
 def build_crossenv_venv(ctx: BuildContext) -> None:
@@ -241,7 +264,11 @@ def build_crossenv_or_standard_venv(ctx: BuildContext) -> None:
 
 def inject_python_wrapper(ctx: BuildContext) -> None:
     """Inject custom PYTHONPATH python wrapper script inside virtualenv."""
-    python_exe = ctx.env_dir / "bin" / "python"
+    if os.name == "nt":
+        # Scripts/python.exe is a native launcher and cannot be replaced by a shell script.
+        return
+
+    python_exe = venv_python_path(ctx.env_dir)
     if python_exe.is_symlink():
         real_python = python_exe.readlink()
         if not real_python.is_absolute():
