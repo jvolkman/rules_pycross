@@ -1946,6 +1946,16 @@ def _test_fold_variant_marker_impl(env, target):
         conflict_sets = orthogonal,
     )).equals("F")
 
+    # Parenthesized conjunctions (as emitted by combine_markers) still detect contradictions.
+    env.expect.that_str(fold_variant_marker(
+        "(extra == '__variant_group_app_cpu') and (extra == '__variant_group_app_cuda')",
+        conflict_sets = sets,
+    )).equals("F")
+    env.expect.that_str(fold_variant_marker(
+        "(extra == '__variant_group_app_cpu' and sys_platform == 'linux') and (extra != '__variant_group_app_cpu')",
+        conflict_sets = sets,
+    )).equals("F")
+
 def _test_fold_variant_marker(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_fold_variant_marker_impl)
@@ -2342,6 +2352,31 @@ def _test_uv_local_member_edge_cases_impl(env, target):
     key_b = repo_b["pins"]["torch"].keys()[0]
     env.expect.that_bool(key_a != key_b).equals(True)
     env.expect.that_bool(repo_a["resolution_marker_exprs"][key_a]["marker"] != repo_b["resolution_marker_exprs"][key_b]["marker"]).equals(True)
+
+    # 7. Unpinned multi-hop local chain with contradictory conflict markers prunes the phantom pin,
+    # and an unversioned forked `pkg[extra]` dep expands and prunes variant-gated forks.
+    chain_extra_lock = _lock(
+        [
+            _vpkg("root", dev_deps = {"cpu": [], "cuda": []}),
+            _pkg("lib-a", "0.1.0", source = {"editable": "a"}, deps = [
+                _dep("lib-b", marker = "extra == 'group-4-root-cpu'"),
+                _dep("forkpkg", extra = ["opt"]),
+            ]),
+            _pkg("lib-b", "0.1.0", source = {"editable": "b"}, deps = [
+                _dep("phantom", "1.0", marker = "extra == 'group-4-root-cuda'"),
+            ]),
+            _pkg("phantom", "1.0", wheels = [_whl("phantom-1.0-py3-none-any.whl", "ph1")]),
+            _pkg("forkpkg", "1.0", markers = ["extra == 'group-4-root-cpu'"], wheels = [_whl("forkpkg-1.0-py3-none-any.whl", "f1")], opt_deps = {"opt": []}),
+            _pkg("forkpkg", "2.0", markers = ["extra == 'group-4-root-cuda'"], wheels = [_whl("forkpkg-2.0-py3-none-any.whl", "f2")], opt_deps = {"opt": []}),
+        ],
+        conflicts = [[{"package": "root", "group": "cpu"}, {"package": "root", "group": "cuda"}]],
+    )
+    unpinned_res = translate_uv(_project(name = "lib-a"), chain_extra_lock, _lock_model(projects = ["lib-a"]))
+    env.expect.that_collection(unpinned_res["pins"].keys()).not_contains("phantom")
+    env.expect.that_collection(unpinned_res["pins"]["forkpkg[opt]"].values()).contains_exactly(["forkpkg[opt]@1.0", "forkpkg[opt]@2.0"])
+    cpu_extra_res = translate_uv(_project(name = "root"), chain_extra_lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu"]))
+    env.expect.that_collection(cpu_extra_res["pins"].keys()).not_contains("phantom")
+    env.expect.that_dict(cpu_extra_res["pins"]["forkpkg[opt]"]).contains_exactly({"res_forkpkg_1_0": "forkpkg[opt]@1.0"})
 
 def _test_uv_local_member_edge_cases(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

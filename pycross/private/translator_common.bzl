@@ -394,7 +394,7 @@ def _resolve_candidates(
     marked_candidates = [
         True
         for c in candidates
-        if c.get("markers") or resolution_marker_constraint_name(c["name"], c["version"]) in resolution_marker_exprs
+        if c.get("markers") or resolution_marker_constraint_name(c["name"].split("[")[0], c["version"]) in resolution_marker_exprs
     ]
     is_exact_pin = (
         parsed_spec != None and
@@ -416,7 +416,7 @@ def _resolve_candidates(
         if is_forked:
             cand_marker = cand.get("markers", "")
             if not cand_marker:
-                cname = resolution_marker_constraint_name(cand["name"], cand["version"])
+                cname = resolution_marker_constraint_name(cand["name"].split("[")[0], cand["version"])
                 expr = resolution_marker_exprs.get(cname)
                 if type(expr) == "string":
                     cand_marker = expr

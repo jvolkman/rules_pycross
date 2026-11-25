@@ -441,6 +441,11 @@ def fold_variant_marker(marker, conflict_pairs = None, active_qnames = (), confl
                 frame[2].append(element)
             continue
         stack.pop()
+        if stack and frame[2] and "or" not in frame[2]:
+            # Flatten parenthesized conjunctions (e.g. `(A) and (B)` emitted by
+            # combine_markers) so variant tokens are checked together.
+            stack[-1][2].extend(frame[2])
+            continue
         folded = _fold_variant_level(frame[2], true_tokens, false_tokens, pairs) if frame[2] else "T"
         if not stack:
             return folded
