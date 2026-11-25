@@ -280,6 +280,152 @@ def excluded_variant_items(conflict_sets, selected):
                     excluded[other] = True
     return excluded
 
+_VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
+
+def extract_variant_token(item):
+    """Return `(normalized_token, is_positive)` for an `extra ==/!= '__variant_...'` item, or None."""
+    lhs, op, rhs = item
+    if op not in ("==", "!="):
+        return None
+    if lhs.type == "variable" and lhs.value == "extra" and rhs.type == "string":
+        value = rhs.value
+    elif rhs.type == "variable" and rhs.value == "extra" and lhs.type == "string":
+        value = lhs.value
+    else:
+        return None
+    if not value.startswith(_VARIANT_TOKEN_PREFIX):
+        return None
+    return (value, op == "==")
+
+def variant_conflict_pairs(conflict_sets):
+    """Build `{(token_a, token_b): True}` of mutually exclusive normalized variant tokens.
+
+    Args:
+        conflict_sets: Iterable of lists of variant qualified names.
+
+    Returns:
+        Dict of incompatible normalized variant token pairs.
+    """
+    pairs = {}
+    for qnames in conflict_sets:
+        norm = [pypackaging.utils.canonicalize_name("__variant_" + q) for q in qnames]
+        for a in norm:
+            for b in norm:
+                if a != b:
+                    pairs[(a, b)] = True
+    return pairs
+
+def _fold_variant_marker(elements, true_tokens, false_tokens, conflict_pairs):
+    """Fold one parenthesized marker level under fixed variant truth assignments."""
+    groups = [[]]
+    for e in elements:
+        if e == "or":
+            groups.append([])
+        elif e != "and":
+            groups[-1].append(e)
+
+    results = []
+    for group in groups:
+        positive = {}
+        negative = {}
+        result = "T"
+        for e in group:
+            if e in ("T", "F", "U"):
+                if e == "F":
+                    result = "F"
+                    break
+                if e == "U":
+                    result = "U"
+                continue
+            tok = extract_variant_token(e)
+            if not tok:
+                result = "U"
+                continue
+            token, is_pos = tok
+            if token in true_tokens:
+                if not is_pos:
+                    result = "F"
+                    break
+                continue
+            if token in false_tokens:
+                if is_pos:
+                    result = "F"
+                    break
+                continue
+            (positive if is_pos else negative)[token] = True
+            result = "U"
+
+        if result != "F":
+            for token in positive:
+                if token in negative:
+                    result = "F"
+                    break
+                for other in positive:
+                    if (token, other) in conflict_pairs:
+                        result = "F"
+                        break
+                if result == "F":
+                    break
+        results.append(result)
+
+    if "T" in results:
+        return "T"
+    if "U" in results:
+        return "U"
+    return "F"
+
+def eval_variant_marker(marker, active_qname, conflict_sets):
+    """Partially evaluate a PEP 508 marker assuming `active_qname` is selected.
+
+    Uses 3-valued logic over `__variant_<qname>` tokens and mutual exclusion
+    from `conflict_sets`. Non-variant comparisons (such as `sys_platform`) and
+    unrelated variant sets remain unknown (`"U"`).
+
+    Args:
+        marker: PEP 508 marker string (with uv conflict tokens rewritten to
+            `__variant_<qname>`).
+        active_qname: Variant qualified name assumed active, or `""` for none.
+        conflict_sets: Iterable of lists of variant qualified names.
+
+    Returns:
+        `"T"` if always true under `active_qname`, `"F"` if unsatisfiable under
+        `active_qname`, or `"U"` if it depends on other environment values.
+    """
+    if not marker:
+        return "T"
+    marker_lower = marker.lower()
+    if "__variant_" not in marker_lower and _VARIANT_TOKEN_PREFIX not in marker_lower:
+        return "U"
+
+    true_tokens = {}
+    false_tokens = {}
+    if active_qname:
+        true_tokens[pypackaging.utils.canonicalize_name("__variant_" + active_qname)] = True
+        for rival in excluded_variant_items(conflict_sets, [active_qname]).keys():
+            false_tokens[pypackaging.utils.canonicalize_name("__variant_" + rival)] = True
+
+    pairs = variant_conflict_pairs(conflict_sets)
+
+    tree = pypackaging.markers.parse(marker)
+    stack = [[tree, 0, []]]
+    for _ in range(2 * len(marker) + 1):
+        frame = stack[-1]
+        node = frame[0]
+        if frame[1] < len(node):
+            element = node[frame[1]]
+            frame[1] += 1
+            if type(element) == "list":
+                stack.append([element, 0, []])
+            else:
+                frame[2].append(element)
+            continue
+        stack.pop()
+        folded = _fold_variant_marker(frame[2], true_tokens, false_tokens, pairs) if frame[2] else "T"
+        if not stack:
+            return folded
+        stack[-1][2].append(folded)
+    fail("eval_variant_marker exceeded step bound: " + marker)
+
 def decode_variant_state(raw):
     """Decode a canonical `//_lock:_state` JSON string into a dict of overrides.
 

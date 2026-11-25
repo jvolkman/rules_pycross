@@ -16,33 +16,13 @@ SCC is resettable and no intra-SCC edge depends on variants.
 
 load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
-load("//pycross/private:util.bzl", "base_package_key", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "base_package_key", "extract_variant_token", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name", "variant_conflict_pairs")
 load(":common.bzl", "is_in_same_cycle")
 load(":wheels.bzl", "resolved_wheel_candidates", "wheel_match_condition")
 
 _VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
 
-def variant_token(item):
-    """The variant token an `extra == / != '__variant_...'` item tests, as `(token, positive)`.
-
-    Args:
-        item: Parsed marker comparison tuple `(lhs, op, rhs)`.
-
-    Returns:
-        `(token, positive)` tuple, or None if `item` does not test a variant token.
-    """
-    lhs, op, rhs = item
-    if op not in ("==", "!="):
-        return None
-    if lhs.type == "variable" and lhs.value == "extra" and rhs.type == "string":
-        value = rhs.value
-    elif rhs.type == "variable" and rhs.value == "extra" and lhs.type == "string":
-        value = lhs.value
-    else:
-        return None
-    if not value.startswith(_VARIANT_TOKEN_PREFIX):
-        return None
-    return (value, op == "==")
+variant_token = extract_variant_token
 
 def fold_marker(elements, conflict_pairs):
     """Folds one parenthesized level of a parsed marker.
@@ -387,26 +367,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         gate_lines.extend(flag_setting("{}_nomatch".format(eval_name), ":" + eval_name, "false", indent = 1, use_native = True))
     return raw_plan
 
-def conflict_pairs(conflict_sets):
-    """Build `{(token_a, token_b): True}` of mutually exclusive normalized variant tokens.
-
-    Args:
-        conflict_sets: Iterable of lists of variant qualified names.
-
-    Returns:
-        Dict of incompatible normalized variant token pairs.
-    """
-    tokens = [
-        [pypackaging.utils.canonicalize_name("__variant_" + qname) for qname in qnames]
-        for qnames in conflict_sets
-    ]
-    pairs = {}
-    for set_tokens in tokens:
-        for a in set_tokens:
-            for b in set_tokens:
-                if a != b:
-                    pairs[(a, b)] = True
-    return pairs
+conflict_pairs = variant_conflict_pairs
 
 def render_reset_bzl(flag_labels, string_flag_labels = None):
     """Renders `_lock/reset.bzl`: the variant-reset transition and rule.

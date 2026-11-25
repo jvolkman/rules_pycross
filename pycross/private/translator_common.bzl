@@ -375,7 +375,7 @@ def _resolve_local_dep_constraint(constraint, dep_base_name, dep_version, resolu
     }
     return dep_constraint
 
-def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None):
+def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None, expanded_testonly_pins = None):
     """Resolves a dependency graph of packages.
 
     Ports translator_utils.py resolve_lock_graph() to Starlark.
@@ -405,6 +405,9 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
             extras) to the list of PEP 508 environment markers on the root
             projects' dependency edges to them (optional). Only pins that are
             exclusively requested under markers appear here.
+        expanded_testonly_pins: Optional list of pin base names that were only
+            reached as testonly via pre-expanded local packages, so runtime
+            reachability can still clear their testonly status.
 
     Returns:
         A dict in raw_lock.json format.
@@ -600,12 +603,12 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         direct_pin_names[name] = True
         direct_pin_names[name.split("[")[0]] = True
     testonly_set = {name: True for name in testonly_pins}
+    expanded_testonly = {name: True for name in (expanded_testonly_pins or [])}
     non_testonly_set = {}
     for name in pinned_keys.keys():
         base = name.split("[")[0]
-        if name not in testonly_set and base not in testonly_set:
+        if name not in testonly_set and base not in testonly_set and name not in expanded_testonly and base not in expanded_testonly:
             non_testonly_set[base] = True
-    expanded_testonly = {}
     expanded_local = {}  # (constraint, key) -> bool (True = expanded only as testonly, False = expanded as non-testonly)
     for _ in range(2 * len(distinct_packages) + 1):
         local_pins = []

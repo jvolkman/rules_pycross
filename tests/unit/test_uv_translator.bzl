@@ -14,6 +14,9 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 load("//pycross/private:translator_common.bzl", "read_project_dict_for_testing")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "eval_variant_marker")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", "translate_uv")
 
 def _lock_model(
@@ -1879,6 +1882,362 @@ def _test_uv_virtual_and_directory_members(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_virtual_and_directory_members_impl)
 
+# --- test_eval_variant_marker ---
+
+# buildifier: disable=unused-variable
+def _test_eval_variant_marker_impl(env, target):
+    sets = [["group_app_cpu", "group_app_cuda"]]
+    env.expect.that_str(eval_variant_marker("", "group_app_cpu", sets)).equals("T")
+    env.expect.that_str(eval_variant_marker("sys_platform == 'linux'", "group_app_cpu", sets)).equals("U")
+    env.expect.that_str(eval_variant_marker("extra == '__variant_group_app_cuda'", "group_app_cuda", sets)).equals("T")
+    env.expect.that_str(eval_variant_marker("'__variant_group_app_cuda' == extra", "group_app_cuda", sets)).equals("T")
+    env.expect.that_str(eval_variant_marker("extra == '__variant_group_app_cuda'", "group_app_cpu", sets)).equals("F")
+    env.expect.that_str(eval_variant_marker("extra != '__variant_group_app_cuda'", "group_app_cpu", sets)).equals("T")
+    env.expect.that_str(eval_variant_marker("extra != '__variant_group_app_cpu'", "group_app_cpu", sets)).equals("F")
+    env.expect.that_str(eval_variant_marker("extra == '__variant_group_app_cpu' and extra != '__variant_group_app_cpu'", "", sets)).equals("F")
+    env.expect.that_str(eval_variant_marker(
+        "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
+        "group_app_cpu",
+        sets,
+    )).equals("U")
+    env.expect.that_str(eval_variant_marker(
+        "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
+        "group_app_cuda",
+        sets,
+    )).equals("F")
+    env.expect.that_str(eval_variant_marker(
+        "(extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda') or (extra != '__variant_group_app_cpu' and extra != '__variant_group_app_cuda')",
+        "group_app_cpu",
+        sets,
+    )).equals("F")
+    env.expect.that_str(eval_variant_marker(
+        "(extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda') or (extra != '__variant_group_app_cpu' and extra != '__variant_group_app_cuda')",
+        "",
+        sets,
+    )).equals("U")
+
+    # Overlapping conflict sets + nested parens.
+    overlapping = [["group_app_a", "group_app_b"], ["group_app_a", "group_app_c"]]
+    env.expect.that_str(eval_variant_marker(
+        "((extra == '__variant_group_app_b' or extra == '__variant_group_app_c') and sys_platform == 'linux')",
+        "group_app_a",
+        overlapping,
+    )).equals("F")
+    env.expect.that_str(eval_variant_marker(
+        "extra == '__variant_group_app_b' and extra == '__variant_group_app_c'",
+        "",
+        overlapping,
+    )).equals("U")
+
+def _test_eval_variant_marker(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_eval_variant_marker_impl)
+
+# --- test_uv_local_member_conflict_markers ---
+
+# buildifier: disable=unused-variable
+def _test_uv_local_member_conflict_markers_impl(env, target):
+    """Local member conflict-routed deps stay disjoint across root, wildcard, per-variant, and member-only repos."""
+    m_darwin_cpu = "(sys_platform == 'darwin' and extra == 'group-14-conflict-repro-cpu') or (extra == 'group-14-conflict-repro-cpu' and extra == 'group-14-conflict-repro-cuda')"
+    m_notdarwin_cpu = "(sys_platform != 'darwin' and extra == 'group-14-conflict-repro-cpu') or (extra == 'group-14-conflict-repro-cpu' and extra == 'group-14-conflict-repro-cuda')"
+    m_neither = "(extra == 'group-14-conflict-repro-cpu' and extra == 'group-14-conflict-repro-cuda') or (extra != 'group-14-conflict-repro-cpu' and extra != 'group-14-conflict-repro-cuda')"
+    m_cuda = "extra == 'group-14-conflict-repro-cuda'"
+
+    project = _project(name = "conflict-repro")
+    lock = _lock(
+        [
+            _vpkg(
+                "conflict-repro",
+                version = "0.0.0",
+                dev_deps = {
+                    "cpu": [
+                        _dep("lib"),
+                        _dep("torch", "2.9.1", marker = m_darwin_cpu),
+                        _dep("torch", "2.9.1+cpu", marker = m_notdarwin_cpu),
+                    ],
+                    "cuda": [
+                        _dep("lib"),
+                        _dep("torch", "2.9.1+cu129"),
+                    ],
+                },
+            ),
+            _pkg(
+                "lib",
+                "0.1.0",
+                source = {"editable": "lib"},
+                deps = [
+                    _dep("torch", "2.9.1", marker = m_darwin_cpu),
+                    _dep("torch", "2.9.1", marker = m_neither),
+                    _dep("torch", "2.9.1+cpu", marker = m_notdarwin_cpu),
+                    _dep("torch", "2.9.1+cu129", marker = m_cuda),
+                ],
+            ),
+            _pkg("torch", "2.9.1", markers = ["sys_platform == 'darwin'"], wheels = [_whl("torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", "a1")]),
+            _pkg("torch", "2.9.1", wheels = [_whl("torch-2.9.1-cp312-cp312-manylinux_2_28_x86_64.whl", "a2")]),
+            _pkg("torch", "2.9.1+cpu", markers = ["sys_platform != 'darwin'"], wheels = [_whl("torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", "b1")]),
+            _pkg("torch", "2.9.1+cu129", wheels = [_whl("torch-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_x86_64.whl", "c1")]),
+        ],
+        conflicts = [[
+            {"package": "conflict-repro", "group": "cpu"},
+            {"package": "conflict-repro", "group": "cuda"},
+        ]],
+    )
+
+    expected_both = {
+        "group_conflict-repro_cpu_res_torch_2_9_1__group_conflict-repro_cpu": "torch@2.9.1",
+        "group_conflict-repro_cpu_res_torch_2_9_1_cpu__group_conflict-repro_cpu": "torch@2.9.1+cpu",
+        "group_conflict-repro_cuda": "torch@2.9.1+cu129",
+    }
+
+    # 1. Root project with both conflict groups.
+    root_both = translate_uv(project, lock, _lock_model(projects = ["conflict-repro"], dependency_groups = ["default", "group:cpu", "group:cuda"]))
+    env.expect.that_dict(root_both["pins"]["torch"]).contains_exactly(expected_both)
+
+    # 2. Wildcard projects with both conflict groups: plain __edge_ entries from lib are pruned.
+    all_both = translate_uv(project, lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu", "group:cuda"]))
+    env.expect.that_dict(all_both["pins"]["torch"]).contains_exactly(expected_both)
+
+    # 3. CPU-only repo with wildcard projects: no CUDA branch or plain __edge_ entries.
+    all_cpu = translate_uv(project, lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu"]))
+    env.expect.that_dict(all_cpu["pins"]["torch"]).contains_exactly({
+        "group_conflict-repro_cpu_res_torch_2_9_1__group_conflict-repro_cpu": "torch@2.9.1",
+        "group_conflict-repro_cpu_res_torch_2_9_1_cpu__group_conflict-repro_cpu": "torch@2.9.1+cpu",
+    })
+
+    # 4. CUDA-only repo with wildcard projects: only the CUDA variant branch.
+    all_cuda = translate_uv(project, lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cuda"]))
+    env.expect.that_dict(all_cuda["pins"]["torch"]).contains_exactly({
+        "group_conflict-repro_cuda": "torch@2.9.1+cu129",
+    })
+
+    # 5. Member-only repo without conflict groups: keeps all three conflict-routed __edge_ branches.
+    lib_only = translate_uv(_project(name = "lib"), lock, _lock_model(projects = ["lib"], dependency_groups = ["default"]))
+    lib_torch = lib_only["pins"]["torch"]
+    env.expect.that_collection(lib_torch.values()).contains_exactly(["torch@2.9.1", "torch@2.9.1+cpu", "torch@2.9.1+cu129"])
+    by_ver = {v: k for k, v in lib_torch.items()}
+    for ver in ["torch@2.9.1", "torch@2.9.1+cpu", "torch@2.9.1+cu129"]:
+        env.expect.that_str(by_ver[ver]).contains("__edge_")
+    env.expect.that_str(lib_only["resolution_marker_exprs"][by_ver["torch@2.9.1"]]).contains("extra != '__variant_group_conflict-repro_cpu'")
+
+def _test_uv_local_member_conflict_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_member_conflict_markers_impl)
+
+# --- test_uv_local_member_chain_and_empty_pin_pruning ---
+
+# buildifier: disable=unused-variable
+def _test_uv_local_member_chain_and_empty_pin_pruning_impl(env, target):
+    """Multi-hop local member expansion prunes unsatisfiable conflict branches and drops emptied pins."""
+    m_cpu = "extra == 'group-4-root-cpu'"
+    m_cuda = "extra == 'group-4-root-cuda'"
+    lock = _lock(
+        [
+            _vpkg("root", dev_deps = {"cpu": [_dep("lib-a")], "cuda": [_dep("lib-a")]}),
+            _pkg("lib-a", "0.1.0", source = {"editable": "a"}, deps = [_dep("lib-b")]),
+            _pkg(
+                "lib-b",
+                "0.1.0",
+                source = {"editable": "b"},
+                deps = [
+                    _dep("torch", "2.9.1+cpu", marker = m_cpu),
+                    _dep("torch", "2.9.1+cu129", marker = m_cuda),
+                    _dep("triton", "3.5.1", marker = m_cuda),
+                ],
+            ),
+            _pkg("torch", "2.9.1+cpu", wheels = [_whl("torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", "aa")]),
+            _pkg("torch", "2.9.1+cu129", wheels = [_whl("torch-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_x86_64.whl", "bb")]),
+            _pkg("triton", "3.5.1", wheels = [_whl("triton-3.5.1-cp312-cp312-manylinux_2_28_x86_64.whl", "cc")]),
+        ],
+        conflicts = [[
+            {"package": "root", "group": "cpu"},
+            {"package": "root", "group": "cuda"},
+        ]],
+    )
+
+    both = translate_uv(_project(name = "root"), lock, _lock_model(projects = ["root"], dependency_groups = ["default", "group:cpu", "group:cuda"]))
+    env.expect.that_dict(both["pins"]["torch"]).contains_exactly({
+        "group_root_cpu": "torch@2.9.1+cpu",
+        "group_root_cuda": "torch@2.9.1+cu129",
+    })
+    env.expect.that_dict(both["pins"]["triton"]).contains_exactly({
+        "group_root_cuda": "triton@3.5.1",
+    })
+
+    # In a CPU-only wildcard repo, triton is only satisfiable under cuda so its
+    # pin and root_dependency_markers entry are both dropped cleanly.
+    cpu_only = translate_uv(_project(name = "root"), lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu"]))
+    env.expect.that_dict(cpu_only["pins"]["torch"]).contains_exactly({"group_root_cpu": "torch@2.9.1+cpu"})
+    env.expect.that_collection(cpu_only["pins"].keys()).not_contains("triton")
+    env.expect.that_collection(cpu_only.get("root_dependency_markers", {}).keys()).not_contains("triton")
+
+def _test_uv_local_member_chain_and_empty_pin_pruning(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_member_chain_and_empty_pin_pruning_impl)
+
+# --- test_uv_asymmetric_fork_with_independent_member ---
+
+# buildifier: disable=unused-variable
+def _test_uv_asymmetric_fork_with_independent_member_impl(env, target):
+    """When a conflict variant only covers one forked version, an independent member's edge for another version is narrowed rather than dropped."""
+    m_cpu_darwin = "sys_platform == 'darwin' and extra == 'group-4-root-cpu'"
+    m_cpu_other = "sys_platform != 'darwin' and extra == 'group-4-root-cpu'"
+    m_cuda_linux = "sys_platform == 'linux' and extra == 'group-4-root-cuda'"
+    m_lib_plain = "(sys_platform == 'darwin' and extra == 'group-4-root-cpu') or (sys_platform != 'linux' and extra == 'group-4-root-cuda') or (extra != 'group-4-root-cpu' and extra != 'group-4-root-cuda')"
+    lock = _lock(
+        [
+            _vpkg(
+                "root",
+                dev_deps = {
+                    "cpu": [
+                        _dep("torch", "2.9.1", marker = m_cpu_darwin),
+                        _dep("torch", "2.9.1+cpu", marker = m_cpu_other),
+                    ],
+                    "cuda": [
+                        _dep("torch", "2.9.1+cu129", marker = m_cuda_linux),
+                    ],
+                },
+            ),
+            _pkg(
+                "lib",
+                "0.1.0",
+                source = {"editable": "lib"},
+                deps = [
+                    _dep("torch", "2.9.1", marker = m_lib_plain),
+                    _dep("torch", "2.9.1+cpu", marker = m_cpu_other),
+                    _dep("torch", "2.9.1+cu129", marker = m_cuda_linux),
+                ],
+            ),
+            _pkg("torch", "2.9.1", markers = ["sys_platform == 'darwin'"], wheels = [_whl("torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", "a1")]),
+            _pkg("torch", "2.9.1+cpu", markers = ["sys_platform != 'darwin'"], wheels = [_whl("torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", "b1")]),
+            _pkg("torch", "2.9.1+cu129", markers = ["sys_platform == 'linux'"], wheels = [_whl("torch-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_x86_64.whl", "c1")]),
+        ],
+        conflicts = [[
+            {"package": "root", "group": "cpu"},
+            {"package": "root", "group": "cuda"},
+        ]],
+    )
+
+    result = translate_uv(_project(name = "root"), lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu", "group:cuda"]))
+    torch_pin = result["pins"]["torch"]
+    exprs = result["resolution_marker_exprs"]
+
+    # Root's three variant-fork entries stay intact.
+    env.expect.that_str(torch_pin["group_root_cpu_res_torch_2_9_1__group_root_cpu"]).equals("torch@2.9.1")
+    env.expect.that_str(torch_pin["group_root_cpu_res_torch_2_9_1_cpu__group_root_cpu"]).equals("torch@2.9.1+cpu")
+    env.expect.that_str(torch_pin["group_root_cuda_res_torch_2_9_1_cu129__group_root_cuda"]).equals("torch@2.9.1+cu129")
+
+    # Lib's 2.9.1 edge stays narrowed to cuda (the only variant that does not
+    # already have a 2.9.1 entry), while its 2.9.1+cpu and 2.9.1+cu129 edges are dropped.
+    edge_keys = [k for k in torch_pin.keys() if "__edge_" in k]
+    env.expect.that_collection(edge_keys).has_size(1)
+    env.expect.that_str(torch_pin[edge_keys[0]]).equals("torch@2.9.1")
+    env.expect.that_str(exprs[edge_keys[0]]).contains("(extra == '__variant_group_root_cuda') and ")
+
+def _test_uv_asymmetric_fork_with_independent_member(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_asymmetric_fork_with_independent_member_impl)
+
+# --- test_uv_testonly_local_member_expansion ---
+
+# buildifier: disable=unused-variable
+def _test_uv_testonly_local_member_expansion_impl(env, target):
+    """Testonly local member deps stay testonly unless reachable from runtime pins, and pruned edges don't strip testonly."""
+    lock = _lock(
+        [
+            _vpkg("app", deps = [_dep("runtime-pkg", "1.0")], dev_deps = {"test": [_dep("test-helper")]}),
+            _pkg("test-helper", "0.1.0", source = {"editable": "test-helper"}, deps = [_dep("pytest", "8.0"), _dep("shared", "1.0")]),
+            _pkg("runtime-pkg", "1.0", wheels = [_whl("runtime_pkg-1.0-py3-none-any.whl", "r1")], deps = [_dep("shared", "1.0")]),
+            _pkg("shared", "1.0", wheels = [_whl("shared-1.0-py3-none-any.whl", "s1")]),
+            _pkg("pytest", "8.0", wheels = [_whl("pytest-8.0-py3-none-any.whl", "p1")]),
+        ],
+    )
+    result = translate_uv(
+        _project(name = "app"),
+        lock,
+        _lock_model(projects = ["app"], dependency_groups = ["default", "group:test"], testonly_groups = ["group:test"]),
+    )
+    env.expect.that_collection(result["testonly_pins"]).contains_exactly(["pytest"])
+
+    # A pruned non-testonly edge from another member does not strip testonly from a surviving testonly pin.
+    conflict_lock = _lock(
+        [
+            _vpkg("root", dev_deps = {"cpu": [_dep("pytest", "8.0")], "cuda": []}),
+            _pkg("lib", "0.1.0", source = {"editable": "lib"}, deps = [_dep("pytest", "8.0", marker = "extra == 'group-4-root-cuda'")]),
+            _pkg("pytest", "8.0", wheels = [_whl("pytest-8.0-py3-none-any.whl", "p1")]),
+        ],
+        conflicts = [[{"package": "root", "group": "cpu"}, {"package": "root", "group": "cuda"}]],
+    )
+    pruned_res = translate_uv(
+        _project(name = "root"),
+        conflict_lock,
+        _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu"], testonly_groups = ["group:cpu"]),
+    )
+    env.expect.that_collection(pruned_res["testonly_pins"]).contains_exactly(["pytest"])
+
+def _test_uv_testonly_local_member_expansion(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_testonly_local_member_expansion_impl)
+
+# --- test_uv_local_member_edge_cases ---
+
+# buildifier: disable=unused-variable
+def _test_uv_local_member_edge_cases_impl(env, target):
+    """Covers local cycles with markers, local+registry name match, all-pruned unversioned forks, and base+extra marker collisions."""
+
+    # 1. Local cycle with markers terminates cleanly, and exact registry version is not hijacked by a local package.
+    cycle_lock = _lock([
+        _vpkg("root", deps = [_dep("lib-a"), _dep("dual", "2.0.0")]),
+        _pkg("lib-a", "0.1.0", source = {"editable": "a"}, deps = [_dep("lib-b", marker = "sys_platform == 'linux'")]),
+        _pkg("lib-b", "0.1.0", source = {"editable": "b"}, deps = [_dep("lib-a", marker = "python_version >= '3.10'"), _dep("six", "1.17.0")]),
+        _pkg("dual", "0.1.0", source = {"editable": "dual"}),
+        _pkg("dual", "2.0.0", wheels = [_whl("dual-2.0.0-py3-none-any.whl", "d2")]),
+        _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "s1")]),
+    ])
+    cycle_res = translate_uv(_project(name = "root"), cycle_lock, _lock_model(projects = ["root"]))
+    env.expect.that_str(cycle_res["pins"]["six"]).equals("six@1.17.0")
+    env.expect.that_str(cycle_res["pins"]["dual"]).equals("dual@2.0.0")
+
+    # 2. Unversioned local dep to a forked package whose forks are all pruned under the active variant is dropped (not re-emitted unversioned).
+    pruned_fork_lock = _lock(
+        [
+            _vpkg("root", dev_deps = {"cpu": [_dep("lib")], "cuda": [_dep("lib")]}),
+            _pkg("lib", "0.1.0", source = {"editable": "lib"}, deps = [_dep("forkpkg")]),
+            _pkg("forkpkg", "1.0", markers = ["sys_platform == 'linux' and extra == 'group-4-root-cuda'"], wheels = [_whl("forkpkg-1.0-py3-none-any.whl", "f1")]),
+            _pkg("forkpkg", "2.0", markers = ["sys_platform == 'darwin' and extra == 'group-4-root-cuda'"], wheels = [_whl("forkpkg-2.0-py3-none-any.whl", "f2")]),
+        ],
+        conflicts = [[{"package": "root", "group": "cpu"}, {"package": "root", "group": "cuda"}]],
+    )
+    cpu_fork_res = translate_uv(_project(name = "root"), pruned_fork_lock, _lock_model(projects = ["root"], dependency_groups = ["default", "group:cpu"]))
+    env.expect.that_collection(cpu_fork_res["pins"].keys()).not_contains("forkpkg")
+
+    # 3. Base package and extra at the same forked version with distinct markers under one variant do not clobber each other.
+    extra_fork_lock = _lock(
+        [
+            _vpkg(
+                "root",
+                dev_deps = {
+                    "cpu": [
+                        _dep("torch", "2.9.1", marker = "sys_platform == 'darwin' and extra == 'group-4-root-cpu'"),
+                        _dep("torch", "2.9.1", extra = ["opt"], marker = "sys_platform == 'linux' and extra == 'group-4-root-cpu'"),
+                    ],
+                },
+            ),
+            _pkg("torch", "2.9.1", markers = ["sys_platform == 'darwin'"], wheels = [_whl("torch-2.9.1-py3-none-any.whl", "t1")], opt_deps = {"opt": []}),
+            _pkg("torch", "2.9.1+cpu", markers = ["sys_platform != 'darwin'"], wheels = [_whl("torch-2.9.1%2Bcpu-py3-none-any.whl", "t2")], opt_deps = {"opt": []}),
+        ],
+        conflicts = [[{"package": "root", "group": "cpu"}, {"package": "root", "group": "cuda"}]],
+    )
+    extra_res = translate_uv(_project(name = "root"), extra_fork_lock, _lock_model(projects = ["root"], dependency_groups = ["default", "group:cpu"]))
+    base_k = extra_res["pins"]["torch"].keys()[0]
+    opt_k = extra_res["pins"]["torch[opt]"].keys()[0]
+    env.expect.that_bool(base_k != opt_k).equals(True)
+    env.expect.that_str(extra_res["resolution_marker_exprs"][extra_res["resolution_marker_exprs"][base_k]["marker"]]).contains("darwin")
+    env.expect.that_str(extra_res["resolution_marker_exprs"][extra_res["resolution_marker_exprs"][opt_k]["marker"]]).contains("linux")
+
+def _test_uv_local_member_edge_cases(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_member_edge_cases_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -1930,5 +2289,11 @@ def uv_translator_test_suite(name):
             _test_uv_project_conflict_asymmetric_edges,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
+            _test_eval_variant_marker,
+            _test_uv_local_member_conflict_markers,
+            _test_uv_local_member_chain_and_empty_pin_pruning,
+            _test_uv_asymmetric_fork_with_independent_member,
+            _test_uv_testonly_local_member_expansion,
+            _test_uv_local_member_edge_cases,
         ],
     )
