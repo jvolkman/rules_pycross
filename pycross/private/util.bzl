@@ -283,7 +283,14 @@ def excluded_variant_items(conflict_sets, selected):
 _VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
 
 def extract_variant_token(item):
-    """Return `(normalized_token, is_positive)` for an `extra ==/!= '__variant_...'` item, or None."""
+    """Return `(normalized_token, is_positive)` for an `extra ==/!= '__variant_...'` item, or None.
+
+    Args:
+        item: Parsed marker comparison tuple `(lhs, op, rhs)`.
+
+    Returns:
+        `(token, positive)` tuple, or None if `item` does not test a variant token.
+    """
     lhs, op, rhs = item
     if op not in ("==", "!="):
         return None
