@@ -14,7 +14,7 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 load("//pycross/private:translator_common.bzl", "read_project_dict_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "eval_variant_marker")
+load("//pycross/private:util.bzl", "fold_variant_marker")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", "translate_uv")
@@ -1882,56 +1882,58 @@ def _test_uv_virtual_and_directory_members(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_virtual_and_directory_members_impl)
 
-# --- test_eval_variant_marker ---
+# --- test_fold_variant_marker ---
 
 # buildifier: disable=unused-variable
-def _test_eval_variant_marker_impl(env, target):
+def _test_fold_variant_marker_impl(env, target):
     sets = [["group_app_cpu", "group_app_cuda"]]
-    env.expect.that_str(eval_variant_marker("", "group_app_cpu", sets)).equals("T")
-    env.expect.that_str(eval_variant_marker("sys_platform == 'linux'", "group_app_cpu", sets)).equals("U")
-    env.expect.that_str(eval_variant_marker("extra == '__variant_group_app_cuda'", "group_app_cuda", sets)).equals("T")
-    env.expect.that_str(eval_variant_marker("'__variant_group_app_cuda' == extra", "group_app_cuda", sets)).equals("T")
-    env.expect.that_str(eval_variant_marker("extra == '__variant_group_app_cuda'", "group_app_cpu", sets)).equals("F")
-    env.expect.that_str(eval_variant_marker("extra != '__variant_group_app_cuda'", "group_app_cpu", sets)).equals("T")
-    env.expect.that_str(eval_variant_marker("extra != '__variant_group_app_cpu'", "group_app_cpu", sets)).equals("F")
-    env.expect.that_str(eval_variant_marker("extra == '__variant_group_app_cpu' and extra != '__variant_group_app_cpu'", "", sets)).equals("F")
-    env.expect.that_str(eval_variant_marker(
+    env.expect.that_str(fold_variant_marker("", active_qname = "group_app_cpu", conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("sys_platform == 'linux'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("N")
+    env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cuda'", active_qname = "group_app_cuda", conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("'__variant_group_app_cuda' == extra", active_qname = "group_app_cuda", conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cuda'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("F")
+    env.expect.that_str(fold_variant_marker("extra != '__variant_group_app_cuda'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("extra != '__variant_group_app_cpu'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("F")
+    env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cpu' and extra != '__variant_group_app_cpu'", conflict_sets = sets)).equals("F")
+    env.expect.that_str(fold_variant_marker(
         "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
-        "group_app_cpu",
-        sets,
-    )).equals("U")
-    env.expect.that_str(eval_variant_marker(
+        active_qname = "group_app_cpu",
+        conflict_sets = sets,
+    )).equals("N")
+    env.expect.that_str(fold_variant_marker(
         "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
-        "group_app_cuda",
-        sets,
+        active_qname = "group_app_cuda",
+        conflict_sets = sets,
     )).equals("F")
-    env.expect.that_str(eval_variant_marker(
+    env.expect.that_str(fold_variant_marker(
         "(extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda') or (extra != '__variant_group_app_cpu' and extra != '__variant_group_app_cuda')",
-        "group_app_cpu",
-        sets,
+        active_qname = "group_app_cpu",
+        conflict_sets = sets,
     )).equals("F")
-    env.expect.that_str(eval_variant_marker(
+    env.expect.that_str(fold_variant_marker(
         "(extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda') or (extra != '__variant_group_app_cpu' and extra != '__variant_group_app_cuda')",
-        "",
-        sets,
-    )).equals("U")
+        conflict_sets = sets,
+    )).equals("V")
+    env.expect.that_str(fold_variant_marker(
+        "sys_platform == 'linux' or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
+        conflict_sets = sets,
+    )).equals("N")
 
     # Overlapping conflict sets + nested parens.
     overlapping = [["group_app_a", "group_app_b"], ["group_app_a", "group_app_c"]]
-    env.expect.that_str(eval_variant_marker(
+    env.expect.that_str(fold_variant_marker(
         "((extra == '__variant_group_app_b' or extra == '__variant_group_app_c') and sys_platform == 'linux')",
-        "group_app_a",
-        overlapping,
+        active_qname = "group_app_a",
+        conflict_sets = overlapping,
     )).equals("F")
-    env.expect.that_str(eval_variant_marker(
+    env.expect.that_str(fold_variant_marker(
         "extra == '__variant_group_app_b' and extra == '__variant_group_app_c'",
-        "",
-        overlapping,
-    )).equals("U")
+        conflict_sets = overlapping,
+    )).equals("V")
 
-def _test_eval_variant_marker(name):
+def _test_fold_variant_marker(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_eval_variant_marker_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_fold_variant_marker_impl)
 
 # --- test_uv_local_member_conflict_markers ---
 
@@ -2289,7 +2291,7 @@ def uv_translator_test_suite(name):
             _test_uv_project_conflict_asymmetric_edges,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
-            _test_eval_variant_marker,
+            _test_fold_variant_marker,
             _test_uv_local_member_conflict_markers,
             _test_uv_local_member_chain_and_empty_pin_pruning,
             _test_uv_asymmetric_fork_with_independent_member,

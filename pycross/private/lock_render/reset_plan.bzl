@@ -14,73 +14,10 @@ callers outside the cycle reset across the cycle only when every member of the
 SCC is resettable and no intra-SCC edge depends on variants.
 """
 
-load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
-load("//pycross/private:util.bzl", "base_package_key", "extract_variant_token", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name", "variant_conflict_pairs")
+load("//pycross/private:util.bzl", "base_package_key", "fold_variant_marker", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name", "variant_conflict_pairs")
 load(":common.bzl", "is_in_same_cycle")
 load(":wheels.bzl", "resolved_wheel_candidates", "wheel_match_condition")
-
-_VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
-
-variant_token = extract_variant_token
-
-def fold_marker(elements, conflict_pairs):
-    """Folds one parenthesized level of a parsed marker.
-
-    Args:
-        elements: Items (tuples), "and"/"or", and folded child results.
-        conflict_pairs: {(token, token): True} of variant tokens that are never
-            active together.
-
-    Returns:
-        "T" (always true), "F" (never true), "V" (depends on a variant) or
-        "N" (doesn't depend on a variant).
-    """
-    groups = [[]]
-    for e in elements:
-        if e == "or":
-            groups.append([])
-        elif e != "and":
-            groups[-1].append(e)
-
-    results = []
-    for group in groups:
-        positive = {}
-        negative = {}
-        result = "T"
-        for e in group:
-            if e in ("T", "F", "V", "N"):
-                if e == "F":
-                    result = "F"
-                    break
-                if e == "V" or (e == "N" and result == "T"):
-                    result = e
-                continue
-            token = variant_token(e)
-            if token:
-                (positive if token[1] else negative)[token[0]] = True
-                result = "V"
-            elif result == "T":
-                result = "N"
-        if result != "F":
-            for token in positive:
-                if token in negative:
-                    result = "F"
-                    break
-                for other in positive:
-                    if (token, other) in conflict_pairs:
-                        result = "F"
-                        break
-                if result == "F":
-                    break
-        results.append(result)
-
-    if "T" in results:
-        return "T"
-    kept = [r for r in results if r != "F"]
-    if not kept:
-        return "F"
-    return "V" if "V" in kept else "N"
 
 def marker_depends_on_variants(marker, conflict_pairs):
     """Whether a marker's value can depend on the selected variants.
@@ -96,30 +33,7 @@ def marker_depends_on_variants(marker, conflict_pairs):
     Returns:
         True if the marker's result can vary with the selected variants.
     """
-    if "__variant_" not in marker and _VARIANT_TOKEN_PREFIX not in marker:
-        return False
-    tree = pypackaging.markers.parse(marker)
-    stack = [[tree, 0, []]]
-
-    # Each step either consumes one element of a parsed list or pops one list;
-    # both counts are bounded by len(marker).
-    for _ in range(2 * len(marker) + 1):
-        frame = stack[-1]
-        node = frame[0]
-        if frame[1] < len(node):
-            element = node[frame[1]]
-            frame[1] += 1
-            if type(element) == "list":
-                stack.append([element, 0, []])
-            else:
-                frame[2].append(element)
-            continue
-        stack.pop()
-        folded = fold_marker(frame[2], conflict_pairs) if frame[2] else "T"
-        if not stack:
-            return folded == "V"
-        stack[-1][2].append(folded)
-    fail("marker_depends_on_variants exceeded step bound: " + marker)
+    return fold_variant_marker(marker, conflict_pairs = conflict_pairs) == "V"
 
 def _is_extras_proxy(key, pkg):
     return not pkg.get("wheel_candidates") and bool(parse_package_key(key).extra)
@@ -137,7 +51,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
     Args:
         packages: The lock's packages.
         repo_map: File key -> label.
-        conflict_pairs: {(token, token): True} (see fold_marker).
+        conflict_pairs: {(token, token): True} (see `variant_conflict_pairs`).
         gate_lines: Output lines for the gate config_setting(_group)s.
         loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
 

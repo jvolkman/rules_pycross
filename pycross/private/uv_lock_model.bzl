@@ -19,7 +19,7 @@ load(
     "resolve_lock_graph",
     "sha256_from_string",
 )
-load(":util.bzl", "eval_variant_marker", "excluded_variant_items", "sanitize_name", "url_decode_filename", "url_filename", "variant_item_qname")
+load(":util.bzl", "excluded_variant_items", "fold_variant_marker", "sanitize_name", "url_decode_filename", "url_filename", "variant_conflict_pairs", "variant_item_qname")
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
     """Parse a UV lock file entry into a file dict.
@@ -261,7 +261,8 @@ def _expand_local_requirements(
         pkgs_by_name,
         fork_constraints,
         resolution_marker_exprs,
-        set_qnames):
+        set_qnames,
+        conflict_pairs):
     """Expand local package edges into non-local requirements with conflict-marker pruning."""
     requirements = []  # (pin_name, specifier, raw_constraint, is_testonly, pin_marker, avail_marker, from_local)
     expanded_local = {}  # (local_id, constraint, pin_marker, avail_marker) -> is_testonly
@@ -299,7 +300,7 @@ def _expand_local_requirements(
                     cand_marker = _combine_markers(pin_marker, fork_expr)
                     cand_avail = _combine_markers(avail_marker, fork_expr)
                     if constraint and cand_marker and "__variant_" in cand_marker:
-                        ev = eval_variant_marker(cand_marker, constraint, set_qnames)
+                        ev = fold_variant_marker(cand_marker, conflict_pairs = conflict_pairs, active_qname = constraint, conflict_sets = set_qnames)
                         if ev == "F":
                             continue
                         if ev == "T":
@@ -327,7 +328,7 @@ def _expand_local_requirements(
             combined_avail = _combine_markers(avail_marker, d_marker)
             combined_pin = _combine_markers(pin_marker, d_marker)
             if constraint and combined_pin and "__variant_" in combined_pin:
-                ev = eval_variant_marker(combined_pin, constraint, set_qnames)
+                ev = fold_variant_marker(combined_pin, conflict_pairs = conflict_pairs, active_qname = constraint, conflict_sets = set_qnames)
                 if ev == "F":
                     continue
                 if ev == "T":
@@ -337,7 +338,7 @@ def _expand_local_requirements(
         fail("Local package expansion exceeded step bound")
     return requirements
 
-def _prune_plain_edge_splits(pinned_package_specs, pin_meta, resolution_marker_exprs, created_edge_keys, variant_sets, set_qnames):
+def _prune_plain_edge_splits(pinned_package_specs, pin_meta, resolution_marker_exprs, created_edge_keys, variant_sets, set_qnames, conflict_pairs):
     """Prune or narrow plain `__edge_` entries that overlap variant entries or pinned sets.
 
     A plain edge-split entry (from an edge outside the conflict, e.g. an
@@ -383,7 +384,7 @@ def _prune_plain_edge_splits(pinned_package_specs, pin_meta, resolution_marker_e
                 ]:
                     continue
                 repo_pin = set_pin_by_idx[idx]
-                if repo_pin and eval_variant_marker(expr, repo_pin, set_qnames) == "F":
+                if repo_pin and fold_variant_marker(expr, conflict_pairs = conflict_pairs, active_qname = repo_pin, conflict_sets = set_qnames) == "F":
                     drop = True
                     break
                 if not [q for q in qnames if q in variant_specs]:
@@ -397,7 +398,7 @@ def _prune_plain_edge_splits(pinned_package_specs, pin_meta, resolution_marker_e
                 sat_uncovered = [
                     q
                     for q in uncovered
-                    if eval_variant_marker(expr, q, set_qnames) != "F"
+                    if fold_variant_marker(expr, conflict_pairs = conflict_pairs, active_qname = q, conflict_sets = set_qnames) != "F"
                 ]
                 if not sat_uncovered:
                     drop = True
@@ -743,6 +744,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             local_pkgs_by_name.setdefault(pkg["name"], []).append(pkg)
 
     set_qnames = [[variant_item_qname(item) for item in vs["items"]] for vs in variant_sets]
+    conflict_pairs = variant_conflict_pairs(set_qnames)
 
     # Collect direct requirements, then expand local packages while preserving
     # edge markers and pruning conflict branches unsatisfiable under their
@@ -846,6 +848,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
         _fork_constraints,
         resolution_marker_exprs,
         set_qnames,
+        conflict_pairs,
     )
 
     # End collect requirements
@@ -1004,6 +1007,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
         created_edge_keys,
         variant_sets,
         set_qnames,
+        conflict_pairs,
     )
 
     # Record root dependency markers and testonly classification only from

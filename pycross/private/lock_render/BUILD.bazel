@@ -51,7 +51,6 @@ bzl_library(
         ":wheels",
         "//pycross/private:build_text",
         "//pycross/private:util",
-        "@pypackaging.bzl//:pypackaging",
     ],
 )
 
