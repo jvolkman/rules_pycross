@@ -383,11 +383,11 @@ def _fold_variant_level(elements, true_tokens, false_tokens, conflict_pairs):
         return "F"
     return "V" if "V" in kept else "N"
 
-def fold_variant_marker(marker, conflict_pairs = None, active_qname = "", conflict_sets = None):
+def fold_variant_marker(marker, conflict_pairs = None, active_qnames = (), conflict_sets = None):
     """Fold a PEP 508 marker over uv conflict variant tokens into `"T"`, `"F"`, `"V"`, or `"N"`.
 
     Evaluates `__variant_<qname>` comparisons under optional fixed variant
-    selection (`active_qname` and its rivals in `conflict_sets`) and folds
+    selections (`active_qnames` and their rivals in `conflict_sets`) and folds
     contradictions from `conflict_pairs`/`conflict_sets`.
 
     Args:
@@ -395,9 +395,10 @@ def fold_variant_marker(marker, conflict_pairs = None, active_qname = "", confli
             `__variant_<qname>`).
         conflict_pairs: Optional precomputed `{(token_a, token_b): True}` from
             `variant_conflict_pairs`. Computed from `conflict_sets` if omitted.
-        active_qname: Optional variant qualified name assumed active, or `""`.
+        active_qnames: Optional iterable of variant qualified names assumed
+            active simultaneously.
         conflict_sets: Optional iterable of lists of variant qualified names
-            (used to derive rivals of `active_qname`, and `conflict_pairs` when
+            (used to derive rivals of `active_qnames`, and `conflict_pairs` when
             not provided).
 
     Returns:
@@ -414,10 +415,15 @@ def fold_variant_marker(marker, conflict_pairs = None, active_qname = "", confli
 
     true_tokens = {}
     false_tokens = {}
-    if active_qname:
-        true_tokens[pypackaging.utils.canonicalize_name("__variant_" + active_qname)] = True
-        for rival in excluded_variant_items(conflict_sets or [], [active_qname]).keys():
+    active = [q for q in active_qnames if q]
+    if active:
+        for q in active:
+            true_tokens[pypackaging.utils.canonicalize_name("__variant_" + q)] = True
+        for rival in excluded_variant_items(conflict_sets or [], active).keys():
             false_tokens[pypackaging.utils.canonicalize_name("__variant_" + rival)] = True
+        for token in true_tokens:
+            if token in false_tokens:
+                return "F"
 
     pairs = conflict_pairs if conflict_pairs != None else variant_conflict_pairs(conflict_sets or [])
 

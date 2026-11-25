@@ -11,15 +11,25 @@ resolution markers, git sources, and editable packages.
 load(
     ":translator_common.bzl",
     "archive_extension",
+    "build_lock_graph",
     "canonicalize_name",
     "compute_requested_dependency_groups",
+    "expand_root_edges",
+    "finalize_lock_graph",
     "read_project_and_lock",
-    "record_root_marker",
     "resolution_marker_constraint_name",
-    "resolve_lock_graph",
     "sha256_from_string",
 )
-load(":util.bzl", "excluded_variant_items", "fold_variant_marker", "sanitize_name", "url_decode_filename", "url_filename", "variant_conflict_pairs", "variant_item_qname")
+load(":util.bzl", "url_decode_filename", "url_filename")
+load(
+    ":uv_conflicts.bzl",
+    "apply_repo_variant_pins_and_defaults",
+    "canonicalize_group_key",
+    "make_pin_marker_folder",
+    "parse_uv_conflicts",
+    "resolve_uv_pins",
+    "rewrite_conflict_markers",
+)
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
     """Parse a UV lock file entry into a file dict.
@@ -98,68 +108,12 @@ def _resolve_package_requires_python(markers):
             specifiers.append("{} {}".format(op, version_part))
     return specifiers
 
-def _uv_conflict_token(item):
-    """Return the uv-encoded conflict marker token for a conflict item."""
-    kind = item["kind"]
-    pkg = canonicalize_name(item["package"])
-    name = item.get("name", "")
-    if kind == "extra":
-        return "extra-{}-{}-{}".format(len(pkg), pkg, canonicalize_name(name))
-    if kind == "group":
-        return "group-{}-{}-{}".format(len(pkg), pkg, canonicalize_name(name))
-    if kind == "project":
-        return "project-{}-{}".format(len(pkg), pkg)
-    fail("Unknown conflict item kind: {}".format(kind))
-
-def _canonicalize_group_key(key):
-    """Normalize the name in a requested group key (`optional:<name>`, `group:<name>`)."""
-    kind, sep, name = key.partition(":")
-    if not sep:
-        return key
-    return "{}:{}".format(kind, canonicalize_name(name))
-
-def _is_item_requested(item, requested_keys):
-    """Whether a repo requests a conflict item of one of its projects.
-
-    Args:
-        item: The conflict item.
-        requested_keys: The groups the repo requests from the item's project,
-            as canonicalized keys (`default`, `optional:<name>`, `group:<name>`).
-
-    Returns:
-        True if the item is active in the repo.
-    """
-    kind = item["kind"]
-    if kind == "project":
-        # Here a project variant gates all of the project's edges.
-        return bool(requested_keys)
-    if kind == "extra":
-        return "optional:" + item["name"] in requested_keys
-    return "group:" + item["name"] in requested_keys
-
-def _rewrite_conflict_markers(marker, token_replacements):
-    if not marker or not token_replacements or "extra" not in marker:
-        return marker
-    for old_quoted, new_quoted in token_replacements:
-        if old_quoted in marker:
-            marker = marker.replace(old_quoted, new_quoted)
-    return marker
-
 def _parse_uv_dependency(dep, token_replacements = ()):
-    """Parse a UV lock dependency dict into a specifier.
-
-    Args:
-        dep: Dict with name, version, marker, extra/extras keys.
-        token_replacements: Optional list of (old_quoted, new_quoted) pairs
-            for rewriting uv conflict tokens into __variant_<qname>.
-
-    Returns:
-        A list of dep dicts suitable for resolve_lock_graph.
-    """
+    """Parse a UV lock dependency dict into dep dicts for `build_lock_graph`."""
     name = canonicalize_name(dep.get("name", ""))
     version = dep.get("version", "")
     specifier = "==={}".format(version) if version else ""
-    marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
+    marker = rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
     extras = dep.get("extra") or dep.get("extras", [])
 
     if not extras:
@@ -179,261 +133,6 @@ def _parse_uv_dependency(dep, token_replacements = ()):
         }
         for extra in extras
     ]
-
-def _resolve_uv_dep_constraint(
-        constraint,
-        base_dep_name,
-        dep_version,
-        dep_marker,
-        fork_constraints,
-        resolution_marker_exprs,
-        disambiguate_marker = False):
-    """Combine a group/extra variant constraint with any resolution-marker fork constraint."""
-    if base_dep_name not in fork_constraints or dep_version not in fork_constraints[base_dep_name]:
-        return constraint
-    fork_constraint = fork_constraints[base_dep_name][dep_version]
-    if not constraint:
-        return fork_constraint
-    if dep_marker and dep_marker != resolution_marker_exprs.get(fork_constraint):
-        default_name = "{}__{}".format(fork_constraint, constraint)
-        collides = default_name in resolution_marker_exprs and resolution_marker_exprs[default_name] != dep_marker
-        if disambiguate_marker or collides:
-            edge_fork_constraint = "%s__%s__%x" % (fork_constraint, constraint, hash(dep_marker) & 0xffffffff)
-        else:
-            edge_fork_constraint = default_name
-        resolution_marker_exprs[edge_fork_constraint] = dep_marker
-        fork_constraint = edge_fork_constraint
-    effective_constraint = "{}_{}".format(constraint, fork_constraint)
-
-    # Register compound constraint with its components.
-    resolution_marker_exprs[effective_constraint] = {
-        "variant": constraint,
-        "marker": fork_constraint,
-    }
-    return effective_constraint
-
-def _edge_constraint_name(base_dep_name, specifier, marker):
-    """Build a deterministic `__edge_<hash>` constraint name for `(base_dep_name, specifier, marker)`."""
-    ver = specifier.lstrip("=")
-    prefix = resolution_marker_constraint_name(base_dep_name, ver) if ver else "res_{}".format(sanitize_name(base_dep_name))
-    return "%s__edge_%x" % (prefix, hash(marker) & 0xffffffff)
-
-def _has_pkg_match(pkgs_by_name, pin_name, specifier):
-    """Whether `pkgs_by_name` contains a package matching `(pin_name, specifier)`."""
-    candidates = pkgs_by_name.get(pin_name)
-    if not candidates:
-        return False
-    if not specifier.startswith("==="):
-        return True
-    target_ver = specifier[3:].lower()
-    for cand in candidates:
-        if cand["version"].lower() == target_ver:
-            return True
-    return False
-
-def _find_local_pkg(local_pkgs_by_name, pin_name, specifier):
-    """Return the local package dict matching `(pin_name, specifier)`, or None."""
-    candidates = local_pkgs_by_name.get(pin_name)
-    if candidates == None and "[" in pin_name:
-        candidates = local_pkgs_by_name.get(pin_name.split("[")[0])
-    if not candidates:
-        return None
-    if specifier.startswith("==="):
-        target_ver = specifier[3:].lower()
-        for cand in candidates:
-            if cand["version"].lower() == target_ver:
-                return cand
-        return None
-    return candidates[0]
-
-def _combine_markers(parent_marker, dep_marker):
-    """AND two PEP 508 marker strings, simplifying empty or identical sides."""
-    if not parent_marker:
-        return dep_marker
-    if not dep_marker or parent_marker == dep_marker:
-        return parent_marker
-    return "({}) and ({})".format(parent_marker, dep_marker)
-
-def _expand_local_requirements(
-        req_queue,
-        packages,
-        local_pkgs_by_name,
-        pkgs_by_name,
-        fork_constraints,
-        resolution_marker_exprs,
-        set_qnames,
-        conflict_pairs):
-    """Expand local package edges into non-local requirements with conflict-marker pruning."""
-    requirements = []  # (pin_name, specifier, raw_constraint, is_testonly, pin_marker, avail_marker, from_local)
-    expanded_local = {}  # (local_id, constraint, pin_marker, avail_marker) -> is_testonly
-    max_expand_steps = max(10000, 20 * len(packages) + len(req_queue) + 1)
-    q_head = 0
-    for _ in range(max_expand_steps):
-        if q_head >= len(req_queue):
-            break
-        pin_name, specifier, constraint, is_testonly, pin_marker, avail_marker, from_local, path = req_queue[q_head]
-        q_head += 1
-
-        local_pkg = _find_local_pkg(local_pkgs_by_name, pin_name, specifier)
-        if local_pkg == None:
-            if from_local and "[" in pin_name and not _has_pkg_match(pkgs_by_name, pin_name, specifier):
-                base_candidate = pin_name.split("[")[0]
-                if _has_pkg_match(pkgs_by_name, base_candidate, specifier):
-                    pin_name = base_candidate
-            base_dep_name = pin_name.split("[")[0]
-            if from_local and not specifier and base_dep_name in fork_constraints:
-                # Unversioned edge from a local package to a resolution-marker
-                # forked dependency expands to every matching forked version.
-                cands = pkgs_by_name.get(pin_name, [])
-                matched_fork = False
-                seen_versions = {}
-                for cand in cands:
-                    cand_ver = cand["version"]
-                    if cand_ver in seen_versions:
-                        continue
-                    fork_cname = fork_constraints[base_dep_name].get(cand_ver)
-                    if not fork_cname:
-                        continue
-                    seen_versions[cand_ver] = True
-                    matched_fork = True
-                    fork_expr = resolution_marker_exprs.get(fork_cname, "")
-                    cand_marker = _combine_markers(pin_marker, fork_expr)
-                    cand_avail = _combine_markers(avail_marker, fork_expr)
-                    if constraint and cand_marker and "__variant_" in cand_marker:
-                        ev = fold_variant_marker(cand_marker, conflict_pairs = conflict_pairs, active_qname = constraint, conflict_sets = set_qnames)
-                        if ev == "F":
-                            continue
-                        if ev == "T":
-                            cand_marker = ""
-                    requirements.append((pin_name, "==={}".format(cand_ver), constraint, is_testonly, cand_marker, cand_avail, from_local))
-                if matched_fork:
-                    continue
-
-            requirements.append((pin_name, specifier, constraint, is_testonly, pin_marker, avail_marker, from_local))
-            continue
-
-        local_id = (local_pkg["name"], local_pkg["version"])
-        if local_id in path:
-            continue
-        visit_key = (local_id, constraint, pin_marker, avail_marker)
-        if visit_key in expanded_local and (is_testonly or not expanded_local[visit_key]):
-            continue
-        expanded_local[visit_key] = is_testonly
-        next_path = path + (local_id,)
-
-        for dep in local_pkg["dependencies"]:
-            d_name = dep["name"]
-            d_spec = dep.get("specifier", "")
-            d_marker = dep.get("marker", "")
-            combined_avail = _combine_markers(avail_marker, d_marker)
-            combined_pin = _combine_markers(pin_marker, d_marker)
-            if constraint and combined_pin and "__variant_" in combined_pin:
-                ev = fold_variant_marker(combined_pin, conflict_pairs = conflict_pairs, active_qname = constraint, conflict_sets = set_qnames)
-                if ev == "F":
-                    continue
-                if ev == "T":
-                    combined_pin = ""
-            req_queue.append((d_name, d_spec, constraint, is_testonly, combined_pin, combined_avail, True, next_path))
-    if q_head < len(req_queue):
-        fail("Local package expansion exceeded step bound")
-    return requirements
-
-def _prune_plain_edge_splits(pinned_package_specs, pin_meta, resolution_marker_exprs, created_edge_keys, variant_sets, set_qnames, conflict_pairs):
-    """Prune or narrow plain `__edge_` entries that overlap variant entries or pinned sets.
-
-    A plain edge-split entry (from an edge outside the conflict, e.g. an
-    unconflicted project's `iniconfig; extra != 'project-1-a'` or a workspace
-    member's conflict-routed `torch` edges) can sit in a pin next to entries
-    for that conflict set's variants. With no variant selected it would match
-    alongside the `_unselected_<set>` error branch, and with a variant selected
-    it would collide with that variant's own entry and make `select()` ambiguous.
-      - If a set is pinned by this repo (`repo_pin`), only that pinned item can
-        ever be active here; drop plain edge entries unsatisfiable under it and
-        check coverage against only the pinned item.
-      - A variant item `q` covers `specifier` when `q` has a bare entry on the
-        pin or already has a compound entry for `specifier` (assuming that
-        variant's own entry covers its applicable platforms for that version).
-      - Drop the edge entry if no uncovered item of the set can satisfy it;
-        otherwise narrow it strictly to the uncovered items that can.
-    """
-    set_pin_by_idx = [vs.get("repo_pin", "") for vs in variant_sets]
-    for pin_name, specs in pinned_package_specs.items():
-        bare_variants = {}
-        variant_specs = {}  # variant_qname -> {specifier: True}
-        for key, spec in specs.items():
-            expr = resolution_marker_exprs.get(key)
-            if type(expr) == "dict":
-                vq = expr["variant"]
-            else:
-                vq = key
-                bare_variants[key] = True
-            variant_specs.setdefault(vq, {})[spec] = True
-
-        for key in list(specs.keys()):
-            expr = resolution_marker_exprs.get(key)
-            if type(expr) != "string" or "__edge_" not in key:
-                continue
-            specifier = specs[key]
-            guards = []
-            drop = False
-            for idx, qnames in enumerate(set_qnames):
-                if not [
-                    q
-                    for q in qnames
-                    if "'__variant_{}'".format(q) in expr or '"__variant_{}"'.format(q) in expr
-                ]:
-                    continue
-                repo_pin = set_pin_by_idx[idx]
-                if repo_pin and fold_variant_marker(expr, conflict_pairs = conflict_pairs, active_qname = repo_pin, conflict_sets = set_qnames) == "F":
-                    drop = True
-                    break
-                if not [q for q in qnames if q in variant_specs]:
-                    continue
-                active_qnames = [repo_pin] if repo_pin else qnames
-                uncovered = [
-                    q
-                    for q in active_qnames
-                    if q not in bare_variants and specifier not in variant_specs.get(q, {})
-                ]
-                sat_uncovered = [
-                    q
-                    for q in uncovered
-                    if fold_variant_marker(expr, conflict_pairs = conflict_pairs, active_qname = q, conflict_sets = set_qnames) != "F"
-                ]
-                if not sat_uncovered:
-                    drop = True
-                    break
-                guards.append("(" + " or ".join(["extra == '__variant_{}'".format(q) for q in sat_uncovered]) + ")")
-            if drop:
-                specs.pop(key)
-                pin_meta.pop((pin_name, key), None)
-            elif guards:
-                specs.pop(key)
-                moved_meta = pin_meta.pop((pin_name, key), [])
-                narrowed = " and ".join(guards + ["({})".format(expr)])
-                narrowed_key = _edge_constraint_name(pin_name.split("[")[0], specifier, narrowed)
-                resolution_marker_exprs[narrowed_key] = narrowed
-                created_edge_keys[narrowed_key] = True
-                specs[narrowed_key] = specifier
-                pin_meta.setdefault((pin_name, narrowed_key), []).extend(moved_meta)
-
-    # Drop pins whose branches were all pruned (e.g. a conflict-gated edge
-    # unsatisfiable under this repo's pinned variant).
-    for pin_name in [k for k, v in pinned_package_specs.items() if not v]:
-        pinned_package_specs.pop(pin_name)
-
-    # Clean up edge-split marker expressions that were pruned or replaced above.
-    if created_edge_keys:
-        used_keys = {}
-        for specs in pinned_package_specs.values():
-            for key in specs.keys():
-                used_keys[key] = True
-                expr = resolution_marker_exprs.get(key)
-                if type(expr) == "dict" and expr.get("marker"):
-                    used_keys[expr["marker"]] = True
-        for edge_key in created_edge_keys.keys():
-            if edge_key not in used_keys:
-                resolution_marker_exprs.pop(edge_key, None)
 
 def _parse_sdist_file(sdist, source, package_name, package_version, registry):
     """Parse an sdist entry from a UV lock package, or return None."""
@@ -460,190 +159,23 @@ def _parse_sdist_file(sdist, source, package_name, package_version, registry):
         return _parse_file_info(sdist, package_name, package_version, registry)
     return None
 
-def translate_uv(project_dict, lock_dict, lock_model):
-    """Translates UV project and lock data to raw_lock_data dict.
-
-    This is a pure function with no I/O, suitable for direct testing.
-
-    Args:
-        project_dict: Parsed pyproject.toml as a dict.
-        lock_dict: Parsed uv.lock as a dict.
-        lock_model: A struct containing the lock model attributes.
-
-    Returns:
-        A dict in raw_lock.json format.
-    """
-
-    # Version check
-    lock_version = lock_dict.get("version", 0)
-    if lock_version != 1:
-        fail("UV lock file version {} is not supported (expected 1)".format(lock_version))
-
-    # backwards-compat for https://github.com/astral-sh/uv/pull/5861
-    distributions_list = lock_dict.get("distribution", [])
-    packages_list = lock_dict.get("package", distributions_list)
-    requires_python = lock_dict.get("requires-python", "")
-
-    # Extract conflicts from [tool.uv]
-    uv_conflicts = lock_dict.get("conflicts", [])
-    uv_default_groups = project_dict.get("tool", {}).get("uv", {}).get("default-groups", [])
-
-    # Parse variant sets from conflicts
-    variant_items_by_key = {}  # (package, kind, name) -> variant item dict
-    variant_sets = []
-    for variant_list in uv_conflicts:
-        items = []
-        for c in variant_list:
-            package = canonicalize_name(c["package"])
-            if "extra" in c:
-                kind, vname = "extra", canonicalize_name(c["extra"])
-            elif "group" in c:
-                kind, vname = "group", canonicalize_name(c["group"])
-            else:
-                kind, vname = "project", ""
-            key = (package, kind, vname)
-            if key not in variant_items_by_key:
-                item = {"package": package, "kind": kind}
-                if vname:
-                    item["name"] = vname
-                variant_items_by_key[key] = item
-            items.append(variant_items_by_key[key])
-        variant_sets.append({"items": items})
-
-    # Build constraint lookup from variants, keyed by (package, name) so a
-    # conflict declared on one project's extra/group doesn't apply to a
-    # same-named extra/group of another project.
-    extra_variant_values = {}
-    group_variant_values = {}
-    project_variant_values = {}  # package -> qname, for `{package = ...}` conflicts
-    token_replacements = []
-    for item in variant_items_by_key.values():
-        kind = item["kind"]
-        vname = item.get("name", "")
-        lookup_key = (item["package"], vname)
-        qualified = variant_item_qname(item)
-        if kind == "extra":
-            extra_variant_values[lookup_key] = qualified
-        elif kind == "group":
-            group_variant_values[lookup_key] = qualified
-        elif kind == "project":
-            project_variant_values[item["package"]] = qualified
-        uv_tok = _uv_conflict_token(item)
-        var_tok = "__variant_{}".format(qualified)
-        token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
-        token_replacements.append(('"{}"'.format(uv_tok), '"{}"'.format(var_tok)))
-
-    # Identify projects
-    projects_list = getattr(lock_model, "projects", [])
-    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    testonly_groups = getattr(lock_model, "testonly_groups", [])
-    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
-    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
-
-    workspace_members = {}
-    for pkg in packages_list:
-        if "virtual" in pkg.get("source", {}) or pkg.get("source", {}).get("editable"):
-            workspace_members[canonicalize_name(pkg["name"])] = pkg
-
-    if not workspace_members and packages_list:
-        # Fallback for older uv.lock (< 0.2.35) or non-workspace setups.
-        # It's a single-project lock. Just read the project name from pyproject.toml.
-        pname = project_dict.get("project", {}).get("name")
-        if pname:
-            pname = canonicalize_name(pname)
-            for pkg in packages_list:
-                if canonicalize_name(pkg["name"]) == pname:
-                    workspace_members[pname] = pkg
-                    break
-
-    target_projects = []
-    if "*" in projects_list:
-        target_projects = list(workspace_members.keys())
-    else:
-        target_projects = [canonicalize_name(p) for p in projects_list]
-
-    for p in target_projects:
-        if p in workspace_members:
-            continue
-
-        # Fallback for standalone single-project locks
-        for pkg in packages_list:
-            if canonicalize_name(pkg["name"]) == p:
-                workspace_members[p] = pkg
-                break
-        if p not in workspace_members:
-            fail("Project '{}' not found in uv.lock workspace members.".format(p))
-
-    # User-facing `_variants` flags for this repo, for items declared by its own
-    # projects (other projects' items get none):
-    #   - `<kind>_<name>` (e.g. `group_test`) covers that extra/group in every
-    #     project of the repo, like `uv --group test` across selected packages.
-    #   - `<kind>_<project>_<name>` (e.g. `group_app-a_test`) covers one project,
-    #     like `uv --package app-a --group test`.
-    # Names are normalized (`-` only), so the two forms can't collide.
-    target_projects_set = {p: True for p in target_projects}
-    for item in variant_items_by_key.values():
-        if item["package"] not in target_projects_set:
-            continue
-        if item["kind"] == "project":
-            item["flags"] = ["package_{}".format(item["package"])]
-        else:
-            item["flags"] = [
-                "{}_{}".format(item["kind"], item["name"]),
-                "{}_{}_{}".format(item["kind"], item["package"], item["name"]),
-            ]
-
-    # Pre-scan: detect resolution-marker forks.
-    # A fork exists when the same package name has multiple versions with
-    # resolution-markers (i.e. uv resolved different versions for different
-    # platforms).
-    _fork_versions = {}  # {canonical_name: {version: [marker_expr, ...]}}
-    for lock_pkg in packages_list:
-        res_markers = [
-            _rewrite_conflict_markers(m, token_replacements)
-            for m in lock_pkg.get("resolution-markers", [])
-        ]
-        if not res_markers:
-            continue
-        fname = canonicalize_name(lock_pkg["name"])
-        fversion = lock_pkg["version"]
-        _fork_versions.setdefault(fname, {}).setdefault(fversion, []).extend(res_markers)
-
-    # Build fork constraints for names with multiple versions.
-    resolution_marker_exprs = {}  # constraint_name -> marker_expression
-    _fork_constraints = {}  # {name: {version: constraint_name}}
-    for fname, versions in _fork_versions.items():
-        if len(versions) <= 1:
-            continue  # Not a fork — single version, no conditional pin needed.
-        for fversion, markers in versions.items():
-            if len(markers) == 1:
-                combined = markers[0]
-            else:
-                combined = " or ".join(["({})".format(m) for m in markers])
-            cname = resolution_marker_constraint_name(fname, fversion)
-            _fork_constraints.setdefault(fname, {})[fversion] = cname
-            resolution_marker_exprs[cname] = combined
-
-    # Process all packages from lock before expanding local workspace members
-    # so local member dependencies participate in the same conflict-marker
-    # evaluation, edge splitting, and pruning as direct root dependencies.
+def _parse_lock_packages(packages_list, token_replacements):
+    """Parse `uv.lock` `[[package]]` entries into normalized package dicts."""
     packages = []
     for lock_pkg in packages_list:
         package_name = canonicalize_name(lock_pkg["name"])
         package_version = lock_pkg["version"]
         resolution_markers = [
-            _rewrite_conflict_markers(m, token_replacements)
+            rewrite_conflict_markers(m, token_replacements)
             for m in lock_pkg.get("resolution-markers", [])
         ]
         python_version_specifiers = _resolve_package_requires_python(resolution_markers)
         package_extras = lock_pkg.get("extras", [])
 
-        # Parse base dependencies
         deps = []
         for dep in lock_pkg.get("dependencies", []):
             deps.extend(_parse_uv_dependency(dep, token_replacements))
 
-        # Parse files: wheels + sdist
         files = []
         source = lock_pkg.get("source", {})
         registry = source.get("registry")
@@ -656,17 +188,11 @@ def translate_uv(project_dict, lock_dict, lock_model):
         if sdist_file:
             files.append(sdist_file)
 
-        # Source dir
         source_dir = source.get("subdirectory", "")
 
-        # Handle git sources
         if "git" in source and not files:
             git_url = source["git"]
-
-            # Extract commit from fragment
-            commit = ""
-            if "#" in git_url:
-                commit = git_url.split("#")[-1]
+            commit = git_url.split("#")[-1] if "#" in git_url else ""
 
             # uv records git subdirectories in the URL query: ?subdirectory=a%2Fb&rev=...
             if "?" in git_url:
@@ -675,17 +201,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     if param.startswith("subdirectory="):
                         source_dir = url_decode_filename(param[len("subdirectory="):])
             if commit:
-                synthetic_hash = sha256_from_string(commit)
-                filename = "{}-{}.tar.gz".format(package_name, package_version)
                 files.append({
-                    "name": filename,
-                    "sha256": synthetic_hash,
+                    "name": "{}-{}.tar.gz".format(package_name, package_version),
+                    "sha256": sha256_from_string(commit),
                     "urls": ["git+" + git_url],
                     "package_name": package_name,
                     "package_version": package_version,
                 })
 
-        # Detect local packages
         is_local_editable = "editable" in source and type(source.get("editable")) == "string"
         is_local_virtual = "virtual" in source and type(source.get("virtual")) == "string"
         is_local_directory = "directory" in source
@@ -694,7 +217,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
         pkg_python_versions = python_version_specifiers[0] if python_version_specifiers else ""
 
-        # Base package
         base_pkg = {
             "name": package_name,
             "version": package_version,
@@ -713,18 +235,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
             extra_parsed_deps = []
             for dep in extra_deps_list:
                 extra_parsed_deps.extend(_parse_uv_dependency(dep, token_replacements))
-
-            # Add self-dependency
             extra_parsed_deps.append({
                 "name": package_name,
                 "specifier": "==={}".format(package_version),
                 "marker": "",
                 "extras": [None],
             })
-
-            extra_pkg_name = "{}[{}]".format(package_name, canonicalize_name(extra_name))
             extra_pkg = {
-                "name": extra_pkg_name,
+                "name": "{}[{}]".format(package_name, canonicalize_name(extra_name)),
                 "version": package_version,
                 "python_versions": pkg_python_versions,
                 "dependencies": extra_parsed_deps,
@@ -736,62 +254,141 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 extra_pkg["source_dir"] = source_dir
             packages.append(extra_pkg)
 
-    local_pkgs_by_name = {}
-    pkgs_by_name = {}
-    for pkg in packages:
-        pkgs_by_name.setdefault(pkg["name"], []).append(pkg)
-        if pkg.get("is_local", False):
-            local_pkgs_by_name.setdefault(pkg["name"], []).append(pkg)
+    return packages
 
-    set_qnames = [[variant_item_qname(item) for item in vs["items"]] for vs in variant_sets]
-    conflict_pairs = variant_conflict_pairs(set_qnames)
+def _scan_fork_constraints(packages_list, token_replacements):
+    """Pre-scan multi-version `resolution-markers` forks across `packages_list`."""
+    fork_versions = {}  # {canonical_name: {version: [marker_expr, ...]}}
+    for lock_pkg in packages_list:
+        res_markers = [
+            rewrite_conflict_markers(m, token_replacements)
+            for m in lock_pkg.get("resolution-markers", [])
+        ]
+        if not res_markers:
+            continue
+        fname = canonicalize_name(lock_pkg["name"])
+        fork_versions.setdefault(fname, {}).setdefault(lock_pkg["version"], []).extend(res_markers)
 
-    # Collect direct requirements, then expand local packages while preserving
-    # edge markers and pruning conflict branches unsatisfiable under their
-    # enclosing variant.
-    # Queue tuple: (pin_name, specifier, raw_constraint, is_testonly, pin_marker, avail_marker, from_local, path)
-    req_queue = []
+    resolution_marker_exprs = {}
+    fork_constraints = {}
+    for fname, versions in fork_versions.items():
+        if len(versions) <= 1:
+            continue
+        for fversion, markers in versions.items():
+            combined = markers[0] if len(markers) == 1 else " or ".join(["({})".format(m) for m in markers])
+            cname = resolution_marker_constraint_name(fname, fversion)
+            fork_constraints.setdefault(fname, {})[fversion] = cname
+            resolution_marker_exprs[cname] = combined
+    return fork_constraints, resolution_marker_exprs
 
-    # Root dependency markers per exact pin; extras also record their implied
-    # base package marker. See record_root_marker.
-    root_dependency_markers = {}
+def _find_target_projects(packages_list, project_dict, projects_list):
+    """Discover workspace members in `uv.lock` and resolve `projects_list`."""
+    workspace_members = {}
+    for pkg in packages_list:
+        if "virtual" in pkg.get("source", {}) or pkg.get("source", {}).get("editable"):
+            workspace_members[canonicalize_name(pkg["name"])] = pkg
+
+    if not workspace_members and packages_list:
+        # Fallback for older uv.lock (< 0.2.35) or standalone single-project locks.
+        pname = project_dict.get("project", {}).get("name")
+        if pname:
+            pname = canonicalize_name(pname)
+            for pkg in packages_list:
+                if canonicalize_name(pkg["name"]) == pname:
+                    workspace_members[pname] = pkg
+                    break
+
+    if "*" in projects_list:
+        target_projects = list(workspace_members.keys())
+    else:
+        target_projects = [canonicalize_name(p) for p in projects_list]
+
+    for p in target_projects:
+        if p in workspace_members:
+            continue
+        for pkg in packages_list:
+            if canonicalize_name(pkg["name"]) == p:
+                workspace_members[p] = pkg
+                break
+        if p not in workspace_members:
+            fail("Project '{}' not found in uv.lock workspace members.".format(p))
+
+    return workspace_members, target_projects
+
+def translate_uv(project_dict, lock_dict, lock_model):
+    """Translates UV project and lock data to raw_lock_data dict.
+
+    This is a pure function with no I/O, suitable for direct testing.
+
+    Args:
+        project_dict: Parsed pyproject.toml as a dict.
+        lock_dict: Parsed uv.lock as a dict.
+        lock_model: A struct containing the lock model attributes.
+
+    Returns:
+        A dict in raw_lock.json format.
+    """
+    lock_version = lock_dict.get("version", 0)
+    if lock_version != 1:
+        fail("UV lock file version {} is not supported (expected 1)".format(lock_version))
+
+    # backwards-compat for https://github.com/astral-sh/uv/pull/5861
+    distributions_list = lock_dict.get("distribution", [])
+    packages_list = lock_dict.get("package", distributions_list)
+    requires_python = lock_dict.get("requires-python", "")
+    uv_conflicts = lock_dict.get("conflicts", [])
+    uv_default_groups = project_dict.get("tool", {}).get("uv", {}).get("default-groups", [])
+
+    projects_list = getattr(lock_model, "projects", [])
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    testonly_groups = getattr(lock_model, "testonly_groups", [])
+    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
+    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
+    is_build_tools_repo = getattr(lock_model, "is_build_tools_repo", False)
+
+    workspace_members, target_projects = _find_target_projects(packages_list, project_dict, projects_list)
+    conflicts = parse_uv_conflicts(uv_conflicts, target_projects)
+    fork_constraints, resolution_marker_exprs = _scan_fork_constraints(packages_list, conflicts.token_replacements)
+    packages = _parse_lock_packages(packages_list, conflicts.token_replacements)
 
     # In a repo spanning several projects, a requested extra/group applies to the
     # projects that declare it (like `uv --all-packages --group test`); it only
     # has to exist in one of them.
     multi_project = len(target_projects) > 1
     groups_seen = {"default": True}
-    requested_by_project = {}  # project -> requested groups dict
+    requested_by_project = {}
+    root_edges = []
+
     for project_name in target_projects:
         project_info = workspace_members[project_name]
-
         default_dependencies = project_info.get("dependencies", [])
         optional_dependencies = project_info.get("optional-dependencies", {})
         development_dependencies = project_info.get("dev-dependencies", {})
 
-        # Parse groups. uv.lock leaves empty extras and groups (e.g. `cpu = []`
-        # when only `[tool.uv.sources]` depends on it) out of
-        # `optional-dependencies` and `dev-dependencies`, so also read them from
-        # the package metadata and the conflict items.
+        # uv.lock leaves empty extras and groups (e.g. `cpu = []` when only
+        # `[tool.uv.sources]` depends on it) out of `optional-dependencies` and
+        # `dev-dependencies`, so also read them from metadata and conflicts.
         metadata = project_info.get("metadata", {})
         extra_names = list(optional_dependencies.keys()) + metadata.get("provides-extras", [])
         group_names = list(development_dependencies.keys()) + list(metadata.get("requires-dev", {}).keys())
-        for item in variant_items_by_key.values():
+        for item in conflicts.variant_items_by_key.values():
             if item["package"] != project_name:
                 continue
             if item["kind"] == "extra":
                 extra_names.append(item["name"])
             elif item["kind"] == "group":
                 group_names.append(item["name"])
+
         available_groups = ["default"]
         seen_canonical = {}
         for g in ["optional:" + n for n in extra_names] + ["group:" + n for n in group_names]:
-            canonical = _canonicalize_group_key(g)
+            canonical = canonicalize_group_key(g)
             if canonical not in seen_canonical:
                 seen_canonical[canonical] = True
                 available_groups.append(g)
         for g in available_groups:
             groups_seen[g] = True
+
         requested_groups_dict = compute_requested_dependency_groups(
             dependency_groups = dependency_groups,
             testonly_groups = testonly_groups,
@@ -804,15 +401,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
         requested_by_project[project_name] = requested_groups_dict
 
         # A project in a `{package = ...}` conflict has all of its edges gated on
-        # its project variant (uv marks them `extra == 'project-<n>-<name>'`).
-        # Extras/groups with their own conflict variant use that instead.
-        project_constraint = project_variant_values.get(project_name, "")
+        # its project variant; extras/groups with their own variant use that instead.
+        project_constraint = conflicts.project_variant_values.get(project_name, "")
         group_batches = []
         if "default" in requested_groups_dict:
             group_batches.append((project_constraint, default_dependencies, requested_groups_dict["default"]))
         for kind, groups_dict, constraint_dict in [
-            ("optional", optional_dependencies, extra_variant_values),
-            ("group", development_dependencies, group_variant_values),
+            ("optional", optional_dependencies, conflicts.extra_variant_values),
+            ("group", development_dependencies, conflicts.group_variant_values),
         ]:
             for group_name, deps_list in groups_dict.items():
                 key = "{}:{}".format(kind, group_name)
@@ -829,225 +425,64 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 dep_name = canonicalize_name(dep["name"])
                 dep_version = dep.get("version", "")
                 dep_extras = dep.get("extra") or dep.get("extras", [])
-                dep_marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
+                dep_marker = rewrite_conflict_markers(dep.get("marker", ""), conflicts.token_replacements)
                 specifier = "==={}".format(dep_version) if dep_version else ""
 
-                if dep_extras:
-                    for extra in dep_extras:
-                        pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                        req_queue.append((pin_name, specifier, constraint, is_testonly, dep_marker, dep_marker, False, ()))
-                else:
-                    req_queue.append((dep_name, specifier, constraint, is_testonly, dep_marker, dep_marker, False, ()))
-
-    # Expand local packages into their non-local requirements.
-    requirements = _expand_local_requirements(
-        req_queue,
-        packages,
-        local_pkgs_by_name,
-        pkgs_by_name,
-        _fork_constraints,
-        resolution_marker_exprs,
-        set_qnames,
-        conflict_pairs,
-    )
-
-    # End collect requirements
+                pin_names = ["{}[{}]".format(dep_name, canonicalize_name(e)) for e in dep_extras] if dep_extras else [dep_name]
+                for pin_name in pin_names:
+                    root_edges.append(struct(
+                        pin_name = pin_name,
+                        specifier = specifier,
+                        constraint = constraint,
+                        is_testonly = is_testonly,
+                        marker = dep_marker,
+                    ))
 
     if multi_project:
         for group in dependency_groups:
-            kind, sep, name = group.partition(":")
+            _, sep, name = group.partition(":")
             if sep and name != "*" and group not in groups_seen:
                 fail("None of the projects {} has group '{}'.".format(sorted(target_projects), group))
 
-    # Pins and defaults for each conflict set in this repo.
-    #
-    # In uv, extras and groups are active only when requested. Here a project
-    # item's (`{package = ...}`) variant gates all of that project's edges, so
-    # it's active whenever the repo requests anything from the project. So if
-    # this repo requests exactly one item of a set, that item is the selection,
-    # as with `uv sync --extra cpu` or `uv sync --package app-a --group test`.
-    # The repo's transition pins it through `_pin_<set>`. The workspace's
-    # `__build` repo serves sdist builds for every repo, so it never pins.
-    #
-    # When the repo requests several items of a set, its default comes from the
-    # selected pyproject's `[tool.uv] default-groups`. As in uv, a project's
-    # default-groups name its own groups. The pyproject is the member's for a
-    # single-project repo (`uv sync --package <member>`) and the root's
-    # otherwise (`uv sync --all-packages`). A project whose default
-    # dependencies the repo requests is a candidate too, so
-    # `[{package = "a"}, {package = "b", group = "g"}]` defaults to `a` in a
-    # repo that requests both. A set gets a default only if exactly one item
-    # qualifies; otherwise a flag must select one. The repo's transition sets
-    # `_default_<set>`, and the workspace repo has no static defaults.
-    is_build_tools_repo = getattr(lock_model, "is_build_tools_repo", False)
-    requested_keys = {
-        project: {_canonicalize_group_key(key): True for key in requested.keys()}
-        for project, requested in requested_by_project.items()
-    }
     default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
-    requested_by_set = []
-    requested_qname_sets = []
-    all_requested_qnames = {}
-    for variant_set in variant_sets:
-        owned_items = [item for item in variant_set["items"] if item["package"] in target_projects_set]
-        requested_items = [item for item in owned_items if _is_item_requested(item, requested_keys[item["package"]])]
-        requested_by_set.append((owned_items, requested_items))
-        if requested_items:
-            qnames = [variant_item_qname(item) for item in requested_items]
-            variant_set["repo_requested"] = qnames
-            requested_qname_sets.append(qnames)
-            for q in qnames:
-                all_requested_qnames[q] = True
-    rival_requested = excluded_variant_items(requested_qname_sets, all_requested_qnames)
-
-    for variant_set, (owned_items, requested_items) in zip(variant_sets, requested_by_set):
-        # An item can be in several sets (e.g. `[[cpu, gpu], [cpu, gpu-test]]`).
-        # Pin it only if the repo requests none of its rivals in any of them;
-        # otherwise the sets could select conflicting items at once.
-        # A set with at most one requested item gets no default either: a rival
-        # elsewhere would make the default disagree with that set's selection.
-        if len(requested_items) <= 1:
-            if requested_items and not is_build_tools_repo:
-                qname = variant_item_qname(requested_items[0])
-                if qname not in rival_requested:
-                    variant_set["repo_pin"] = qname
-            continue
-
-        candidates = []
-        for item in owned_items:
-            requested = requested_keys[item["package"]]
-            if item["kind"] == "project":
-                if "default" in requested:
-                    candidates.append(item)
-                continue
-            if item["kind"] != "group" or item["package"] != default_owner:
-                continue
-            if uv_default_groups != "all" and item["name"] not in [canonicalize_name(g) for g in uv_default_groups]:
-                continue
-            if "group:" + item["name"] not in requested:
-                continue
-            candidates.append(item)
-        if len(candidates) == 1:
-            variant_set["repo_default"] = variant_item_qname(candidates[0])
-
-    # Aggregate requirements per `(pin_name, raw_constraint)` and resolve
-    # resolution-marker forks and conflict-marker edge splits uniformly.
-    # uv can split one edge into several versions with conflict markers and no
-    # (or only partial) `resolution-markers` on the packages. Aggregating per
-    # `(pin_name, raw_constraint, specifier)` first ensures direct and expanded
-    # local-member edges for the same version share one constraint key instead
-    # of emitting overlapping select() branches.
-    edges = {}  # (pin_name, raw_constraint) -> {specifier: [(pin_marker, avail_marker, is_testonly, from_local), ...]}
-    for pin_name, specifier, raw_constraint, is_testonly, pin_marker, avail_marker, from_local in requirements:
-        edges.setdefault((pin_name, raw_constraint), {}).setdefault(specifier, []).append((pin_marker, avail_marker, is_testonly, from_local))
-
-    pinned_package_specs = {}
-    pin_meta = {}  # (pin_name, effective_constraint) -> [(avail_marker, is_testonly, from_local), ...]
-    created_edge_keys = {}
-    for (pin_name, raw_constraint), by_specifier in edges.items():
-        base_dep_name = pin_name.split("[")[0]
-        multi_spec = len(by_specifier) > 1
-        for specifier, entries in by_specifier.items():
-            markers = [e[0] for e in entries]
-            if "" in markers:
-                unique_markers = []
-                agg_marker = ""
-            else:
-                unique_markers = sorted({m: True for m in markers}.keys())
-                agg_marker = unique_markers[0] if len(unique_markers) == 1 else " or ".join(["({})".format(m) for m in unique_markers])
-
-            dep_version = specifier[3:] if specifier.startswith("===") else ""
-            fork_constraint = _fork_constraints.get(base_dep_name, {}).get(dep_version)
-
-            if raw_constraint:
-                if fork_constraint:
-                    effective_constraint = _resolve_uv_dep_constraint(
-                        raw_constraint,
-                        base_dep_name,
-                        dep_version,
-                        agg_marker,
-                        _fork_constraints,
-                        resolution_marker_exprs,
-                        disambiguate_marker = len(unique_markers) > 1,
-                    )
-                elif multi_spec and agg_marker:
-                    # Keyed by the marker so repos (whose requested groups can OR in
-                    # different edges) never map one name to different markers, and
-                    # identical markers share an evaluator.
-                    edge_constraint = _edge_constraint_name(base_dep_name, specifier, agg_marker)
-                    resolution_marker_exprs[edge_constraint] = agg_marker
-                    created_edge_keys[edge_constraint] = True
-                    effective_constraint = "{}_{}".format(raw_constraint, edge_constraint)
-                    resolution_marker_exprs[effective_constraint] = {"variant": raw_constraint, "marker": edge_constraint}
-                else:
-                    effective_constraint = raw_constraint
-            elif agg_marker and (
-                "__variant_" in agg_marker or
-                (multi_spec and (not fork_constraint or agg_marker != resolution_marker_exprs.get(fork_constraint)))
-            ):
-                edge_constraint = _edge_constraint_name(base_dep_name, specifier, agg_marker)
-                resolution_marker_exprs[edge_constraint] = agg_marker
-                created_edge_keys[edge_constraint] = True
-                effective_constraint = edge_constraint
-            elif fork_constraint:
-                effective_constraint = fork_constraint
-            else:
-                effective_constraint = ""
-
-            pinned_package_specs.setdefault(pin_name, {})[effective_constraint] = specifier
-            pin_meta.setdefault((pin_name, effective_constraint), []).extend([
-                (e[1], e[2], e[3])
-                for e in entries
-            ])
-
-    _prune_plain_edge_splits(
-        pinned_package_specs,
-        pin_meta,
-        resolution_marker_exprs,
-        created_edge_keys,
-        variant_sets,
-        set_qnames,
-        conflict_pairs,
+    repo_pins = apply_repo_variant_pins_and_defaults(
+        conflicts,
+        target_projects = target_projects,
+        requested_by_project = requested_by_project,
+        default_owner = default_owner,
+        uv_default_groups = uv_default_groups,
+        is_build_tools_repo = is_build_tools_repo,
     )
 
-    # Record root dependency markers and testonly classification only from
-    # surviving pins/edges so pruned conflict branches do not leak stale
-    # availability markers or override testonly status.
-    direct_testonly_reqs = {}
-    expanded_testonly_reqs = {}
-    non_testonly_reqs = {}
-    for pin_name, specs in pinned_package_specs.items():
-        base_pin_name = pin_name.split("[")[0]
-        for key in specs.keys():
-            for avail_marker, is_testonly, from_local in pin_meta.get((pin_name, key), []):
-                record_root_marker(root_dependency_markers, pin_name, avail_marker)
-                if pin_name != base_pin_name:
-                    record_root_marker(root_dependency_markers, base_pin_name, avail_marker)
-                if is_testonly:
-                    if from_local:
-                        expanded_testonly_reqs[base_pin_name] = True
-                    else:
-                        direct_testonly_reqs[base_pin_name] = True
-                else:
-                    non_testonly_reqs[base_pin_name] = True
-
-    testonly_pin_names = [name for name in direct_testonly_reqs if name not in non_testonly_reqs]
-    expanded_testonly_pin_names = [
-        name
-        for name in expanded_testonly_reqs
-        if name not in non_testonly_reqs and name not in direct_testonly_reqs
-    ]
-
-    return resolve_lock_graph(
-        packages = packages,
-        pinned_package_specs = pinned_package_specs,
-        requires_python = requires_python,
-        strict_dependencies = True,
-        variants = variant_sets,
+    graph = build_lock_graph(
+        packages,
         resolution_marker_exprs = resolution_marker_exprs,
-        testonly_pins = testonly_pin_names,
-        root_dependency_markers = root_dependency_markers,
-        expanded_testonly_pins = expanded_testonly_pin_names,
+        strict_dependencies = True,
+    )
+    expanded_edges = expand_root_edges(
+        graph,
+        root_edges,
+        strict_dependencies = True,
+        fold_pin_marker = make_pin_marker_folder(conflicts, repo_pins),
+    )
+    resolved_pins = resolve_uv_pins(
+        expanded_edges,
+        conflicts = conflicts,
+        repo_pins = repo_pins,
+        fork_constraints = fork_constraints,
+        resolution_marker_exprs = resolution_marker_exprs,
+    )
+
+    return finalize_lock_graph(
+        graph,
+        resolved_pins.pinned_keys,
+        requires_python = requires_python,
+        variants = conflicts.variant_sets,
+        resolution_marker_exprs = resolution_marker_exprs,
+        testonly_pins = resolved_pins.testonly_pins,
+        expanded_testonly_pins = resolved_pins.expanded_testonly_pins,
+        non_testonly_pins = resolved_pins.non_testonly_pins,
+        root_dependency_markers = resolved_pins.root_dependency_markers,
     )
 
 def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):

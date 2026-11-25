@@ -359,65 +359,90 @@ def _version_key(version_str):
     """Parse a version string into a comparable key tuple."""
     return pypackaging.version.parse(version_str).key
 
-def _resolve_local_dep_constraint(constraint, dep_base_name, dep_version, resolution_marker_exprs):
-    """Combine a local package pin's constraint with any resolution-marker fork on its dependency."""
-    cname = resolution_marker_constraint_name(dep_base_name, dep_version)
-    if cname not in resolution_marker_exprs or constraint == cname:
-        return constraint
-    if not constraint:
-        return cname
-    if type(resolution_marker_exprs.get(constraint)) == "string":
-        return constraint
-    dep_constraint = "{}_{}".format(constraint, cname)
-    resolution_marker_exprs[dep_constraint] = {
-        "variant": constraint,
-        "marker": cname,
-    }
-    return dep_constraint
-
-def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None, expanded_testonly_pins = None):
-    """Resolves a dependency graph of packages.
-
-    Ports translator_utils.py resolve_lock_graph() to Starlark.
-
-    Each package in the packages list should be a dict with:
-        - name: canonicalized package name
-        - version: version string
-        - dependencies: list of dicts {name, specifier, marker, extras}
-        - files: list of dicts {name, sha256, urls?}
-        - python_versions: requires-python specifier string
-        - is_local: bool (optional, default False)
-        - extras: list of extra names (optional)
-
-    Each pinned_package_specs entry maps a dependency name (str) to
-    a dict of {constraint_label: specifier_str}.
+def combine_markers(parent_marker, dep_marker):
+    """AND two PEP 508 marker strings, simplifying empty or identical sides.
 
     Args:
-        packages: List of package dicts.
-        pinned_package_specs: Dict mapping pin name to {constraint: specifier}.
-        requires_python: The requires-python specifier string.
-        strict_dependencies: If True, fail on unresolved deps.
-        variants: List of variant set dicts (optional).
-        resolution_marker_exprs: Dict mapping constraint names to PEP 508
-            marker expressions (optional). Used for resolution-marker forks.
-        testonly_pins: List of pin names that are exclusively reachable from testonly groups.
-        root_dependency_markers: Dict mapping root pin names (including
-            extras) to the list of PEP 508 environment markers on the root
-            projects' dependency edges to them (optional). Only pins that are
-            exclusively requested under markers appear here.
-        expanded_testonly_pins: Optional list of pin base names that were only
-            reached as testonly via pre-expanded local packages, so runtime
-            reachability can still clear their testonly status.
+        parent_marker: Outer marker string (may be `""`).
+        dep_marker: Inner dependency marker string (may be `""`).
 
     Returns:
-        A dict in raw_lock.json format.
+        Combined PEP 508 marker string.
     """
-    if variants == None:
-        variants = []
+    if not parent_marker:
+        return dep_marker
+    if not dep_marker or parent_marker == dep_marker:
+        return parent_marker
+    return "({}) and ({})".format(parent_marker, dep_marker)
+
+def _resolve_candidates(
+        candidates,
+        parsed_spec,
+        dep_marker,
+        resolution_marker_exprs,
+        req_extra = "",
+        cand_extras_by_key = None,
+        break_on_first = True):
+    """Return matching `(candidate, combined_marker)` pairs from `candidates`.
+
+    For resolution-marker forked packages (multiple marked versions and not an
+    exact `===` pin), emits every matching candidate gated by its package-level
+    marker instead of stopping at the newest version.
+    """
+    if not candidates:
+        return []
+    marked_candidates = [
+        True
+        for c in candidates
+        if c.get("markers") or resolution_marker_constraint_name(c["name"], c["version"]) in resolution_marker_exprs
+    ]
+    is_exact_pin = (
+        parsed_spec != None and
+        len(parsed_spec) == 1 and
+        len(parsed_spec[0].specs) == 1 and
+        parsed_spec[0].specs[0].operator == "==="
+    )
+    is_forked = len(marked_candidates) > 1 and not is_exact_pin
+
+    matches = []
+    for cand in candidates:
+        if req_extra:
+            cand_key = _package_key_str(cand["name"], cand["version"])
+            if req_extra not in cand_extras_by_key.get(cand_key, {}):
+                continue
+        if not _parsed_specifier_contains_version(parsed_spec, cand["version"]):
+            continue
+        edge_marker = dep_marker
+        if is_forked:
+            cand_marker = cand.get("markers", "")
+            if not cand_marker:
+                cname = resolution_marker_constraint_name(cand["name"], cand["version"])
+                expr = resolution_marker_exprs.get(cname)
+                if type(expr) == "string":
+                    cand_marker = expr
+            edge_marker = combine_markers(dep_marker, cand_marker)
+        matches.append((cand, edge_marker))
+        if break_on_first and not is_forked:
+            break
+    return matches
+
+def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependencies = True):
+    """Deduplicate packages, index by name, and resolve inter-package dependencies.
+
+    Args:
+        packages: List of package dicts (`name`, `version`, `dependencies`,
+            `files`, `python_versions`, optional `is_local`, `extras`, `markers`,
+            `source_dir`).
+        resolution_marker_exprs: Optional dict mapping constraint names to PEP
+            508 marker expressions (used for resolution-marker fork expansion).
+        strict_dependencies: If True, fail when a dependency matches no package.
+
+    Returns:
+        Struct with `distinct_packages`, `packages_by_name`, `resolved_deps`,
+        and `resolution_marker_exprs`.
+    """
     if resolution_marker_exprs == None:
         resolution_marker_exprs = {}
-    if testonly_pins == None:
-        testonly_pins = []
 
     # Deduplicate: merge packages with same key
     distinct_packages = {}
@@ -469,15 +494,10 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
 
     all_packages = distinct_packages.values()
 
-    # Group by canonical name
+    # Group by canonical name and sort newest first.
     packages_by_name = {}
     for pkg in all_packages:
-        name = pkg["name"]
-        if name not in packages_by_name:
-            packages_by_name[name] = []
-        packages_by_name[name].append(pkg)
-
-    # Sort by version descending (newest first)
+        packages_by_name.setdefault(pkg["name"], []).append(pkg)
     for name in list(packages_by_name.keys()):
         packages_by_name[name] = sorted(
             packages_by_name[name],
@@ -494,7 +514,6 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
 
     # Resolve dependencies
     resolved_deps = {}  # pkg_key -> list of resolved dep dicts
-
     for pkg in all_packages:
         pkg_key = _package_key_str(pkg["name"], pkg["version"])
         pkg_resolved = []
@@ -503,172 +522,209 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
             dep_name = canonicalize_name(dep["name"])
             dep_specifier = dep.get("specifier", "")
             dep_marker = dep.get("marker", "")
-            dep_extras = dep.get("extras", [None])
-
-            if not dep_extras:
-                dep_extras = [None]
+            dep_extras = dep.get("extras", [None]) or [None]
 
             candidates = packages_by_name.get(dep_name, [])
+            resolved_dep_name = dep_name
+            if not candidates and "[" in dep_name:
+                resolved_dep_name = dep_name.split("[")[0]
+                candidates = packages_by_name.get(resolved_dep_name, [])
             parsed_spec = _parse_specifier_parts(dep_specifier) if candidates else None
-            marked_candidates = [
-                True
-                for c in candidates
-                if c.get("markers") or resolution_marker_constraint_name(c["name"], c["version"]) in resolution_marker_exprs
-            ]
-            is_exact_pin = (
-                parsed_spec != None and
-                len(parsed_spec) == 1 and
-                len(parsed_spec[0].specs) == 1 and
-                parsed_spec[0].specs[0].operator == "==="
-            )
-            is_forked = len(marked_candidates) > 1 and not is_exact_pin
 
             for req_extra in dep_extras:
                 norm_req_extra = canonicalize_name(req_extra) if req_extra else ""
-                display_name = _dependency_name_str(dep_name, norm_req_extra)
-
-                # Find matching package(s). For resolution-marker forked packages
-                # (multiple versions gated by package-level markers), emit all
-                # satisfying branches gated by their markers instead of breaking
-                # on the newest version.
-                found = False
-                for cand in candidates:
-                    if norm_req_extra:
-                        cand_key = _package_key_str(cand["name"], cand["version"])
-                        if norm_req_extra not in cand_extras_by_key.get(cand_key, {}):
-                            continue
-                    if not _parsed_specifier_contains_version(parsed_spec, cand["version"]):
-                        continue
-                    edge_marker = dep_marker
-                    if is_forked:
-                        cand_marker = cand.get("markers", "")
-                        if not cand_marker:
-                            cname = resolution_marker_constraint_name(cand["name"], cand["version"])
-                            expr = resolution_marker_exprs.get(cname)
-                            if type(expr) == "string":
-                                cand_marker = expr
-                        if dep_marker and cand_marker:
-                            edge_marker = dep_marker if dep_marker == cand_marker else "({}) and ({})".format(dep_marker, cand_marker)
-                        elif cand_marker:
-                            edge_marker = cand_marker
+                display_name = _dependency_name_str(resolved_dep_name, norm_req_extra)
+                matches = _resolve_candidates(
+                    candidates,
+                    parsed_spec,
+                    dep_marker,
+                    resolution_marker_exprs,
+                    req_extra = norm_req_extra,
+                    cand_extras_by_key = cand_extras_by_key,
+                    break_on_first = bool(dep_specifier),
+                )
+                for cand, edge_marker in matches:
                     pkg_resolved.append({
                         "name": display_name,
                         "version": cand["version"],
                         "marker": edge_marker,
                     })
-                    found = True
-                    if dep_specifier and not is_forked:
-                        break
-
-                if not found and strict_dependencies:
+                if not matches and strict_dependencies:
                     fail("Found no packages to satisfy dependency (name={}, spec={})".format(dep_name, dep_specifier))
 
         resolved_deps[pkg_key] = pkg_resolved
 
-    # Resolve pins
-    pinned_keys = {}
-    for pin_name, pin_specs in pinned_package_specs.items():
+    return struct(
+        distinct_packages = distinct_packages,
+        packages_by_name = packages_by_name,
+        resolved_deps = resolved_deps,
+        resolution_marker_exprs = resolution_marker_exprs,
+    )
+
+def _local_pkg_key(distinct_packages, pin_name, pkg_key):
+    """Return the `distinct_packages` key of `pkg_key` (or its base) if local, else None."""
+    if distinct_packages.get(pkg_key, {}).get("is_local", False):
+        return pkg_key
+    if "[" in pin_name:
+        base_key = _package_key_str(pin_name.split("[")[0], pkg_key.split("@", 1)[1])
+        if distinct_packages.get(base_key, {}).get("is_local", False):
+            return base_key
+    return None
+
+def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_marker = None):
+    """Resolve root edges and expand local packages into non-local edges.
+
+    Args:
+        graph: Struct returned by `build_lock_graph`.
+        root_edges: List of structs with `pin_name`, `specifier`, `constraint`,
+            `is_testonly`, and `marker`.
+        strict_dependencies: If True, fail when a root edge matches no package.
+        fold_pin_marker: Optional `fn(constraint, marker)` returning a folded
+            marker string or `None` to prune an unsatisfiable edge.
+
+    Returns:
+        List of non-local edge structs with `pin_name`, `pkg_key`, `constraint`,
+        `is_testonly`, `pin_marker`, `avail_marker`, and `from_local`.
+    """
+    distinct_packages = graph.distinct_packages
+    packages_by_name = graph.packages_by_name
+    resolved_deps = graph.resolved_deps
+    resolution_marker_exprs = graph.resolution_marker_exprs
+
+    # Queue entries: (pin_name, pkg_key, constraint, is_testonly, pin_marker, avail_marker, from_local, path)
+    queue = []
+    for edge in root_edges:
+        pin_name = edge.pin_name
+        specifier = edge.specifier
+        constraint = edge.constraint
+        is_testonly = edge.is_testonly
+        marker = edge.marker
+
         pin_packages = packages_by_name.get(pin_name)
         key_name = None
         if pin_packages == None and "[" in pin_name:
-            # No separate name[extra] package (e.g. Poetry): pin the base
-            # version; lock_resolver synthesizes name[extra] from the base.
+            # No separate name[extra] package (e.g. Poetry or empty extra): pin
+            # the base version; lock_resolver synthesizes name[extra] if needed.
             pin_packages = packages_by_name.get(pin_name.split("[")[0])
             key_name = pin_name
         pin_packages = pin_packages or []
-        pinned_keys[pin_name] = {}
-        for constraint, pin_specifier in pin_specs.items():
-            parsed_pin_spec = _parse_specifier_parts(pin_specifier) if pin_packages else None
-            found = False
-            for pin_pkg in pin_packages:
-                if not _parsed_specifier_contains_version(parsed_pin_spec, pin_pkg["version"]):
+        parsed_spec = _parse_specifier_parts(specifier) if pin_packages else None
+        matches = _resolve_candidates(
+            pin_packages,
+            parsed_spec,
+            marker,
+            resolution_marker_exprs,
+            break_on_first = True,
+        )
+        if not matches and strict_dependencies:
+            fail("Found no packages to satisfy pin (name={}, spec={})".format(pin_name, specifier))
+        for cand, edge_marker in matches:
+            pin_marker = edge_marker
+            if fold_pin_marker != None:
+                pin_marker = fold_pin_marker(constraint, pin_marker)
+                if pin_marker == None:
                     continue
-                pinned_keys[pin_name][constraint] = _package_key_str(key_name or pin_pkg["name"], pin_pkg["version"])
-                found = True
-                break
-            if not found and strict_dependencies:
-                fail("Found no packages to satisfy pin (name={}, spec={})".format(pin_name, pin_specifier))
+            pkg_key = _package_key_str(key_name or cand["name"], cand["version"])
+            queue.append((pin_name, pkg_key, constraint, is_testonly, pin_marker, edge_marker, False, ()))
 
-    # Replace pins of local packages with pins of their dependencies
-    if root_dependency_markers == None:
-        root_dependency_markers = {}
-    else:
-        root_dependency_markers = {
-            name: markers
-            for name, markers in root_dependency_markers.items()
-            if markers != None
-        }
-    direct_pin_names = {}
-    for name in pinned_package_specs.keys():
-        direct_pin_names[name] = True
-        direct_pin_names[name.split("[")[0]] = True
-    testonly_set = {name: True for name in testonly_pins}
-    expanded_testonly = {name: True for name in (expanded_testonly_pins or [])}
-    non_testonly_set = {}
-    for name in pinned_keys.keys():
-        base = name.split("[")[0]
-        if name not in testonly_set and base not in testonly_set and name not in expanded_testonly and base not in expanded_testonly:
-            non_testonly_set[base] = True
-    expanded_local = {}  # (constraint, key) -> bool (True = expanded only as testonly, False = expanded as non-testonly)
-    for _ in range(2 * len(distinct_packages) + 1):
-        local_pins = []
-        for pin_name, constraints in pinned_keys.items():
-            for constraint, key in constraints.items():
-                pkg = distinct_packages.get(key, {})
-                if pkg.get("is_local", False):
-                    local_pins.append((pin_name, constraint, key))
-        if not local_pins:
+    expanded = []
+    expanded_local = {}  # (local_key, constraint, pin_marker, avail_marker) -> is_testonly
+    max_steps = max(10000, 20 * len(distinct_packages) + len(queue) + 1)
+    head = 0
+    for _ in range(max_steps):
+        if head >= len(queue):
             break
-        for pin_name, constraint, key in local_pins:
-            pin_base = pin_name.split("[")[0]
-            pin_is_testonly = (pin_name in testonly_set or pin_base in testonly_set or pin_base in expanded_testonly) and pin_base not in non_testonly_set
-            pinned_keys[pin_name].pop(constraint)
-            visit_key = (constraint, key)
-            if visit_key in expanded_local and (pin_is_testonly or not expanded_local[visit_key]):
-                continue
-            expanded_local[visit_key] = pin_is_testonly
-            pkg_deps = resolved_deps.get(key, [])
-            for dep in pkg_deps:
-                dep_base_name = dep["name"].split("[")[0]
-                dep_pin_name = dep["name"]
+        pin_name, pkg_key, constraint, is_testonly, pin_marker, avail_marker, from_local, path = queue[head]
+        head += 1
+
+        local_key = _local_pkg_key(distinct_packages, pin_name, pkg_key)
+        if local_key == None:
+            expanded.append(struct(
+                pin_name = pin_name,
+                pkg_key = pkg_key,
+                constraint = constraint,
+                is_testonly = is_testonly,
+                pin_marker = pin_marker,
+                avail_marker = avail_marker,
+                from_local = from_local,
+            ))
+            continue
+
+        if local_key in path:
+            continue
+        visit_key = (local_key, constraint, pin_marker, avail_marker)
+        if visit_key in expanded_local and (is_testonly or not expanded_local[visit_key]):
+            continue
+        expanded_local[visit_key] = is_testonly
+        next_path = path + (local_key,)
+
+        for dep in resolved_deps.get(local_key, []):
+            dep_base_name = dep["name"].split("[")[0]
+            dep_pin_name = dep["name"]
+            dep_key = _package_key_str(dep_pin_name, dep["version"])
+            if dep_key not in distinct_packages:
+                dep_pin_name = dep_base_name
                 dep_key = _package_key_str(dep_pin_name, dep["version"])
-                if dep_key not in distinct_packages:
-                    dep_pin_name = dep_base_name
-                    dep_key = _package_key_str(dep_pin_name, dep["version"])
-
-                if pin_is_testonly:
-                    expanded_testonly[dep_base_name] = True
-                else:
-                    non_testonly_set[dep_base_name] = True
-
-                # Skip re-adding an already-expanded local member unless upgrading from testonly to non-testonly.
-                dep_constraint = _resolve_local_dep_constraint(
-                    constraint,
-                    dep_base_name,
-                    dep["version"],
-                    resolution_marker_exprs,
-                )
-                dep_visit_key = (dep_constraint, dep_key)
-                if distinct_packages.get(dep_key, {}).get("is_local", False) and dep_visit_key in expanded_local and (pin_is_testonly or not expanded_local[dep_visit_key]):
+            combined_avail = combine_markers(avail_marker, dep["marker"])
+            combined_pin = combine_markers(pin_marker, dep["marker"])
+            if fold_pin_marker != None:
+                combined_pin = fold_pin_marker(constraint, combined_pin)
+                if combined_pin == None:
                     continue
+            queue.append((dep_pin_name, dep_key, constraint, is_testonly, combined_pin, combined_avail, True, next_path))
 
-                # The dependency is requested under the local package's edge
-                # marker. A directly pinned name absent from
-                # root_dependency_markers is already unconditional.
-                marker_names = [dep_pin_name] if dep_pin_name == dep_base_name else [dep_pin_name, dep_base_name]
-                for marker_name in marker_names:
-                    if marker_name in direct_pin_names and marker_name not in root_dependency_markers:
-                        continue
-                    record_root_marker(root_dependency_markers, marker_name, dep["marker"])
+    if head < len(queue):
+        fail("Local package expansion exceeded step bound")
+    return expanded
 
-                if dep_pin_name not in pinned_keys:
-                    pinned_keys[dep_pin_name] = {}
-                pinned_keys[dep_pin_name][dep_constraint] = dep_key
+def finalize_lock_graph(
+        graph,
+        pinned_keys,
+        requires_python,
+        variants = None,
+        resolution_marker_exprs = None,
+        testonly_pins = None,
+        expanded_testonly_pins = None,
+        non_testonly_pins = None,
+        root_dependency_markers = None):
+    """Compute final testonly pins and serialize a resolved lock graph to raw_lock format.
 
-        # Cleanup empty dicts
-        keys_to_delete = [k for k, v in pinned_keys.items() if not v]
-        for k in keys_to_delete:
-            pinned_keys.pop(k)
+    Args:
+        graph: Struct returned by `build_lock_graph`.
+        pinned_keys: Dict mapping pin name -> `{constraint: pkg_key}`.
+        requires_python: The requires-python specifier string.
+        variants: Optional list of variant set dicts.
+        resolution_marker_exprs: Optional dict mapping constraint names to marker
+            expressions or compound dicts.
+        testonly_pins: Optional iterable of explicitly testonly pin names.
+        expanded_testonly_pins: Optional iterable of pin base names reached as
+            testonly only via expanded local packages (cleared if reachable at
+            runtime from a non-testonly pin).
+        non_testonly_pins: Optional iterable of pin base names reached from
+            non-testonly groups.
+        root_dependency_markers: Optional dict mapping pin names to list of
+            environment marker strings (or None for unconditional).
+
+    Returns:
+        A dict in raw_lock.json format.
+    """
+    distinct_packages = graph.distinct_packages
+    resolved_deps = graph.resolved_deps
+    if variants == None:
+        variants = []
+    if resolution_marker_exprs == None:
+        resolution_marker_exprs = {}
+
+    testonly_set = {name: True for name in (testonly_pins or [])}
+    expanded_testonly = {name: True for name in (expanded_testonly_pins or [])}
+    if non_testonly_pins != None:
+        non_testonly_set = {name: True for name in non_testonly_pins}
+    else:
+        non_testonly_set = {}
+        for name in pinned_keys.keys():
+            base = name.split("[")[0]
+            if name not in testonly_set and base not in testonly_set and name not in expanded_testonly and base not in expanded_testonly:
+                non_testonly_set[base] = True
 
     # Packages reachable at runtime from non-testonly pins through third-party
     # dependency edges must not be marked testonly solely because a testonly
@@ -702,7 +758,7 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     for name in sorted(expanded_testonly.keys()):
         if name not in non_testonly_set and name not in runtime_reachable and name not in testonly_set:
             testonly_set[name] = True
-    testonly_pins = sorted([
+    final_testonly_pins = sorted([
         name
         for name in testonly_set.keys()
         if (
@@ -712,19 +768,14 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         )
     ])
 
-    # Build output
+    # Build output packages, skipping local workspace/path members.
     lock_packages = {}
-    for pkg in all_packages:
+    for pkg in distinct_packages.values():
         if pkg.get("is_local", False):
-            # Local/editable/virtual packages are workspace members or path
-            # dependencies; they don't have downloadable artifacts so we skip
-            # them when building the pycross repo.
             continue
 
         pkg_key = _package_key_str(pkg["name"], pkg["version"])
         deps = resolved_deps.get(pkg_key, [])
-
-        # Filter self-deps
         deps_without_self = [d for d in deps if _package_key_str(d["name"].split("[")[0], d["version"]) != pkg_key]
         deps_sorted = sorted(deps_without_self, key = lambda d: (d["name"], d["version"]))
         files_sorted = sorted(pkg["files"], key = lambda f: f["name"])
@@ -736,14 +787,11 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
             "dependencies": deps_sorted,
             "files": files_sorted,
         }
-
-        # Include source_dir if present
         if pkg.get("source_dir"):
             raw_package["source_dir"] = pkg["source_dir"]
-
         lock_packages[pkg_key] = raw_package
 
-    # Simplify pins: if a pin has only one constraint with key "", flatten it
+    # Simplify pins: if a pin has only one constraint with key "", flatten it.
     simplified_pins = {}
     for name, constraints in pinned_keys.items():
         keys = sorted(constraints.keys())
@@ -756,24 +804,150 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         "packages": lock_packages,
         "pins": simplified_pins,
         "python_versions": requires_python,
-        "testonly_pins": testonly_pins,
+        "testonly_pins": final_testonly_pins,
     }
-
     if variants:
         result["variants"] = variants
-
     if resolution_marker_exprs:
         result["resolution_marker_exprs"] = resolution_marker_exprs
 
-    root_dependency_markers = {
+    filtered_markers = {
         name: markers
-        for name, markers in root_dependency_markers.items()
+        for name, markers in (root_dependency_markers or {}).items()
         if markers != None
     }
-    if root_dependency_markers:
-        result["root_dependency_markers"] = root_dependency_markers
+    if filtered_markers:
+        result["root_dependency_markers"] = filtered_markers
 
     return result
+
+def _resolve_local_dep_constraint(constraint, dep_base_name, dep_version, resolution_marker_exprs):
+    """Combine a local package pin's constraint with any resolution-marker fork on its dependency."""
+    cname = resolution_marker_constraint_name(dep_base_name, dep_version)
+    if cname not in resolution_marker_exprs or constraint == cname:
+        return constraint
+    if not constraint:
+        return cname
+    if type(resolution_marker_exprs.get(constraint)) == "string":
+        return constraint
+    dep_constraint = "{}_{}".format(constraint, cname)
+    resolution_marker_exprs[dep_constraint] = {
+        "variant": constraint,
+        "marker": cname,
+    }
+    return dep_constraint
+
+def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None):
+    """Resolves a dependency graph of packages.
+
+    Ports translator_utils.py resolve_lock_graph() to Starlark.
+
+    Each package in the packages list should be a dict with:
+        - name: canonicalized package name
+        - version: version string
+        - dependencies: list of dicts {name, specifier, marker, extras}
+        - files: list of dicts {name, sha256, urls?}
+        - python_versions: requires-python specifier string
+        - is_local: bool (optional, default False)
+        - extras: list of extra names (optional)
+
+    Each pinned_package_specs entry maps a dependency name (str) to
+    a dict of {constraint_label: specifier_str}.
+
+    Args:
+        packages: List of package dicts.
+        pinned_package_specs: Dict mapping pin name to {constraint: specifier}.
+        requires_python: The requires-python specifier string.
+        strict_dependencies: If True, fail on unresolved deps.
+        variants: List of variant set dicts (optional).
+        resolution_marker_exprs: Dict mapping constraint names to PEP 508
+            marker expressions (optional). Used for resolution-marker forks.
+        testonly_pins: List of pin names that are exclusively reachable from testonly groups.
+        root_dependency_markers: Dict mapping root pin names (including
+            extras) to the list of PEP 508 environment markers on the root
+            projects' dependency edges to them (optional). Only pins that are
+            exclusively requested under markers appear here.
+
+    Returns:
+        A dict in raw_lock.json format.
+    """
+    if resolution_marker_exprs == None:
+        resolution_marker_exprs = {}
+    graph = build_lock_graph(
+        packages,
+        resolution_marker_exprs = resolution_marker_exprs,
+        strict_dependencies = strict_dependencies,
+    )
+
+    testonly_set = {name: True for name in (testonly_pins or [])}
+    input_markers = {
+        name: markers
+        for name, markers in (root_dependency_markers or {}).items()
+        if markers != None
+    }
+    root_edges = []
+    for pin_name, pin_specs in pinned_package_specs.items():
+        base = pin_name.split("[")[0]
+        is_testonly = pin_name in testonly_set or base in testonly_set
+        edge_markers = input_markers.get(pin_name) or [""]
+        for constraint, specifier in pin_specs.items():
+            for marker in edge_markers:
+                root_edges.append(struct(
+                    pin_name = pin_name,
+                    specifier = specifier,
+                    constraint = constraint,
+                    is_testonly = is_testonly,
+                    marker = marker,
+                ))
+
+    expanded_edges = expand_root_edges(
+        graph,
+        root_edges,
+        strict_dependencies = strict_dependencies,
+    )
+
+    pinned_keys = {}
+    final_root_markers = {}
+    direct_testonly = {}
+    expanded_testonly = {}
+    non_testonly = {}
+    for edge in expanded_edges:
+        base = edge.pin_name.split("[")[0]
+        constraint = edge.constraint
+        if edge.from_local:
+            constraint = _resolve_local_dep_constraint(
+                constraint,
+                base,
+                edge.pkg_key.split("@", 1)[1],
+                resolution_marker_exprs,
+            )
+        pinned_keys.setdefault(edge.pin_name, {})[constraint] = edge.pkg_key
+
+        record_root_marker(final_root_markers, edge.pin_name, edge.avail_marker)
+        if edge.from_local and edge.pin_name != base:
+            record_root_marker(final_root_markers, base, edge.avail_marker)
+
+        if edge.is_testonly:
+            if edge.from_local:
+                expanded_testonly[base] = True
+            else:
+                direct_testonly[edge.pin_name] = True
+                if base in testonly_set:
+                    direct_testonly[base] = True
+        else:
+            non_testonly[base] = True
+
+    return finalize_lock_graph(
+        graph,
+        pinned_keys,
+        requires_python = requires_python,
+        variants = variants,
+        resolution_marker_exprs = resolution_marker_exprs,
+        testonly_pins = direct_testonly.keys(),
+        expanded_testonly_pins = expanded_testonly.keys(),
+        non_testonly_pins = non_testonly.keys(),
+        root_dependency_markers = final_root_markers,
+    )
 
 # Prefixes accepted in dependency_groups entries ('<kind>:<name>' or '<kind>:*').
 _GROUP_KINDS = ["optional", "group"]

@@ -1103,7 +1103,7 @@ def _test_uv_project_conflict_mixed_set_impl(env, target):
 
 # buildifier: disable=unused-variable
 def _test_uv_project_conflict_edge_split_impl(env, target):
-    """A group of a conflicted project whose edge splits by conflict markers keeps both versions apart."""
+    """A conflicted project's group drops unsatisfiable rival branches, while satisfiable split edges get marker-hashed constraints."""
     lock = _lock(
         [
             dict(
@@ -1114,34 +1114,41 @@ def _test_uv_project_conflict_edge_split_impl(env, target):
                 ]}}
             ),
             _pkg("b", "0", source = {"virtual": "b"}, deps = [_dep("iniconfig", "2.0.0", marker = "extra == 'project-1-b'")]),
+            dict(
+                _pkg("c", "0", source = {"virtual": "c"}, deps = [
+                    _dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'"),
+                    _dep("iniconfig", "2.0.0", marker = "extra == 'project-1-b' or extra != 'project-1-a'"),
+                ]),
+                **{"dev-dependencies": {"linux_only": [
+                    _dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a' and sys_platform == 'linux'"),
+                    _dep("iniconfig", "2.0.0", marker = "(extra == 'project-1-b' or extra != 'project-1-a') and sys_platform == 'linux'"),
+                ]}}
+            ),
             _pkg("iniconfig", "1.1.1", wheels = [_whl("iniconfig-1.1.1-py2.py3-none-any.whl", "aaa")]),
             _pkg("iniconfig", "2.0.0", wheels = [_whl("iniconfig-2.0.0-py3-none-any.whl", "bbb")]),
         ],
         conflicts = [[{"package": "a"}, {"package": "b"}]],
     )
+
+    # Under project `a`, the `2.0.0` branch (`package_b or != package_a`) is
+    # unsatisfiable and pruned, so `package_a` maps cleanly to `1.1.1`.
     result = translate_uv(_project(name = "a"), lock, _lock_model(projects = ["a"], dependency_groups = ["default", "group:plain"]))
-    pin = result["pins"]["iniconfig"]
-    exprs = result["resolution_marker_exprs"]
+    env.expect.that_dict(result["pins"]["iniconfig"]).contains_exactly({"package_a": "iniconfig@1.1.1"})
+    env.expect.that_bool("resolution_marker_exprs" in result).equals(False)
 
-    # Before the fix, `package_a` mapped to the last edge's version (2.0.0).
-    env.expect.that_collection(pin.keys()).not_contains("package_a")
-    by_version = {v: k for k, v in pin.items()}
-    env.expect.that_collection(by_version.keys()).contains_exactly(["iniconfig@1.1.1", "iniconfig@2.0.0"])
-    one = exprs[by_version["iniconfig@1.1.1"]]
-    env.expect.that_str(one["variant"]).equals("package_a")
-    env.expect.that_str(exprs[one["marker"]]).equals("extra == '__variant_package_a'")
-    two = exprs[by_version["iniconfig@2.0.0"]]
-    env.expect.that_str(exprs[two["marker"]]).equals("extra == '__variant_package_b' or extra != '__variant_package_a'")
+    # Under unconflicted project `c`, both versions are satisfiable and get
+    # distinct marker-hashed constraints; adding `group:linux_only` ORs in a
+    # second marker and produces a distinct hash so repos never collide on merge.
+    c_default = translate_uv(_project(name = "c"), lock, _lock_model(projects = ["c"], dependency_groups = ["default"]))
+    c_by_ver = {v: k for k, v in c_default["pins"]["iniconfig"].items()}
+    env.expect.that_collection(c_by_ver.keys()).contains_exactly(["iniconfig@1.1.1", "iniconfig@2.0.0"])
+    c_exprs = c_default["resolution_marker_exprs"]
+    env.expect.that_str(c_exprs[c_by_ver["iniconfig@1.1.1"]]).equals("extra == '__variant_package_a'")
+    env.expect.that_str(c_exprs[c_by_ver["iniconfig@2.0.0"]]).equals("extra == '__variant_package_b' or extra != '__variant_package_a'")
 
-    # Edge constraint names follow the marker, so repos whose groups OR in different
-    # edges don't map one name to different markers when the workspace merges them.
-    lock["package"][0]["dev-dependencies"]["linux_only"] = [
-        _dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a' and sys_platform == 'linux'"),
-        _dep("iniconfig", "2.0.0", marker = "(extra == 'project-1-b' or extra != 'project-1-a') and sys_platform == 'linux'"),
-    ]
-    wider = translate_uv(_project(name = "a"), lock, _lock_model(projects = ["a"], dependency_groups = ["default", "group:plain", "group:linux_only"]))
-    wider_one = wider["resolution_marker_exprs"][{v: k for k, v in wider["pins"]["iniconfig"].items()}["iniconfig@1.1.1"]]
-    env.expect.that_bool(wider_one["marker"] != one["marker"]).equals(True)
+    c_wider = translate_uv(_project(name = "c"), lock, _lock_model(projects = ["c"], dependency_groups = ["default", "group:linux_only"]))
+    wider_key = {v: k for k, v in c_wider["pins"]["iniconfig"].items()}["iniconfig@1.1.1"]
+    env.expect.that_bool(wider_key != c_by_ver["iniconfig@1.1.1"]).equals(True)
 
 # buildifier: disable=unused-variable
 def _test_uv_project_conflict_redundant_edges_impl(env, target):
@@ -1742,29 +1749,24 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     lock = decode(_ISSUE_1510_UV_LOCK)
     raw = translate_uv(project, lock, _lock_model(dependency_groups = ["group:*"]))
 
-    # 1. Verify deterministic per-(variant, version) fork pins on torch:
+    # 1. Verify deterministic per-(variant, version) content-hashed fork pins on torch:
     torch_pins = raw["pins"]["torch"]
     exprs = raw["resolution_marker_exprs"]
-    env.expect.that_dict(torch_pins).contains_exactly({
-        "group_native-torch-probe_cpu_res_torch_2_12_0__group_native-torch-probe_cpu": "torch@2.12.0",
-        "group_native-torch-probe_cpu_res_torch_2_12_0_cpu__group_native-torch-probe_cpu": "torch@2.12.0+cpu",
-        "group_native-torch-probe_cuda_res_torch_2_12_0__group_native-torch-probe_cuda": "torch@2.12.0",
-    })
-    env.expect.that_dict(exprs["group_native-torch-probe_cpu_res_torch_2_12_0__group_native-torch-probe_cpu"]).contains_exactly({
-        "variant": "group_native-torch-probe_cpu",
-        "marker": "res_torch_2_12_0__group_native-torch-probe_cpu",
-    })
-    env.expect.that_dict(exprs["group_native-torch-probe_cpu_res_torch_2_12_0_cpu__group_native-torch-probe_cpu"]).contains_exactly({
-        "variant": "group_native-torch-probe_cpu",
-        "marker": "res_torch_2_12_0_cpu__group_native-torch-probe_cpu",
-    })
-    env.expect.that_dict(exprs["group_native-torch-probe_cuda_res_torch_2_12_0__group_native-torch-probe_cuda"]).contains_exactly({
-        "variant": "group_native-torch-probe_cuda",
-        "marker": "res_torch_2_12_0__group_native-torch-probe_cuda",
-    })
-    env.expect.that_str(exprs["res_torch_2_12_0__group_native-torch-probe_cpu"]).contains("extra == '__variant_group_native-torch-probe_cpu'")
-    env.expect.that_str(exprs["res_torch_2_12_0_cpu__group_native-torch-probe_cpu"]).contains("extra == '__variant_group_native-torch-probe_cpu'")
-    env.expect.that_str(exprs["res_torch_2_12_0__group_native-torch-probe_cuda"]).equals("platform_machine == 'x86_64' and sys_platform == 'linux'")
+    env.expect.that_int(len(torch_pins)).equals(3)
+    by_variant_target = {}
+    for key, target_pkg in torch_pins.items():
+        compound = exprs[key]
+        marker_key = compound["marker"]
+        env.expect.that_str(marker_key).contains("__edge_")
+        by_variant_target[(compound["variant"], target_pkg)] = exprs[marker_key]
+    env.expect.that_collection(by_variant_target.keys()).contains_exactly([
+        ("group_native-torch-probe_cpu", "torch@2.12.0"),
+        ("group_native-torch-probe_cpu", "torch@2.12.0+cpu"),
+        ("group_native-torch-probe_cuda", "torch@2.12.0"),
+    ])
+    env.expect.that_str(by_variant_target[("group_native-torch-probe_cpu", "torch@2.12.0")]).contains("extra == '__variant_group_native-torch-probe_cpu'")
+    env.expect.that_str(by_variant_target[("group_native-torch-probe_cpu", "torch@2.12.0+cpu")]).contains("extra == '__variant_group_native-torch-probe_cpu'")
+    env.expect.that_str(by_variant_target[("group_native-torch-probe_cuda", "torch@2.12.0")]).equals("platform_machine == 'x86_64' and sys_platform == 'linux'")
 
     # 2. Run resolve() and check torch's availability markers reference __variant_ tokens.
     resolved = resolve(raw, include_transitive = True)
@@ -1887,27 +1889,27 @@ def _test_uv_virtual_and_directory_members(name):
 # buildifier: disable=unused-variable
 def _test_fold_variant_marker_impl(env, target):
     sets = [["group_app_cpu", "group_app_cuda"]]
-    env.expect.that_str(fold_variant_marker("", active_qname = "group_app_cpu", conflict_sets = sets)).equals("T")
-    env.expect.that_str(fold_variant_marker("sys_platform == 'linux'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("N")
-    env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cuda'", active_qname = "group_app_cuda", conflict_sets = sets)).equals("T")
-    env.expect.that_str(fold_variant_marker("'__variant_group_app_cuda' == extra", active_qname = "group_app_cuda", conflict_sets = sets)).equals("T")
-    env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cuda'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("F")
-    env.expect.that_str(fold_variant_marker("extra != '__variant_group_app_cuda'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("T")
-    env.expect.that_str(fold_variant_marker("extra != '__variant_group_app_cpu'", active_qname = "group_app_cpu", conflict_sets = sets)).equals("F")
+    env.expect.that_str(fold_variant_marker("", active_qnames = ["group_app_cpu"], conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("sys_platform == 'linux'", active_qnames = ["group_app_cpu"], conflict_sets = sets)).equals("N")
+    env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cuda'", active_qnames = ["group_app_cuda"], conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("'__variant_group_app_cuda' == extra", active_qnames = ["group_app_cuda"], conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cuda'", active_qnames = ["group_app_cpu"], conflict_sets = sets)).equals("F")
+    env.expect.that_str(fold_variant_marker("extra != '__variant_group_app_cuda'", active_qnames = ["group_app_cpu"], conflict_sets = sets)).equals("T")
+    env.expect.that_str(fold_variant_marker("extra != '__variant_group_app_cpu'", active_qnames = ["group_app_cpu"], conflict_sets = sets)).equals("F")
     env.expect.that_str(fold_variant_marker("extra == '__variant_group_app_cpu' and extra != '__variant_group_app_cpu'", conflict_sets = sets)).equals("F")
     env.expect.that_str(fold_variant_marker(
         "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
-        active_qname = "group_app_cpu",
+        active_qnames = ["group_app_cpu"],
         conflict_sets = sets,
     )).equals("N")
     env.expect.that_str(fold_variant_marker(
         "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
-        active_qname = "group_app_cuda",
+        active_qnames = ["group_app_cuda"],
         conflict_sets = sets,
     )).equals("F")
     env.expect.that_str(fold_variant_marker(
         "(extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda') or (extra != '__variant_group_app_cpu' and extra != '__variant_group_app_cuda')",
-        active_qname = "group_app_cpu",
+        active_qnames = ["group_app_cpu"],
         conflict_sets = sets,
     )).equals("F")
     env.expect.that_str(fold_variant_marker(
@@ -1923,13 +1925,26 @@ def _test_fold_variant_marker_impl(env, target):
     overlapping = [["group_app_a", "group_app_b"], ["group_app_a", "group_app_c"]]
     env.expect.that_str(fold_variant_marker(
         "((extra == '__variant_group_app_b' or extra == '__variant_group_app_c') and sys_platform == 'linux')",
-        active_qname = "group_app_a",
+        active_qnames = ["group_app_a"],
         conflict_sets = overlapping,
     )).equals("F")
     env.expect.that_str(fold_variant_marker(
         "extra == '__variant_group_app_b' and extra == '__variant_group_app_c'",
         conflict_sets = overlapping,
     )).equals("V")
+
+    # Joint folding across multiple simultaneous active variants (orthogonal sets) + contradictory active_qnames.
+    orthogonal = [["group_app_a", "group_app_b"], ["extra_app_c", "extra_app_d"]]
+    env.expect.that_str(fold_variant_marker(
+        "extra == '__variant_group_app_b' or extra == '__variant_extra_app_d'",
+        active_qnames = ["group_app_a", "extra_app_c"],
+        conflict_sets = orthogonal,
+    )).equals("F")
+    env.expect.that_str(fold_variant_marker(
+        "extra == '__variant_group_app_a'",
+        active_qnames = ["group_app_a", "group_app_b"],
+        conflict_sets = orthogonal,
+    )).equals("F")
 
 def _test_fold_variant_marker(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1985,26 +2000,38 @@ def _test_uv_local_member_conflict_markers_impl(env, target):
         ]],
     )
 
-    expected_both = {
-        "group_conflict-repro_cpu_res_torch_2_9_1__group_conflict-repro_cpu": "torch@2.9.1",
-        "group_conflict-repro_cpu_res_torch_2_9_1_cpu__group_conflict-repro_cpu": "torch@2.9.1+cpu",
-        "group_conflict-repro_cuda": "torch@2.9.1+cu129",
-    }
+    def _pin_summary(res):
+        exprs = res.get("resolution_marker_exprs", {})
+        items = []
+        for key, target_pkg in res["pins"]["torch"].items():
+            expr = exprs.get(key)
+            if type(expr) == "dict":
+                items.append((expr["variant"], target_pkg, True))
+            else:
+                items.append((key, target_pkg, False))
+        return items
+
+    expected_both = [
+        ("group_conflict-repro_cpu", "torch@2.9.1", True),
+        ("group_conflict-repro_cpu", "torch@2.9.1+cpu", True),
+        ("group_conflict-repro_cuda", "torch@2.9.1+cu129", False),
+    ]
 
     # 1. Root project with both conflict groups.
     root_both = translate_uv(project, lock, _lock_model(projects = ["conflict-repro"], dependency_groups = ["default", "group:cpu", "group:cuda"]))
-    env.expect.that_dict(root_both["pins"]["torch"]).contains_exactly(expected_both)
+    env.expect.that_collection(_pin_summary(root_both)).contains_exactly(expected_both)
 
     # 2. Wildcard projects with both conflict groups: plain __edge_ entries from lib are pruned.
     all_both = translate_uv(project, lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu", "group:cuda"]))
-    env.expect.that_dict(all_both["pins"]["torch"]).contains_exactly(expected_both)
+    env.expect.that_collection(_pin_summary(all_both)).contains_exactly(expected_both)
+    env.expect.that_dict(all_both["pins"]["torch"]).contains_exactly(root_both["pins"]["torch"])
 
     # 3. CPU-only repo with wildcard projects: no CUDA branch or plain __edge_ entries.
     all_cpu = translate_uv(project, lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu"]))
-    env.expect.that_dict(all_cpu["pins"]["torch"]).contains_exactly({
-        "group_conflict-repro_cpu_res_torch_2_9_1__group_conflict-repro_cpu": "torch@2.9.1",
-        "group_conflict-repro_cpu_res_torch_2_9_1_cpu__group_conflict-repro_cpu": "torch@2.9.1+cpu",
-    })
+    env.expect.that_collection(_pin_summary(all_cpu)).contains_exactly([
+        ("group_conflict-repro_cpu", "torch@2.9.1", True),
+        ("group_conflict-repro_cpu", "torch@2.9.1+cpu", True),
+    ])
 
     # 4. CUDA-only repo with wildcard projects: only the CUDA variant branch.
     all_cuda = translate_uv(project, lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cuda"]))
@@ -2123,17 +2150,24 @@ def _test_uv_asymmetric_fork_with_independent_member_impl(env, target):
     torch_pin = result["pins"]["torch"]
     exprs = result["resolution_marker_exprs"]
 
-    # Root's three variant-fork entries stay intact.
-    env.expect.that_str(torch_pin["group_root_cpu_res_torch_2_9_1__group_root_cpu"]).equals("torch@2.9.1")
-    env.expect.that_str(torch_pin["group_root_cpu_res_torch_2_9_1_cpu__group_root_cpu"]).equals("torch@2.9.1+cpu")
-    env.expect.that_str(torch_pin["group_root_cuda_res_torch_2_9_1_cu129__group_root_cuda"]).equals("torch@2.9.1+cu129")
+    # Root's three variant-fork entries stay intact as compound constraints.
+    compound_branches = [
+        (exprs[k]["variant"], target_pkg)
+        for k, target_pkg in torch_pin.items()
+        if type(exprs.get(k)) == "dict"
+    ]
+    env.expect.that_collection(compound_branches).contains_exactly([
+        ("group_root_cpu", "torch@2.9.1"),
+        ("group_root_cpu", "torch@2.9.1+cpu"),
+        ("group_root_cuda", "torch@2.9.1+cu129"),
+    ])
 
     # Lib's 2.9.1 edge stays narrowed to cuda (the only variant that does not
     # already have a 2.9.1 entry), while its 2.9.1+cpu and 2.9.1+cu129 edges are dropped.
-    edge_keys = [k for k in torch_pin.keys() if "__edge_" in k]
-    env.expect.that_collection(edge_keys).has_size(1)
-    env.expect.that_str(torch_pin[edge_keys[0]]).equals("torch@2.9.1")
-    env.expect.that_str(exprs[edge_keys[0]]).contains("(extra == '__variant_group_root_cuda') and ")
+    plain_edge_keys = [k for k in torch_pin.keys() if type(exprs.get(k)) == "string" and "__edge_" in k]
+    env.expect.that_collection(plain_edge_keys).has_size(1)
+    env.expect.that_str(torch_pin[plain_edge_keys[0]]).equals("torch@2.9.1")
+    env.expect.that_str(exprs[plain_edge_keys[0]]).contains("(extra == '__variant_group_root_cuda') and ")
 
 def _test_uv_asymmetric_fork_with_independent_member(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -2235,6 +2269,79 @@ def _test_uv_local_member_edge_cases_impl(env, target):
     env.expect.that_bool(base_k != opt_k).equals(True)
     env.expect.that_str(extra_res["resolution_marker_exprs"][extra_res["resolution_marker_exprs"][base_k]["marker"]]).contains("darwin")
     env.expect.that_str(extra_res["resolution_marker_exprs"][extra_res["resolution_marker_exprs"][opt_k]["marker"]]).contains("linux")
+
+    # 4. Single-specifier conflicted edge referencing an orthogonal conflict set keeps its variant marker.
+    ortho_lock = _lock(
+        [
+            _vpkg(
+                "root",
+                dev_deps = {"cpu": [_dep("lib")], "cuda": []},
+                opt_deps = {"a": [], "b": [_dep("pkg", "2.0")]},
+            ),
+            _pkg("lib", "0.1.0", source = {"editable": "lib"}, deps = [_dep("pkg", "1.0", marker = "extra == 'extra-4-root-a'")]),
+            _pkg("pkg", "1.0", wheels = [_whl("pkg-1.0-py3-none-any.whl", "p1")]),
+            _pkg("pkg", "2.0", wheels = [_whl("pkg-2.0-py3-none-any.whl", "p2")]),
+        ],
+        conflicts = [
+            [{"package": "root", "group": "cpu"}, {"package": "root", "group": "cuda"}],
+            [{"package": "root", "extra": "a"}, {"package": "root", "extra": "b"}],
+        ],
+    )
+    ortho_res = translate_uv(
+        _project(name = "root"),
+        ortho_lock,
+        _lock_model(projects = ["root"], dependency_groups = ["default", "group:cpu", "group:cuda", "optional:a", "optional:b"]),
+    )
+    ortho_pins = ortho_res["pins"]["pkg"]
+    ortho_exprs = ortho_res["resolution_marker_exprs"]
+    cpu_keys = [k for k, v in ortho_pins.items() if v == "pkg@1.0"]
+    env.expect.that_collection(cpu_keys).has_size(1)
+    env.expect.that_str(ortho_exprs[cpu_keys[0]]["variant"]).equals("group_root_cpu")
+    env.expect.that_str(ortho_exprs[ortho_exprs[cpu_keys[0]]["marker"]]).equals("extra == '__variant_extra_root_a'")
+    env.expect.that_str(ortho_pins["extra_root_b"]).equals("pkg@2.0")
+
+    # 5. Two simultaneous repo_pins jointly prune an OR-ed edge referencing rivals from both sets.
+    dual_pin_lock = _lock(
+        [
+            _vpkg("root", dev_deps = {"cpu": [], "cuda": []}, opt_deps = {"a": [], "b": []}),
+            _pkg("lib", "0.1.0", source = {"editable": "lib"}, deps = [
+                _dep("only-other", "1.0", marker = "extra == 'group-4-root-cuda' or extra == 'extra-4-root-b'"),
+            ]),
+            _pkg("only-other", "1.0", wheels = [_whl("only_other-1.0-py3-none-any.whl", "o1")]),
+        ],
+        conflicts = [
+            [{"package": "root", "group": "cpu"}, {"package": "root", "group": "cuda"}],
+            [{"package": "root", "extra": "a"}, {"package": "root", "extra": "b"}],
+        ],
+    )
+    dual_pin_res = translate_uv(
+        _project(name = "root"),
+        dual_pin_lock,
+        _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu", "optional:a"]),
+    )
+    env.expect.that_collection(dual_pin_res["pins"].keys()).not_contains("only-other")
+
+    # 6. Cross-repo marker disambiguation: two repos sharing a `{package = "root"}` constraint
+    # with distinct markers on the same forked version produce distinct marker keys.
+    cross_repo_lock = _lock(
+        [
+            _vpkg(
+                "root",
+                deps = [_dep("torch", "2.9.1", marker = "sys_platform == 'darwin'")],
+                dev_deps = {"dev": [_dep("torch", "2.9.1", marker = "sys_platform == 'linux'")]},
+            ),
+            _vpkg("other", deps = [_dep("torch", "2.9.1+cpu", marker = "sys_platform == 'linux'")]),
+            _pkg("torch", "2.9.1", markers = ["sys_platform == 'darwin' or sys_platform == 'linux'"], wheels = [_whl("torch-2.9.1-py3-none-any.whl", "t1")]),
+            _pkg("torch", "2.9.1+cpu", markers = ["sys_platform == 'linux'"], wheels = [_whl("torch-2.9.1%2Bcpu-py3-none-any.whl", "t2")]),
+        ],
+        conflicts = [[{"package": "root"}, {"package": "other"}]],
+    )
+    repo_a = translate_uv(_project(name = "root"), cross_repo_lock, _lock_model(projects = ["root"], dependency_groups = ["default"]))
+    repo_b = translate_uv(_project(name = "root"), cross_repo_lock, _lock_model(projects = ["root"], dependency_groups = ["group:dev"]))
+    key_a = repo_a["pins"]["torch"].keys()[0]
+    key_b = repo_b["pins"]["torch"].keys()[0]
+    env.expect.that_bool(key_a != key_b).equals(True)
+    env.expect.that_bool(repo_a["resolution_marker_exprs"][key_a]["marker"] != repo_b["resolution_marker_exprs"][key_b]["marker"]).equals(True)
 
 def _test_uv_local_member_edge_cases(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

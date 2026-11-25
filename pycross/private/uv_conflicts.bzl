@@ -1,0 +1,485 @@
+"""UV conflict sets, variant pins/defaults, and conflict-aware pin resolution.
+
+Handles UV's `[[conflicts]]` declarations: rewriting uv's encoded `extra == ...`
+conflict tokens to internal `__variant_<qname>` tokens, computing per-repo
+`_variants` flags / `repo_pin` / `repo_default`, folding edge markers during
+local-member expansion, and resolving surviving edges into conditional pins.
+"""
+
+load(
+    ":translator_common.bzl",
+    "canonicalize_name",
+    "record_root_marker",
+    "resolution_marker_constraint_name",
+)
+load(
+    ":util.bzl",
+    "excluded_variant_items",
+    "fold_variant_marker",
+    "sanitize_name",
+    "variant_conflict_pairs",
+    "variant_item_qname",
+)
+
+def _uv_conflict_token(item):
+    """Return the uv-encoded conflict marker token for a conflict item."""
+    kind = item["kind"]
+    pkg = canonicalize_name(item["package"])
+    name = item.get("name", "")
+    if kind == "extra":
+        return "extra-{}-{}-{}".format(len(pkg), pkg, canonicalize_name(name))
+    if kind == "group":
+        return "group-{}-{}-{}".format(len(pkg), pkg, canonicalize_name(name))
+    if kind == "project":
+        return "project-{}-{}".format(len(pkg), pkg)
+    fail("Unknown conflict item kind: {}".format(kind))
+
+def canonicalize_group_key(key):
+    """Normalize the name in a requested group key (`optional:<name>`, `group:<name>`).
+
+    Args:
+        key: Group key string such as `"default"`, `"optional:My_Extra"`, or `"group:Dev"`.
+
+    Returns:
+        Group key string with the suffix canonicalized per PEP 503.
+    """
+    kind, sep, name = key.partition(":")
+    if not sep:
+        return key
+    return "{}:{}".format(kind, canonicalize_name(name))
+
+def _is_item_requested(item, requested_keys):
+    """Whether a repo requests a conflict item of one of its projects."""
+    kind = item["kind"]
+    if kind == "project":
+        # A project variant gates all of the project's edges.
+        return bool(requested_keys)
+    if kind == "extra":
+        return "optional:" + item["name"] in requested_keys
+    return "group:" + item["name"] in requested_keys
+
+def rewrite_conflict_markers(marker, token_replacements):
+    """Rewrite uv conflict marker tokens in `marker` into `__variant_<qname>`.
+
+    Args:
+        marker: PEP 508 marker string (may be `""`).
+        token_replacements: Sequence of `(old_quoted, new_quoted)` string pairs.
+
+    Returns:
+        Marker string with all matching conflict tokens rewritten.
+    """
+    if not marker or not token_replacements or "extra" not in marker:
+        return marker
+    for old_quoted, new_quoted in token_replacements:
+        if old_quoted in marker:
+            marker = marker.replace(old_quoted, new_quoted)
+    return marker
+
+def parse_uv_conflicts(uv_conflicts, target_projects):
+    """Parse uv `conflicts` declarations into variant sets, lookups, and rewrite rules.
+
+    Args:
+        uv_conflicts: List of conflict sets from `uv.lock["conflicts"]`.
+        target_projects: List of canonicalized target project names for this repo.
+
+    Returns:
+        Struct with `variant_sets`, `variant_items_by_key`,
+        `extra_variant_values`, `group_variant_values`, `project_variant_values`,
+        `token_replacements`, `set_qnames`, and `conflict_pairs`.
+    """
+    variant_items_by_key = {}  # (package, kind, name) -> variant item dict
+    variant_sets = []
+    for variant_list in uv_conflicts:
+        items = []
+        for c in variant_list:
+            package = canonicalize_name(c["package"])
+            if "extra" in c:
+                kind, vname = "extra", canonicalize_name(c["extra"])
+            elif "group" in c:
+                kind, vname = "group", canonicalize_name(c["group"])
+            else:
+                kind, vname = "project", ""
+            key = (package, kind, vname)
+            if key not in variant_items_by_key:
+                item = {"package": package, "kind": kind}
+                if vname:
+                    item["name"] = vname
+                variant_items_by_key[key] = item
+            items.append(variant_items_by_key[key])
+        variant_sets.append({"items": items})
+
+    # Build constraint lookups keyed by (package, name) so a conflict declared
+    # on one project's extra/group doesn't apply to a same-named extra/group of
+    # another project.
+    extra_variant_values = {}
+    group_variant_values = {}
+    project_variant_values = {}
+    token_replacements = []
+    target_projects_set = {p: True for p in target_projects}
+    for item in variant_items_by_key.values():
+        kind = item["kind"]
+        vname = item.get("name", "")
+        qualified = variant_item_qname(item)
+        if kind == "extra":
+            extra_variant_values[(item["package"], vname)] = qualified
+        elif kind == "group":
+            group_variant_values[(item["package"], vname)] = qualified
+        elif kind == "project":
+            project_variant_values[item["package"]] = qualified
+
+        uv_tok = _uv_conflict_token(item)
+        var_tok = "__variant_{}".format(qualified)
+        token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
+        token_replacements.append(('"{}"'.format(uv_tok), '"{}"'.format(var_tok)))
+
+        # User-facing `_variants` flags for this repo, for items declared by its
+        # own projects (other projects' items get none):
+        #   - `<kind>_<name>` (e.g. `group_test`) covers that extra/group in
+        #     every project of the repo, like `uv --group test`.
+        #   - `<kind>_<project>_<name>` covers one project, like
+        #     `uv --package app-a --group test`.
+        # Names are normalized (`-` only), so the two forms can't collide.
+        if item["package"] not in target_projects_set:
+            continue
+        if kind == "project":
+            item["flags"] = ["package_{}".format(item["package"])]
+        else:
+            item["flags"] = [
+                "{}_{}".format(kind, vname),
+                "{}_{}_{}".format(kind, item["package"], vname),
+            ]
+
+    set_qnames = [[variant_item_qname(item) for item in vs["items"]] for vs in variant_sets]
+    conflict_pairs = variant_conflict_pairs(set_qnames)
+    return struct(
+        variant_sets = variant_sets,
+        variant_items_by_key = variant_items_by_key,
+        extra_variant_values = extra_variant_values,
+        group_variant_values = group_variant_values,
+        project_variant_values = project_variant_values,
+        token_replacements = token_replacements,
+        set_qnames = set_qnames,
+        conflict_pairs = conflict_pairs,
+    )
+
+def apply_repo_variant_pins_and_defaults(
+        conflicts,
+        target_projects,
+        requested_by_project,
+        default_owner,
+        uv_default_groups,
+        is_build_tools_repo):
+    """Annotate `conflicts.variant_sets` with `repo_requested`, `repo_pin`, and `repo_default`.
+
+    In uv, extras and groups are active only when requested. A `{package = ...}`
+    project variant gates all of that project's edges, so it is active whenever
+    the repo requests anything from the project. When this repo requests exactly
+    one item of a set (and none of its rivals in any overlapping set), the repo
+    pins it via `repo_pin` (except `<ws>__build`, which serves sdist builds for
+    every repo). When several items are requested, `repo_default` comes from the
+    selected pyproject's `[tool.uv] default-groups` or a project whose default
+    dependencies are requested, provided exactly one candidate qualifies.
+
+    Args:
+        conflicts: Struct returned by `parse_uv_conflicts`.
+        target_projects: List of canonicalized target project names.
+        requested_by_project: Dict mapping project name -> requested groups dict.
+        default_owner: Canonicalized project name that owns `default-groups`.
+        uv_default_groups: `[tool.uv] default-groups` value (`"all"` or list).
+        is_build_tools_repo: Whether this repo is the workspace `__build` repo.
+
+    Returns:
+        List of `repo_pin` variant qualified names active across this repo.
+    """
+    target_projects_set = {p: True for p in target_projects}
+    requested_keys = {
+        project: {canonicalize_group_key(key): True for key in requested.keys()}
+        for project, requested in requested_by_project.items()
+    }
+    requested_by_set = []
+    requested_qname_sets = []
+    all_requested_qnames = {}
+    for variant_set in conflicts.variant_sets:
+        owned_items = [item for item in variant_set["items"] if item["package"] in target_projects_set]
+        requested_items = [item for item in owned_items if _is_item_requested(item, requested_keys[item["package"]])]
+        requested_by_set.append((owned_items, requested_items))
+        if requested_items:
+            qnames = [variant_item_qname(item) for item in requested_items]
+            variant_set["repo_requested"] = qnames
+            requested_qname_sets.append(qnames)
+            for q in qnames:
+                all_requested_qnames[q] = True
+    rival_requested = excluded_variant_items(requested_qname_sets, all_requested_qnames)
+
+    repo_pins = []
+    for variant_set, (owned_items, requested_items) in zip(conflicts.variant_sets, requested_by_set):
+        # An item can belong to several sets (e.g. `[[cpu, gpu], [cpu, gpu-test]]`).
+        # Pin it only if the repo requests none of its rivals in any of them.
+        if len(requested_items) <= 1:
+            if requested_items and not is_build_tools_repo:
+                qname = variant_item_qname(requested_items[0])
+                if qname not in rival_requested:
+                    variant_set["repo_pin"] = qname
+                    repo_pins.append(qname)
+            continue
+
+        candidates = []
+        for item in owned_items:
+            requested = requested_keys[item["package"]]
+            if item["kind"] == "project":
+                if "default" in requested:
+                    candidates.append(item)
+                continue
+            if item["kind"] != "group" or item["package"] != default_owner:
+                continue
+            if uv_default_groups != "all" and item["name"] not in [canonicalize_name(g) for g in uv_default_groups]:
+                continue
+            if "group:" + item["name"] not in requested:
+                continue
+            candidates.append(item)
+        if len(candidates) == 1:
+            variant_set["repo_default"] = variant_item_qname(candidates[0])
+
+    return repo_pins
+
+def make_pin_marker_folder(conflicts, repo_pins):
+    """Build a `fold_pin_marker(constraint, marker)` closure for `expand_root_edges`.
+
+    Jointly evaluates `__variant_` tokens against both the edge's enclosing
+    variant `constraint` and all `repo_pins` active in this repo:
+      - `"F"` (unsatisfiable) returns `None` so the edge is pruned immediately.
+      - `"T"` with a non-empty `constraint` simplifies to `""`.
+      - Plain (`constraint == ""`) edges keep their marker even when `"T"` under
+        `repo_pins` so plain edge-split pruning can still detect overlap with
+        conflicted branches on the same pin.
+
+    Args:
+        conflicts: Struct returned by `parse_uv_conflicts`.
+        repo_pins: List of `repo_pin` qnames active in this repo.
+
+    Returns:
+        Callable `fold(constraint, marker) -> str | None`.
+    """
+    conflict_pairs = conflicts.conflict_pairs
+    set_qnames = conflicts.set_qnames
+
+    def _fold(constraint, marker):
+        if not marker or "__variant_" not in marker:
+            return marker
+        active = ([constraint] if constraint else []) + repo_pins
+        ev = fold_variant_marker(
+            marker,
+            conflict_pairs = conflict_pairs,
+            active_qnames = active,
+            conflict_sets = set_qnames,
+        )
+        if ev == "F":
+            return None
+        if ev == "T" and constraint:
+            return ""
+        return marker
+
+    return _fold
+
+def _edge_constraint_name(base_dep_name, version, marker):
+    """Build a content-hashed `__edge_<hash>` constraint name for `(base_dep_name, version, marker)`."""
+    prefix = resolution_marker_constraint_name(base_dep_name, version) if version else "res_{}".format(sanitize_name(base_dep_name))
+    return "%s__edge_%x" % (prefix, hash(marker) & 0xffffffff)
+
+def _prune_plain_branches(branches, conflicts, repo_pins):
+    """Drop or narrow plain (`raw_constraint == ""`) conflict-gated branches on one pin.
+
+    A plain branch carrying `__variant_` tokens (e.g. from an unconflicted
+    project or expanded local member) can sit next to conflicted branches for
+    the same conflict set. With no variant selected it would match alongside
+    `_unselected_<set>`, and with a variant selected it would collide with that
+    variant's own entry and make `select()` ambiguous.
+      - A variant item `q` covers `pkg_key` when `q` has a bare branch on this
+        pin or already has a branch for `pkg_key`.
+      - Drop the plain branch if no uncovered item of the set can satisfy it;
+        otherwise narrow its effective marker to the uncovered items that can.
+    """
+    bare_variants = {}
+    variant_specs = {}  # variant_qname -> {pkg_key: True}
+    for branch in branches:
+        rc = branch["raw_constraint"]
+        if not rc:
+            continue
+        if not branch["needs_marker"]:
+            bare_variants[rc] = True
+        variant_specs.setdefault(rc, {})[branch["pkg_key"]] = True
+
+    if not variant_specs:
+        return branches
+
+    set_pin_by_idx = [vs.get("repo_pin", "") for vs in conflicts.variant_sets]
+    kept = []
+    for branch in branches:
+        expr = branch["effective_marker"]
+        if branch["raw_constraint"] or not expr or "__variant_" not in expr:
+            kept.append(branch)
+            continue
+
+        guards = []
+        drop = False
+        for idx, qnames in enumerate(conflicts.set_qnames):
+            if not [
+                q
+                for q in qnames
+                if "'__variant_{}'".format(q) in expr or '"__variant_{}"'.format(q) in expr
+            ]:
+                continue
+            if not [q for q in qnames if q in variant_specs]:
+                continue
+            repo_pin = set_pin_by_idx[idx]
+            candidates = [repo_pin] if repo_pin else qnames
+            uncovered = [
+                q
+                for q in candidates
+                if q not in bare_variants and branch["pkg_key"] not in variant_specs.get(q, {})
+            ]
+            sat_uncovered = [
+                q
+                for q in uncovered
+                if fold_variant_marker(
+                    expr,
+                    conflict_pairs = conflicts.conflict_pairs,
+                    active_qnames = [q] + repo_pins,
+                    conflict_sets = conflicts.set_qnames,
+                ) != "F"
+            ]
+            if not sat_uncovered:
+                drop = True
+                break
+            guards.append("(" + " or ".join(["extra == '__variant_{}'".format(q) for q in sat_uncovered]) + ")")
+
+        if drop:
+            continue
+        if guards:
+            branch["effective_marker"] = " and ".join(guards + ["({})".format(expr)])
+            branch["needs_marker"] = True
+        kept.append(branch)
+
+    return kept
+
+def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, resolution_marker_exprs):
+    """Aggregate expanded UV root edges into pins, markers, and testonly sets.
+
+    Aggregates edges by `(pin_name, raw_constraint, pkg_key)`, prunes plain
+    conflict-gated branches that overlap variant entries before registering any
+    `resolution_marker_exprs` keys, and emits `pinned_keys`,
+    `root_dependency_markers`, and testonly sets in a single final pass.
+
+    Args:
+        expanded_edges: Non-local edge structs returned by `expand_root_edges`.
+        conflicts: Struct returned by `parse_uv_conflicts`.
+        repo_pins: List of `repo_pin` qnames active in this repo.
+        fork_constraints: Dict `{base_name: {version: fork_constraint_name}}`.
+        resolution_marker_exprs: Dict of constraint name -> marker expr or
+            compound dict, mutated in place with newly needed edge constraints.
+
+    Returns:
+        Struct with `pinned_keys`, `root_dependency_markers`, `testonly_pins`,
+        `expanded_testonly_pins`, and `non_testonly_pins`.
+    """
+    by_pin = {}  # pin_name -> {(raw_constraint, pkg_key): [edge, ...]}
+    specs_per_group = {}  # (pin_name, raw_constraint) -> {pkg_key: True}
+    for edge in expanded_edges:
+        by_pin.setdefault(edge.pin_name, {}).setdefault((edge.constraint, edge.pkg_key), []).append(edge)
+        specs_per_group.setdefault((edge.pin_name, edge.constraint), {})[edge.pkg_key] = True
+
+    pinned_keys = {}
+    root_dependency_markers = {}
+    direct_testonly = {}
+    expanded_testonly = {}
+    non_testonly = {}
+
+    for pin_name, grouped in by_pin.items():
+        base_name = pin_name.split("[")[0]
+        branches = []
+        for (raw_constraint, pkg_key), entries in grouped.items():
+            markers = [e.pin_marker for e in entries]
+            if "" in markers:
+                agg_marker = ""
+            else:
+                unique = sorted({m: True for m in markers}.keys())
+                agg_marker = unique[0] if len(unique) == 1 else " or ".join(["({})".format(m) for m in unique])
+
+            pkg_version = pkg_key.split("@", 1)[1]
+            fork_constraint = fork_constraints.get(base_name, {}).get(pkg_version)
+            effective_marker = agg_marker or resolution_marker_exprs.get(fork_constraint, "")
+            multi_spec = len(specs_per_group[(pin_name, raw_constraint)]) > 1
+
+            active = ([raw_constraint] if raw_constraint else []) + repo_pins
+            needs_marker = bool(effective_marker) and (
+                multi_spec or
+                fork_constraint != None or
+                (
+                    "__variant_" in effective_marker and
+                    fold_variant_marker(
+                        effective_marker,
+                        conflict_pairs = conflicts.conflict_pairs,
+                        active_qnames = active,
+                        conflict_sets = conflicts.set_qnames,
+                    ) == "V"
+                )
+            )
+            branches.append({
+                "raw_constraint": raw_constraint,
+                "pkg_key": pkg_key,
+                "pkg_version": pkg_version,
+                "fork_constraint": fork_constraint,
+                "effective_marker": effective_marker,
+                "needs_marker": needs_marker,
+                "entries": entries,
+            })
+
+        surviving = _prune_plain_branches(branches, conflicts, repo_pins)
+        for branch in surviving:
+            raw_constraint = branch["raw_constraint"]
+            if branch["needs_marker"]:
+                fork_constraint = branch["fork_constraint"]
+                marker = branch["effective_marker"]
+                if fork_constraint and marker == resolution_marker_exprs.get(fork_constraint):
+                    marker_key = fork_constraint
+                else:
+                    marker_key = _edge_constraint_name(base_name, branch["pkg_version"], marker)
+                    resolution_marker_exprs[marker_key] = marker
+
+                if raw_constraint:
+                    constraint_key = "{}_{}".format(raw_constraint, marker_key)
+                    resolution_marker_exprs[constraint_key] = {
+                        "variant": raw_constraint,
+                        "marker": marker_key,
+                    }
+                else:
+                    constraint_key = marker_key
+            else:
+                constraint_key = raw_constraint
+
+            pinned_keys.setdefault(pin_name, {})[constraint_key] = branch["pkg_key"]
+            for edge in branch["entries"]:
+                record_root_marker(root_dependency_markers, pin_name, edge.avail_marker)
+                if pin_name != base_name:
+                    record_root_marker(root_dependency_markers, base_name, edge.avail_marker)
+                if edge.is_testonly:
+                    if edge.from_local:
+                        expanded_testonly[base_name] = True
+                    else:
+                        direct_testonly[base_name] = True
+                else:
+                    non_testonly[base_name] = True
+
+    testonly_pins = [name for name in direct_testonly if name not in non_testonly]
+    expanded_testonly_pins = [
+        name
+        for name in expanded_testonly
+        if name not in non_testonly and name not in direct_testonly
+    ]
+    return struct(
+        pinned_keys = pinned_keys,
+        root_dependency_markers = root_dependency_markers,
+        testonly_pins = testonly_pins,
+        expanded_testonly_pins = expanded_testonly_pins,
+        non_testonly_pins = non_testonly.keys(),
+    )
