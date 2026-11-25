@@ -16,6 +16,7 @@ load(
     ":util.bzl",
     "excluded_variant_items",
     "fold_variant_marker",
+    "parse_package_key",
     "sanitize_name",
     "variant_conflict_pairs",
     "variant_item_qname",
@@ -281,9 +282,9 @@ def make_pin_marker_folder(conflicts, repo_pins):
 
     return _fold
 
-def _edge_constraint_name(base_dep_name, version, marker):
-    """Build a content-hashed `__edge_<hash>` constraint name for `(base_dep_name, version, marker)`."""
-    prefix = resolution_marker_constraint_name(base_dep_name, version) if version else "res_{}".format(sanitize_name(base_dep_name))
+def _edge_constraint_name(base_dep_name, version, marker, tag = ""):
+    """Build a content-hashed `__edge_<hash>` constraint name for `(base_dep_name, version, tag, marker)`."""
+    prefix = resolution_marker_constraint_name(base_dep_name, version, tag) if version else "res_{}".format(sanitize_name(base_dep_name))
     return "%s__edge_%x" % (prefix, hash(marker) & 0xffffffff)
 
 def _prune_plain_branches(branches, conflicts, repo_pins):
@@ -374,7 +375,7 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
         expanded_edges: Non-local edge structs returned by `expand_root_edges`.
         conflicts: Struct returned by `parse_uv_conflicts`.
         repo_pins: List of `repo_pin` qnames active in this repo.
-        fork_constraints: Dict `{base_name: {version: fork_constraint_name}}`.
+        fork_constraints: Dict `{base_name: {(version, tag): fork_constraint_name}}`.
         resolution_marker_exprs: Dict of constraint name -> marker expr or
             compound dict, mutated in place with newly needed edge constraints.
 
@@ -405,8 +406,10 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
                 unique = sorted({m: True for m in markers}.keys())
                 agg_marker = unique[0] if len(unique) == 1 else " or ".join(["({})".format(m) for m in unique])
 
-            pkg_version = pkg_key.split("@", 1)[1]
-            fork_constraint = fork_constraints.get(base_name, {}).get(pkg_version)
+            parts = parse_package_key(pkg_key)
+            pkg_version = parts.version
+            pkg_tag = parts.tag
+            fork_constraint = fork_constraints.get(base_name, {}).get((pkg_version, pkg_tag))
             effective_marker = agg_marker or resolution_marker_exprs.get(fork_constraint, "")
             multi_spec = len(specs_per_group[(pin_name, raw_constraint)]) > 1
 
@@ -428,6 +431,7 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
                 "raw_constraint": raw_constraint,
                 "pkg_key": pkg_key,
                 "pkg_version": pkg_version,
+                "pkg_tag": pkg_tag,
                 "fork_constraint": fork_constraint,
                 "effective_marker": effective_marker,
                 "needs_marker": needs_marker,
@@ -443,7 +447,7 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
                 if fork_constraint and marker == resolution_marker_exprs.get(fork_constraint):
                     marker_key = fork_constraint
                 else:
-                    marker_key = _edge_constraint_name(base_name, branch["pkg_version"], marker)
+                    marker_key = _edge_constraint_name(base_name, branch["pkg_version"], marker, tag = branch["pkg_tag"])
                     resolution_marker_exprs[marker_key] = marker
 
                 if raw_constraint:

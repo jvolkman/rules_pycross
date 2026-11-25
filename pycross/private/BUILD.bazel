@@ -92,6 +92,7 @@ bzl_library(
     srcs = ["translator_common.bzl"],
     deps = [
         ":lock_common",
+        ":util",
         "@pypackaging.bzl//:pypackaging",
     ],
 )

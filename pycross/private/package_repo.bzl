@@ -19,7 +19,7 @@ load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":build_text.bzl", "alias", "flag_setting")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
-load(":util.bzl", "is_wheel_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
+load(":util.bzl", "format_package_key", "is_wheel_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
@@ -406,14 +406,17 @@ def _package_repo_impl(rctx):
             continue
         pkg_name_part = parts.name
         pkg_version = parts.version
+        pkg_tag = parts.tag
         norm_name = _normalize_name(pkg_name_part)
         us_name = underscore_name(pkg_name_part)
-        whldir_name = "{}-{}.whldir".format(us_name, pkg_version)
+        ver_with_tag = "{}~{}".format(pkg_version, pkg_tag) if pkg_tag else pkg_version
+        whldir_name = "{}-{}.whldir".format(us_name, ver_with_tag)
+        target_name = format_package_key(norm_name, pkg_version, tag = pkg_tag)
 
-        # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
+        # Versioned target: _wheel:name@version[~tag] -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
         wheel_lines.extend([
             "pycross_wheel_dir(",
-            '    name = "{}@{}",'.format(norm_name, pkg_version),
+            '    name = "{}",'.format(target_name),
             '    src = "//_lock:_wheel_{}",'.format(pkg_key),
             '    whldir_name = "{}",'.format(whldir_name),
             ")",
@@ -422,7 +425,7 @@ def _package_repo_impl(rctx):
 
         sdist_file = packages[pkg_key].get("sdist_file")
         if sdist_file:
-            sdist_lines.extend(alias("{}@{}".format(norm_name, pkg_version), "//_lock:_sdist_{}".format(pkg_key)))
+            sdist_lines.extend(alias(target_name, "//_lock:_sdist_{}".format(pkg_key)))
 
     rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")

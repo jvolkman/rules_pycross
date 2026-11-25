@@ -6,6 +6,7 @@ Used by PDM, Poetry, UV, and Pylock translators.
 
 load("@pypackaging.bzl", "pypackaging")
 load(":lock_common.bzl", "read_toml_cached", "sibling_project_file")
+load(":util.bzl", "base_package_key", "parse_package_key")
 
 def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
@@ -45,20 +46,23 @@ def record_root_marker(root_dependency_markers, name, marker):
     if marker not in existing:
         root_dependency_markers[name] = existing + [marker]
 
-def resolution_marker_constraint_name(name, version):
+def resolution_marker_constraint_name(name, version, tag = ""):
     """Generate a deterministic constraint name for a resolution-marker fork.
 
     Used by both uv and poetry translators when a package has multiple
-    versions resolved for different environments.
+    versions (or sources at the same version) resolved for different
+    environments.
 
     Args:
         name: Canonical package name.
         version: Package version string.
+        tag: Optional disambiguating source tag (omitted when empty).
 
     Returns:
-        A constraint name like "res_numpy_2_3_4".
+        A constraint name like "res_numpy_2_3_4" or "res_torch_2_9_1_a1b2c3d4".
     """
-    sanitized = (name + "_" + version).replace("-", "_").replace(".", "_").replace("+", "_")
+    ver = "{}_{}".format(version, tag) if tag else version
+    sanitized = (name + "_" + ver).replace("-", "_").replace(".", "_").replace("+", "_").replace("~", "_")
     return "res_{}".format(sanitized)
 
 def sha256_from_string(s):
@@ -326,8 +330,10 @@ def _dependency_name_str(name, extra = ""):
         return "{}[{}]".format(name, extra)
     return name
 
-def _package_key_str(name, version):
-    """Format a package key string."""
+def _package_key_str(name, version, tag = ""):
+    """Format a package key string (with optional `~tag` source qualifier)."""
+    if tag:
+        return "{}@{}~{}".format(name, version, tag)
     return "{}@{}".format(name, version)
 
 def _parse_specifier_parts(specifier_str):
@@ -382,19 +388,24 @@ def _resolve_candidates(
         resolution_marker_exprs,
         req_extra = "",
         cand_extras_by_key = None,
-        break_on_first = True):
+        break_on_first = True,
+        dep_source_id = ""):
     """Return matching `(candidate, combined_marker)` pairs from `candidates`.
 
-    For resolution-marker forked packages (multiple marked versions and not an
-    exact `===` pin), emits every matching candidate gated by its package-level
-    marker instead of stopping at the newest version.
+    For resolution-marker forked packages (multiple marked versions/sources and
+    not an unambiguous exact `===` pin), emits every matching candidate gated by
+    its package-level marker instead of stopping at the newest version.
     """
     if not candidates:
         return []
+    if dep_source_id:
+        candidates = [c for c in candidates if c.get("source_id", "") == dep_source_id]
+        if not candidates:
+            return []
     marked_candidates = [
         True
         for c in candidates
-        if c.get("markers") or resolution_marker_constraint_name(c["name"].split("[")[0], c["version"]) in resolution_marker_exprs
+        if c.get("markers") or resolution_marker_constraint_name(c["name"].split("[")[0], c["version"], c.get("tag", "")) in resolution_marker_exprs
     ]
     is_exact_pin = (
         parsed_spec != None and
@@ -402,12 +413,17 @@ def _resolve_candidates(
         len(parsed_spec[0].specs) == 1 and
         parsed_spec[0].specs[0].operator == "==="
     )
-    is_forked = len(marked_candidates) > 1 and not is_exact_pin
+    matching_version_count = 0
+    if is_exact_pin and not dep_source_id:
+        for c in candidates:
+            if _parsed_specifier_contains_version(parsed_spec, c["version"]):
+                matching_version_count += 1
+    is_forked = len(marked_candidates) > 1 and (not is_exact_pin or matching_version_count > 1)
 
     matches = []
     for cand in candidates:
         if req_extra:
-            cand_key = _package_key_str(cand["name"], cand["version"])
+            cand_key = _package_key_str(cand["name"], cand["version"], cand.get("tag", ""))
             if req_extra not in cand_extras_by_key.get(cand_key, {}):
                 continue
         if not _parsed_specifier_contains_version(parsed_spec, cand["version"]):
@@ -416,7 +432,7 @@ def _resolve_candidates(
         if is_forked:
             cand_marker = cand.get("markers", "")
             if not cand_marker:
-                cname = resolution_marker_constraint_name(cand["name"].split("[")[0], cand["version"])
+                cname = resolution_marker_constraint_name(cand["name"].split("[")[0], cand["version"], cand.get("tag", ""))
                 expr = resolution_marker_exprs.get(cname)
                 if type(expr) == "string":
                     cand_marker = expr
@@ -432,7 +448,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
     Args:
         packages: List of package dicts (`name`, `version`, `dependencies`,
             `files`, `python_versions`, optional `is_local`, `extras`, `markers`,
-            `source_dir`).
+            `source_dir`, `tag`, `source_id`, `source`).
         resolution_marker_exprs: Optional dict mapping constraint names to PEP
             508 marker expressions (used for resolution-marker fork expansion).
         strict_dependencies: If True, fail when a dependency matches no package.
@@ -447,7 +463,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
     # Deduplicate: merge packages with same key
     distinct_packages = {}
     for pkg in packages:
-        pkg_key = _package_key_str(pkg["name"], pkg["version"])
+        pkg_key = _package_key_str(pkg["name"], pkg["version"], pkg.get("tag", ""))
         if pkg_key not in distinct_packages:
             distinct_packages[pkg_key] = pkg
             continue
@@ -460,6 +476,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
                 d["name"],
                 d.get("specifier", ""),
                 d.get("marker", ""),
+                d.get("source_id", ""),
                 tuple(sorted([e for e in (d.get("extras") or []) if e])),
             ): True
             for d in merged_deps
@@ -469,6 +486,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
                 d["name"],
                 d.get("specifier", ""),
                 d.get("marker", ""),
+                d.get("source_id", ""),
                 tuple(sorted([e for e in (d.get("extras") or []) if e])),
             )
             if dk not in existing_dep_keys:
@@ -501,7 +519,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
     for name in list(packages_by_name.keys()):
         packages_by_name[name] = sorted(
             packages_by_name[name],
-            key = lambda p: _version_key(p["version"]),
+            key = lambda p: (_version_key(p["version"]), p.get("tag", "")),
             reverse = True,
         )
 
@@ -515,13 +533,14 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
     # Resolve dependencies
     resolved_deps = {}  # pkg_key -> list of resolved dep dicts
     for pkg in all_packages:
-        pkg_key = _package_key_str(pkg["name"], pkg["version"])
+        pkg_key = _package_key_str(pkg["name"], pkg["version"], pkg.get("tag", ""))
         pkg_resolved = []
 
         for dep in pkg["dependencies"]:
             dep_name = canonicalize_name(dep["name"])
             dep_specifier = dep.get("specifier", "")
             dep_marker = dep.get("marker", "")
+            dep_source_id = dep.get("source_id", "")
             dep_extras = dep.get("extras", [None]) or [None]
 
             candidates = packages_by_name.get(dep_name, [])
@@ -542,13 +561,17 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
                     req_extra = norm_req_extra,
                     cand_extras_by_key = cand_extras_by_key,
                     break_on_first = bool(dep_specifier),
+                    dep_source_id = dep_source_id,
                 )
                 for cand, edge_marker in matches:
-                    pkg_resolved.append({
+                    entry = {
                         "name": display_name,
                         "version": cand["version"],
                         "marker": edge_marker,
-                    })
+                    }
+                    if cand.get("tag"):
+                        entry["key"] = _package_key_str(display_name, cand["version"], cand["tag"])
+                    pkg_resolved.append(entry)
                 if not matches and strict_dependencies:
                     fail("Found no packages to satisfy dependency (name={}, spec={})".format(dep_name, dep_specifier))
 
@@ -566,7 +589,7 @@ def _local_pkg_key(distinct_packages, pin_name, pkg_key):
     if distinct_packages.get(pkg_key, {}).get("is_local", False):
         return pkg_key
     if "[" in pin_name:
-        base_key = _package_key_str(pin_name.split("[")[0], pkg_key.split("@", 1)[1])
+        base_key = base_package_key(pkg_key)
         if distinct_packages.get(base_key, {}).get("is_local", False):
             return base_key
     return None
@@ -577,7 +600,7 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
     Args:
         graph: Struct returned by `build_lock_graph`.
         root_edges: List of structs with `pin_name`, `specifier`, `constraint`,
-            `is_testonly`, and `marker`.
+            `is_testonly`, `marker`, and optional `source_id`.
         strict_dependencies: If True, fail when a root edge matches no package.
         fold_pin_marker: Optional `fn(constraint, marker)` returning a folded
             marker string or `None` to prune an unsatisfiable edge.
@@ -599,6 +622,7 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
         constraint = edge.constraint
         is_testonly = edge.is_testonly
         marker = edge.marker
+        source_id = getattr(edge, "source_id", "")
 
         pin_packages = packages_by_name.get(pin_name)
         key_name = None
@@ -615,6 +639,7 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
             marker,
             resolution_marker_exprs,
             break_on_first = True,
+            dep_source_id = source_id,
         )
         if not matches and strict_dependencies:
             fail("Found no packages to satisfy pin (name={}, spec={})".format(pin_name, specifier))
@@ -624,7 +649,7 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
                 pin_marker = fold_pin_marker(constraint, pin_marker)
                 if pin_marker == None:
                     continue
-            pkg_key = _package_key_str(key_name or cand["name"], cand["version"])
+            pkg_key = _package_key_str(key_name or cand["name"], cand["version"], cand.get("tag", ""))
             queue.append((pin_name, pkg_key, constraint, is_testonly, pin_marker, edge_marker, False, ()))
 
     expanded = []
@@ -661,10 +686,10 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
         for dep in resolved_deps.get(local_key, []):
             dep_base_name = dep["name"].split("[")[0]
             dep_pin_name = dep["name"]
-            dep_key = _package_key_str(dep_pin_name, dep["version"])
+            dep_key = dep.get("key") or _package_key_str(dep_pin_name, dep["version"])
             if dep_key not in distinct_packages:
                 dep_pin_name = dep_base_name
-                dep_key = _package_key_str(dep_pin_name, dep["version"])
+                dep_key = base_package_key(dep_key)
             combined_avail = combine_markers(avail_marker, dep["marker"])
             combined_pin = combine_markers(pin_marker, dep["marker"])
             if fold_pin_marker != None:
@@ -750,7 +775,8 @@ def finalize_lock_graph(
             for dep in resolved_deps.get(cur, []):
                 dep_base = dep["name"].split("[")[0]
                 runtime_reachable[dep_base] = True
-                for dep_key in (_package_key_str(dep["name"], dep["version"]), _package_key_str(dep_base, dep["version"])):
+                raw_dep_key = dep.get("key") or _package_key_str(dep["name"], dep["version"])
+                for dep_key in (raw_dep_key, base_package_key(raw_dep_key)):
                     if dep_key in distinct_packages and dep_key not in visited:
                         visited[dep_key] = True
                         queue.append(dep_key)
@@ -774,10 +800,14 @@ def finalize_lock_graph(
         if pkg.get("is_local", False):
             continue
 
-        pkg_key = _package_key_str(pkg["name"], pkg["version"])
+        pkg_key = _package_key_str(pkg["name"], pkg["version"], pkg.get("tag", ""))
         deps = resolved_deps.get(pkg_key, [])
-        deps_without_self = [d for d in deps if _package_key_str(d["name"].split("[")[0], d["version"]) != pkg_key]
-        deps_sorted = sorted(deps_without_self, key = lambda d: (d["name"], d["version"]))
+        deps_without_self = [
+            d
+            for d in deps
+            if base_package_key(d.get("key") or _package_key_str(d["name"], d["version"])) != pkg_key
+        ]
+        deps_sorted = sorted(deps_without_self, key = lambda d: (d["name"], d["version"], d.get("key", "")))
         files_sorted = sorted(pkg["files"], key = lambda f: f["name"])
 
         raw_package = {
@@ -789,6 +819,8 @@ def finalize_lock_graph(
         }
         if pkg.get("source_dir"):
             raw_package["source_dir"] = pkg["source_dir"]
+        if pkg.get("tag") and pkg.get("source"):
+            raw_package["source"] = pkg["source"]
         lock_packages[pkg_key] = raw_package
 
     # Simplify pins: if a pin has only one constraint with key "", flatten it.
@@ -821,9 +853,9 @@ def finalize_lock_graph(
 
     return result
 
-def _resolve_local_dep_constraint(constraint, dep_base_name, dep_version, resolution_marker_exprs):
+def _resolve_local_dep_constraint(constraint, dep_base_name, dep_version, resolution_marker_exprs, dep_tag = ""):
     """Combine a local package pin's constraint with any resolution-marker fork on its dependency."""
-    cname = resolution_marker_constraint_name(dep_base_name, dep_version)
+    cname = resolution_marker_constraint_name(dep_base_name, dep_version, dep_tag)
     if cname not in resolution_marker_exprs or constraint == cname:
         return constraint
     if not constraint:
@@ -915,11 +947,13 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         base = edge.pin_name.split("[")[0]
         constraint = edge.constraint
         if edge.from_local:
+            edge_parts = parse_package_key(edge.pkg_key)
             constraint = _resolve_local_dep_constraint(
                 constraint,
                 base,
-                edge.pkg_key.split("@", 1)[1],
+                edge_parts.version,
                 resolution_marker_exprs,
+                dep_tag = edge_parts.tag,
             )
         pinned_keys.setdefault(edge.pin_name, {})[constraint] = edge.pkg_key
 

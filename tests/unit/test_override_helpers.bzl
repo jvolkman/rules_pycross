@@ -556,6 +556,7 @@ def _test_collect_module_overrides_root_wins_impl(env, target):
     env.expect.that_str(canonicalize_package_tag_name_for_testing("*")).equals("*")
     env.expect.that_str(canonicalize_package_tag_name_for_testing("PyYAML")).equals("pyyaml")
     env.expect.that_str(canonicalize_package_tag_name_for_testing("Foo_Bar[My_Extra]@1.0")).equals("foo-bar[my-extra]@1.0")
+    env.expect.that_str(canonicalize_package_tag_name_for_testing("Foo_Bar[My_Extra]@1.0~abcd1234")).equals("foo-bar[my-extra]@1.0~abcd1234")
 
     # Main-repo @//pkg:flag does NOT falsely collide with external @rules_python//pkg:flag.
     main_flag = [normalize_flag_for_testing("--@//python/config_settings:python_version=3.12", True)]

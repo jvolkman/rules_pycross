@@ -14,7 +14,7 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 load("//pycross/private:translator_common.bzl", "read_project_dict_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "fold_variant_marker")
+load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "fold_variant_marker", "format_package_key", "parse_package_key")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", "translate_uv")
@@ -91,7 +91,7 @@ def _whl(name = None, sha256 = "1234", url = None):
     w["hash"] = "sha256:" + sha256
     return w
 
-def _dep(name, version = None, marker = None, extra = None):
+def _dep(name, version = None, marker = None, extra = None, source = None):
     d = {"name": name}
     if version:
         d["version"] = version
@@ -99,6 +99,8 @@ def _dep(name, version = None, marker = None, extra = None):
         d["marker"] = marker
     if extra:
         d["extra"] = extra
+    if source:
+        d["source"] = source
     return d
 
 # --- test_minimal_lock ---
@@ -2382,6 +2384,176 @@ def _test_uv_local_member_edge_cases(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_member_edge_cases_impl)
 
+# buildifier: disable=unused-variable
+def _test_uv_multi_source_same_version_impl(env, target):
+    """Verify same (name, version) packages from distinct sources stay separate end-to-end."""
+
+    # 0. Key parsing/formatting helpers preserve ~tag with and without extras.
+    parsed = parse_package_key("torch[opt]@2.9.1~abcd1234")
+    env.expect.that_str(parsed.name).equals("torch")
+    env.expect.that_str(parsed.extra).equals("opt")
+    env.expect.that_str(parsed.version).equals("2.9.1")
+    env.expect.that_str(parsed.tag).equals("abcd1234")
+    env.expect.that_str(format_package_key("torch", "2.9.1", extra = "opt", tag = "abcd1234")).equals("torch[opt]@2.9.1~abcd1234")
+    env.expect.that_str(base_package_key("torch[opt]@2.9.1~abcd1234")).equals("torch@2.9.1~abcd1234")
+    env.expect.that_dict(base_packages_with_extras({"torch@2.9.1~abcd1234": {}, "torch[opt]@2.9.1~abcd1234": {}})).contains_exactly({
+        "torch@2.9.1~abcd1234": ["torch[opt]@2.9.1~abcd1234"],
+    })
+
+    # 1. Two registries ship torch==2.9.1 with the same macOS wheel filename and
+    #    different sha256 hashes + deps, plus a non-colliding torch==2.9.1+cpu.
+    cpu_reg = {"registry": "https://download.pytorch.org/whl/cpu"}
+    pypi_reg = {"registry": "https://pypi.org/simple"}
+    lock = _lock(
+        [
+            _vpkg(
+                "root",
+                deps = [_dep("lib", "0.1.0", source = {"editable": "lib"})],
+                dev_deps = {
+                    "cpu": [
+                        _dep("torch", "2.9.1", source = cpu_reg, marker = "sys_platform == 'darwin' and extra == 'group-4-root-cpu'"),
+                        _dep("torch", "2.9.1+cpu", source = cpu_reg, marker = "sys_platform == 'linux' and extra == 'group-4-root-cpu'"),
+                    ],
+                    "cuda": [
+                        _dep("torch", "2.9.1", source = pypi_reg, marker = "extra == 'group-4-root-cuda'"),
+                    ],
+                },
+            ),
+            _pkg(
+                "lib",
+                "0.1.0",
+                source = {"editable": "lib"},
+                deps = [
+                    _dep("torch", "2.9.1", source = cpu_reg, marker = "sys_platform == 'darwin' and extra == 'group-4-root-cpu'"),
+                    _dep("torch", "2.9.1+cpu", source = cpu_reg, marker = "sys_platform == 'linux' and extra == 'group-4-root-cpu'"),
+                    _dep("torch", "2.9.1", source = pypi_reg, marker = "extra != 'group-4-root-cpu'"),
+                ],
+            ),
+            _pkg(
+                "torch",
+                "2.9.1",
+                source = cpu_reg,
+                markers = ["sys_platform == 'darwin' and extra == 'group-4-root-cpu'"],
+                wheels = [_whl("torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", "cpu_mac_sha")],
+            ),
+            _pkg(
+                "torch",
+                "2.9.1+cpu",
+                source = cpu_reg,
+                markers = ["sys_platform == 'linux' and extra == 'group-4-root-cpu'"],
+                wheels = [_whl("torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", "cpu_lin_sha")],
+            ),
+            _pkg(
+                "torch",
+                "2.9.1",
+                source = pypi_reg,
+                markers = ["extra != 'group-4-root-cpu'"],
+                deps = [_dep("nvidia-nccl", "2.0.0", source = pypi_reg, marker = "sys_platform == 'linux'")],
+                wheels = [
+                    _whl("torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", "pypi_mac_sha"),
+                    _whl("torch-2.9.1-cp312-cp312-manylinux_2_28_x86_64.whl", "pypi_lin_sha"),
+                ],
+            ),
+            _pkg(
+                "nvidia-nccl",
+                "2.0.0",
+                source = pypi_reg,
+                wheels = [_whl("nvidia_nccl-2.0.0-py3-none-manylinux_2_28_x86_64.whl", "nccl_sha")],
+            ),
+        ],
+        conflicts = [[{"package": "root", "group": "cpu"}, {"package": "root", "group": "cuda"}]],
+    )
+
+    # Non-colliding version stays plain; colliding 2.9.1 entries get distinct ~<8hex> tags and sources.
+    res = translate_uv(_project(name = "root"), lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu", "group:cuda"]))
+    env.expect.that_bool("torch@2.9.1+cpu" in res["packages"]).equals(True)
+    env.expect.that_bool("source" in res["packages"]["torch@2.9.1+cpu"]).equals(False)
+    env.expect.that_bool("torch@2.9.1" in res["packages"]).equals(False)
+
+    torch_291_keys = sorted([k for k in res["packages"].keys() if k.startswith("torch@2.9.1~")])
+    env.expect.that_collection(torch_291_keys).has_size(2)
+    by_source = {res["packages"][k]["source"]: k for k in torch_291_keys}
+    cpu_key = by_source["https://download.pytorch.org/whl/cpu"]
+    pypi_key = by_source["https://pypi.org/simple"]
+
+    # Wheels and deps are isolated per source (identical macOS wheel filenames do NOT collide).
+    env.expect.that_collection([f["sha256"] for f in res["packages"][cpu_key]["files"]]).contains_exactly(["cpu_mac_sha"])
+    env.expect.that_collection([f["sha256"] for f in res["packages"][pypi_key]["files"]]).contains_exactly(["pypi_mac_sha", "pypi_lin_sha"])
+    env.expect.that_collection(res["packages"][cpu_key]["dependencies"]).contains_exactly([])
+    env.expect.that_collection([d["name"] for d in res["packages"][pypi_key]["dependencies"]]).contains_exactly(["nvidia-nccl"])
+
+    # Pins select the right tagged key per repo (cpu-only, lib-only, combined).
+    cpu_only = translate_uv(_project(name = "root"), lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu"]))
+    env.expect.that_collection(cpu_only["pins"]["torch"].values()).contains_exactly([cpu_key, "torch@2.9.1+cpu"])
+    lib_only = translate_uv(_project(name = "lib"), lock, _lock_model(projects = ["lib"], dependency_groups = ["default"]))
+    env.expect.that_collection(lib_only["pins"]["torch"].values()).contains_exactly([cpu_key, "torch@2.9.1+cpu", pypi_key])
+
+    # Downstream resolve() + render_lock_bzl() succeed with zero duplicate-wheel collisions.
+    resolved = resolve(res)
+    repo_map = {fk: "@pypi_{}//:file".format(i) for i, fk in enumerate(sorted(resolved.remote_files.keys()))}
+    rendered = render_lock_bzl(
+        {
+            "packages": resolved.packages,
+            "pins": resolved.pins,
+            "variants": resolved.variants,
+            "resolution_marker_exprs": resolved.resolution_marker_exprs,
+        },
+        repo_map,
+        "ws__pkgs",
+    )
+    env.expect.that_str(rendered).contains(cpu_key)
+    env.expect.that_str(rendered).contains(pypi_key)
+
+    # 2. Local editable member and registry package sharing (name, version) stay distinct.
+    local_vs_reg_lock = _lock([
+        _vpkg("root", deps = [
+            _dep("foo", "1.0.0", source = {"editable": "foo"}),
+            _dep("consumer", "1.0.0", source = pypi_reg),
+        ]),
+        _pkg("foo", "1.0.0", source = {"editable": "foo"}, deps = [_dep("helper", "1.0.0", source = pypi_reg)]),
+        _pkg("foo", "1.0.0", source = pypi_reg, wheels = [_whl("foo-1.0.0-py3-none-any.whl", "foo_reg")]),
+        _pkg("consumer", "1.0.0", source = pypi_reg, deps = [_dep("foo", "1.0.0", source = pypi_reg)], wheels = [_whl("consumer-1.0.0-py3-none-any.whl", "c1")]),
+        _pkg("helper", "1.0.0", source = pypi_reg, wheels = [_whl("helper-1.0.0-py3-none-any.whl", "h1")]),
+    ])
+    lvr = translate_uv(_project(name = "root"), local_vs_reg_lock, _lock_model(projects = ["root"]))
+    reg_foo_keys = [k for k in lvr["packages"].keys() if k.startswith("foo@1.0.0~")]
+    env.expect.that_collection(reg_foo_keys).has_size(1)
+    env.expect.that_str(lvr["packages"][reg_foo_keys[0]]["source"]).equals("https://pypi.org/simple")
+    env.expect.that_str(lvr["pins"]["helper"]).equals("helper@1.0.0")
+    env.expect.that_str(lvr["packages"]["consumer@1.0.0"]["dependencies"][0]["key"]).equals(reg_foo_keys[0])
+
+    # 3. Extras stay bound to their own source, and an un-sourced forked dep expands both sources.
+    git_a = {"git": "https://example.com/pkg.git#aaaa1111"}
+    git_b = {"git": "https://example.com/pkg.git#bbbb2222"}
+    git_lock = _lock([
+        _vpkg("root", deps = [
+            _dep("pkg", "1.0.0", extra = ["opt"], source = git_a),
+            _dep("unsourced", "1.0.0", source = pypi_reg),
+        ]),
+        _pkg("unsourced", "1.0.0", source = pypi_reg, deps = [_dep("pkg", "1.0.0")], wheels = [_whl("unsourced-1.0.0-py3-none-any.whl", "u1")]),
+        _pkg("pkg", "1.0.0", source = git_a, markers = ["sys_platform == 'linux'"], opt_deps = {"opt": []}),
+        _pkg("pkg", "1.0.0", source = git_b, markers = ["sys_platform == 'darwin'"], opt_deps = {"opt": []}),
+    ])
+    git_res = translate_uv(_project(name = "root"), git_lock, _lock_model(projects = ["root"]))
+    pkg_base_by_src = {
+        git_res["packages"][k]["source"]: k
+        for k in git_res["packages"].keys()
+        if k.startswith("pkg@1.0.0~")
+    }
+    git_a_base = pkg_base_by_src["https://example.com/pkg.git#aaaa1111"]
+    git_b_base = pkg_base_by_src["https://example.com/pkg.git#bbbb2222"]
+    git_a_opt = git_res["pins"]["pkg[opt]"]
+    if type(git_a_opt) == "dict":
+        git_a_opt = git_a_opt.values()[0]
+    env.expect.that_str(base_package_key(git_a_opt)).equals(git_a_base)
+    env.expect.that_str(git_res["packages"][git_a_opt]["dependencies"][0]["key"]).equals(git_a_base)
+    unsourced_dep_keys = [d["key"] for d in git_res["packages"]["unsourced@1.0.0"]["dependencies"]]
+    env.expect.that_collection(unsourced_dep_keys).contains_exactly([git_a_base, git_b_base])
+
+def _test_uv_multi_source_same_version(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_multi_source_same_version_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -2439,5 +2611,6 @@ def uv_translator_test_suite(name):
             _test_uv_asymmetric_fork_with_independent_member,
             _test_uv_testonly_local_member_expansion,
             _test_uv_local_member_edge_cases,
+            _test_uv_multi_source_same_version,
         ],
     )

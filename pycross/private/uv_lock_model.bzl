@@ -108,12 +108,56 @@ def _resolve_package_requires_python(markers):
             specifiers.append("{} {}".format(op, version_part))
     return specifiers
 
+def _canonical_source(source):
+    """Serialize a UV lock `source` table deterministically for identity matching."""
+    if not source:
+        return ""
+    return json.encode([[k, source[k]] for k in sorted(source.keys())])
+
+def _source_value(source):
+    """Return a human-readable source identifier (registry/git/url/path) from a UV `source` table."""
+    if not source:
+        return ""
+    for key in ("registry", "git", "url", "flat", "path", "directory", "editable", "virtual"):
+        if key in source:
+            val = str(source[key])
+            sub = source.get("subdirectory", "")
+            return "{}#subdirectory={}".format(val, sub) if sub and "subdirectory=" not in val else val
+    return _canonical_source(source)
+
+def _compute_source_tags(packages_list):
+    """Assign deterministic `~<tag>` suffixes ONLY to `(name, version)` pairs with >1 distinct source."""
+    sources_by_nv = {}  # (canonical_name, version) -> {canon_source: True}
+    for lock_pkg in packages_list:
+        nv = (canonicalize_name(lock_pkg["name"]), lock_pkg["version"])
+        canon = _canonical_source(lock_pkg.get("source", {}))
+        sources_by_nv.setdefault(nv, {})[canon] = True
+
+    source_tags = {}  # (canonical_name, version, canon_source) -> tag
+    for (name, version), canon_sources in sources_by_nv.items():
+        if len(canon_sources) <= 1:
+            continue
+        used_tags = {}
+        for canon in sorted(canon_sources.keys()):
+            base_tag = ("00000000" + ("%x" % (hash(canon) & 0xffffffff)))[-8:] if canon else "none"
+            tag = base_tag
+            if tag in used_tags:
+                for i in range(1, len(canon_sources) + 1):
+                    cand = "{}_{}".format(base_tag, i)
+                    if cand not in used_tags:
+                        tag = cand
+                        break
+            used_tags[tag] = True
+            source_tags[(name, version, canon)] = tag
+    return source_tags
+
 def _parse_uv_dependency(dep, token_replacements = ()):
     """Parse a UV lock dependency dict into dep dicts for `build_lock_graph`."""
     name = canonicalize_name(dep.get("name", ""))
     version = dep.get("version", "")
     specifier = "==={}".format(version) if version else ""
     marker = rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
+    source_id = _canonical_source(dep.get("source", {}))
     extras = dep.get("extra") or dep.get("extras", [])
 
     if not extras:
@@ -121,6 +165,7 @@ def _parse_uv_dependency(dep, token_replacements = ()):
             "name": name,
             "specifier": specifier,
             "marker": marker,
+            "source_id": source_id,
             "extras": [None],
         }]
 
@@ -129,6 +174,7 @@ def _parse_uv_dependency(dep, token_replacements = ()):
             "name": "{}[{}]".format(name, canonicalize_name(extra)),
             "specifier": specifier,
             "marker": marker,
+            "source_id": source_id,
             "extras": [None],
         }
         for extra in extras
@@ -159,7 +205,7 @@ def _parse_sdist_file(sdist, source, package_name, package_version, registry):
         return _parse_file_info(sdist, package_name, package_version, registry)
     return None
 
-def _parse_lock_packages(packages_list, token_replacements):
+def _parse_lock_packages(packages_list, token_replacements, source_tags):
     """Parse `uv.lock` `[[package]]` entries into normalized package dicts."""
     packages = []
     for lock_pkg in packages_list:
@@ -178,6 +224,9 @@ def _parse_lock_packages(packages_list, token_replacements):
 
         files = []
         source = lock_pkg.get("source", {})
+        canon_source = _canonical_source(source)
+        source_tag = source_tags.get((package_name, package_version, canon_source), "")
+        source_display = _source_value(source)
         registry = source.get("registry")
 
         for w in lock_pkg.get("wheels", []):
@@ -225,6 +274,9 @@ def _parse_lock_packages(packages_list, token_replacements):
             "files": files,
             "is_local": is_local,
             "extras": [e.lower() for e in package_extras],
+            "tag": source_tag,
+            "source_id": canon_source,
+            "source": source_display,
         }
         if source_dir:
             base_pkg["source_dir"] = source_dir
@@ -239,6 +291,7 @@ def _parse_lock_packages(packages_list, token_replacements):
                 "name": package_name,
                 "specifier": "==={}".format(package_version),
                 "marker": "",
+                "source_id": canon_source,
                 "extras": [None],
             })
             extra_pkg = {
@@ -249,6 +302,9 @@ def _parse_lock_packages(packages_list, token_replacements):
                 "files": [],
                 "is_local": is_local,
                 "extras": [],
+                "tag": source_tag,
+                "source_id": canon_source,
+                "source": source_display,
             }
             if source_dir:
                 extra_pkg["source_dir"] = source_dir
@@ -256,9 +312,9 @@ def _parse_lock_packages(packages_list, token_replacements):
 
     return packages
 
-def _scan_fork_constraints(packages_list, token_replacements):
-    """Pre-scan multi-version `resolution-markers` forks across `packages_list`."""
-    fork_versions = {}  # {canonical_name: {version: [marker_expr, ...]}}
+def _scan_fork_constraints(packages_list, token_replacements, source_tags):
+    """Pre-scan multi-version / multi-source `resolution-markers` forks across `packages_list`."""
+    fork_versions = {}  # {canonical_name: {(version, tag): [marker_expr, ...]}}
     for lock_pkg in packages_list:
         res_markers = [
             rewrite_conflict_markers(m, token_replacements)
@@ -267,17 +323,19 @@ def _scan_fork_constraints(packages_list, token_replacements):
         if not res_markers:
             continue
         fname = canonicalize_name(lock_pkg["name"])
-        fork_versions.setdefault(fname, {}).setdefault(lock_pkg["version"], []).extend(res_markers)
+        fversion = lock_pkg["version"]
+        ftag = source_tags.get((fname, fversion, _canonical_source(lock_pkg.get("source", {}))), "")
+        fork_versions.setdefault(fname, {}).setdefault((fversion, ftag), []).extend(res_markers)
 
     resolution_marker_exprs = {}
     fork_constraints = {}
     for fname, versions in fork_versions.items():
         if len(versions) <= 1:
             continue
-        for fversion, markers in versions.items():
+        for (fversion, ftag), markers in versions.items():
             combined = markers[0] if len(markers) == 1 else " or ".join(["({})".format(m) for m in markers])
-            cname = resolution_marker_constraint_name(fname, fversion)
-            fork_constraints.setdefault(fname, {})[fversion] = cname
+            cname = resolution_marker_constraint_name(fname, fversion, ftag)
+            fork_constraints.setdefault(fname, {})[(fversion, ftag)] = cname
             resolution_marker_exprs[cname] = combined
     return fork_constraints, resolution_marker_exprs
 
@@ -348,8 +406,9 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
     workspace_members, target_projects = _find_target_projects(packages_list, project_dict, projects_list)
     conflicts = parse_uv_conflicts(uv_conflicts, target_projects)
-    fork_constraints, resolution_marker_exprs = _scan_fork_constraints(packages_list, conflicts.token_replacements)
-    packages = _parse_lock_packages(packages_list, conflicts.token_replacements)
+    source_tags = _compute_source_tags(packages_list)
+    fork_constraints, resolution_marker_exprs = _scan_fork_constraints(packages_list, conflicts.token_replacements, source_tags)
+    packages = _parse_lock_packages(packages_list, conflicts.token_replacements, source_tags)
 
     # In a repo spanning several projects, a requested extra/group applies to the
     # projects that declare it (like `uv --all-packages --group test`); it only
@@ -426,6 +485,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 dep_version = dep.get("version", "")
                 dep_extras = dep.get("extra") or dep.get("extras", [])
                 dep_marker = rewrite_conflict_markers(dep.get("marker", ""), conflicts.token_replacements)
+                dep_source_id = _canonical_source(dep.get("source", {}))
                 specifier = "==={}".format(dep_version) if dep_version else ""
 
                 pin_names = ["{}[{}]".format(dep_name, canonicalize_name(e)) for e in dep_extras] if dep_extras else [dep_name]
@@ -436,6 +496,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                         constraint = constraint,
                         is_testonly = is_testonly,
                         marker = dep_marker,
+                        source_id = dep_source_id,
                     ))
 
     if multi_project:

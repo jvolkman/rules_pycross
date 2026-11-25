@@ -22,7 +22,7 @@ load(
 )
 load(":lock_repo_creation.bzl", "create_repos")
 load(":lock_resolver.bzl", "resolve")
-load(":util.bzl", "parse_package_key")
+load(":util.bzl", "format_package_key", "parse_package_key")
 
 # Shared attrs for workspace tags.
 WORKSPACE_COMMON_ATTRS = dict(
@@ -96,6 +96,13 @@ PACKAGE_ATTRS = dict(
     name = attr.string(
         doc = "The package key (name or name@version). Can be '*' to apply to all packages in the workspace.",
         mandatory = True,
+    ),
+    source = attr.string(
+        default = "",
+        doc = (
+            "Optional lockfile source value (e.g. index or git URL) to disambiguate when multiple " +
+            "packages share the same name@version. Use '*' to apply to all sources of that name@version."
+        ),
     ),
     workspace = attr.string(
         doc = "The workspace name (optional if inferable).",
@@ -181,6 +188,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         A dict of annotation fields.
     """
     return dict(
+        source = getattr(pkg, "source", ""),
         build_mode = pkg.build_mode or (wildcard_pkg.build_mode if wildcard_pkg else "") or "auto",
         extra_build_tools = pkg.extra_build_tools or (wildcard_pkg.extra_build_tools if wildcard_pkg else []),
         build_tools_repo = pkg.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
@@ -239,10 +247,9 @@ def _canonicalize_package_tag_name(name):
     parts = parse_package_key(name)
     norm_name = pypackaging.utils.canonicalize_name(parts.name)
     norm_extra = pypackaging.utils.canonicalize_name(parts.extra) if parts.extra else ""
-    base = "{}[{}]".format(norm_name, norm_extra) if norm_extra else norm_name
     if "@" in name:
-        return "{}@{}".format(base, parts.version)
-    return base
+        return format_package_key(norm_name, parts.version, extra = norm_extra, tag = parts.tag)
+    return format_package_key(norm_name, extra = norm_extra)
 
 def _normalize_settings(settings, flags):
     """Stringify `settings` labels, rejecting built-in options and settings also set in `flags`."""
@@ -444,10 +451,15 @@ def make_format_extension(
 
                 normalized = normalize_package_tag(tag)
                 pkg_key = _canonicalize_package_tag_name(tag.name)
+                if pkg_key == "*" and normalized.source:
+                    fail("package '*' cannot specify 'source' in workspace '{}'".format(ws_name))
+                ann_key = (pkg_key, normalized.source) if normalized.source else pkg_key
                 ws_pkgs = workspace_packages.setdefault(ws_name, {})
-                if pkg_key in ws_pkgs:
+                if ann_key in ws_pkgs:
+                    if normalized.source:
+                        fail("Multiple package entries for package '{}' (source '{}') in workspace '{}'".format(tag.name, normalized.source, ws_name))
                     fail("Multiple package entries for package '{}' in workspace '{}'".format(tag.name, ws_name))
-                ws_pkgs[pkg_key] = normalized
+                ws_pkgs[ann_key] = normalized
 
         if not lock_repos:
             if bazel_features.external_deps.extension_metadata_has_reproducible:

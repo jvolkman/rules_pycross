@@ -10,17 +10,23 @@ load("//pycross/private:lock_resolver.bzl", "resolve")
 def _make_file(name, sha256 = "1234"):
     return {"name": name, "sha256": sha256}
 
-def _make_dep(name, version, marker = ""):
-    return {"name": name, "version": version, "marker": marker}
+def _make_dep(name, version, marker = "", key = None):
+    d = {"name": name, "version": version, "marker": marker}
+    if key:
+        d["key"] = key
+    return d
 
-def _make_pkg(name, version, files, deps = None, python_versions = ">=3.8"):
-    return {
+def _make_pkg(name, version, files, deps = None, python_versions = ">=3.8", source = None):
+    pkg = {
         "name": name,
         "version": version,
         "python_versions": python_versions,
         "dependencies": deps or [],
         "files": files,
     }
+    if source:
+        pkg["source"] = source
+    return pkg
 
 def _resolve_failure_subject_impl(ctx):
     lock_model_data = json.decode(ctx.attr.lock_model_data)
@@ -2362,6 +2368,128 @@ def _test_ignore_dependencies_bogus_version_fails(name):
         impl = _test_ignore_dependencies_bogus_version_fails_impl,
     )
 
+def _multi_source_lock_data():
+    return {
+        "packages": {
+            "torch@2.9.1~11111111": _make_pkg(
+                "torch",
+                "2.9.1",
+                [_make_file("torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", sha256 = "aaaa")],
+                source = "https://download.pytorch.org/whl/cpu",
+            ),
+            "torch@2.9.1~22222222": _make_pkg(
+                "torch",
+                "2.9.1",
+                [_make_file("torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", sha256 = "bbbb")],
+                source = "https://pypi.org/simple",
+            ),
+            "app@1.0": _make_pkg(
+                "app",
+                "1.0",
+                [_make_file("app-1.0-py3-none-any.whl", sha256 = "cccc")],
+                deps = [
+                    _make_dep("torch", "2.9.1", marker = "sys_platform == 'darwin'", key = "torch@2.9.1~11111111"),
+                    _make_dep("torch", "2.9.1", marker = "sys_platform == 'linux'", key = "torch@2.9.1~22222222"),
+                ],
+            ),
+        },
+        "pins": {
+            "app": "app@1.0",
+            "torch[opt]": "torch[opt]@2.9.1~11111111",
+        },
+        "resolution_marker_exprs": {
+            "res_torch_2_9_1_11111111": "sys_platform == 'darwin'",
+            "res_torch_2_9_1_22222222": "sys_platform == 'linux'",
+        },
+    }
+
+# buildifier: disable=unused-variable
+def _test_multi_source_annotations_and_transitive_impl(env, target):
+    """Verify source-disambiguated annotations, source='*', ignore_dependencies, synthesized extras, and include_transitive."""
+    lock_data = _multi_source_lock_data()
+
+    # 1. Exact per-source annotations target each source independently; synthesized extra binds to its tagged base;
+    #    include_transitive emits distinct resolution-marker branches per source.
+    res = resolve(
+        lock_data,
+        annotations_data = {
+            ("torch@2.9.1", "https://download.pytorch.org/whl/cpu"): {"precompile": "enabled"},
+            ("torch@2.9.1", "https://pypi.org/simple"): {"precompile": "disabled"},
+        },
+        include_transitive = True,
+    )
+    env.expect.that_str(res.packages["torch@2.9.1~11111111"]["precompile"]).equals("enabled")
+    env.expect.that_str(res.packages["torch@2.9.1~22222222"]["precompile"]).equals("disabled")
+    env.expect.that_collection([md["key"] for md in res.packages["torch[opt]@2.9.1~11111111"]["marker_dependencies"]]).contains_exactly(["torch@2.9.1~11111111"])
+    env.expect.that_dict(res.pins["torch"]).contains_exactly({
+        "res_torch_2_9_1_11111111": "torch@2.9.1~11111111",
+        "res_torch_2_9_1_22222222": "torch@2.9.1~22222222",
+    })
+
+    # 2. source = "*" applies to all sources of torch@2.9.1, and ignore_dependencies = ["torch@2.9.1"] ignores tagged deps.
+    res_wild = resolve(
+        lock_data,
+        annotations_data = {
+            ("torch@2.9.1", "*"): {"precompile": "enabled"},
+            "app": {"ignore_dependencies": ["torch@2.9.1"]},
+        },
+    )
+    env.expect.that_str(res_wild.packages["torch@2.9.1~11111111"]["precompile"]).equals("enabled")
+    env.expect.that_str(res_wild.packages["torch@2.9.1~22222222"]["precompile"]).equals("enabled")
+    env.expect.that_collection(res_wild.packages["app@1.0"]["marker_dependencies"]).contains_exactly([])
+
+def _test_multi_source_annotations_and_transitive(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_multi_source_annotations_and_transitive_impl)
+
+def _test_multi_source_annotation_ambiguous_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.all(
+            matching.contains('annotations entry "torch@2.9.1" matches multiple sources'),
+            matching.contains('source = "https://download.pytorch.org/whl/cpu"'),
+            matching.contains('source = "https://pypi.org/simple"'),
+        ),
+    )
+
+def _test_multi_source_annotation_ambiguous_fails(name):
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(_multi_source_lock_data()),
+        annotations_data = json.encode({"torch@2.9.1": {"precompile": "enabled"}}),
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_multi_source_annotation_ambiguous_fails_impl,
+    )
+
+def _test_multi_source_annotation_bad_source_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.all(
+            matching.contains('with source "https://wrong.example/simple" matches no packages'),
+            matching.contains("https://download.pytorch.org/whl/cpu"),
+            matching.contains("https://pypi.org/simple"),
+        ),
+    )
+
+def _test_multi_source_annotation_bad_source_fails(name):
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(_multi_source_lock_data()),
+        annotations_data = json.encode({
+            "torch@2.9.1": {"source": "https://wrong.example/simple", "precompile": "enabled"},
+        }),
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_multi_source_annotation_bad_source_fails_impl,
+    )
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
@@ -2441,5 +2569,8 @@ def lock_resolver_test_suite(name):
             _test_testonly_no_testonly_pins,
             _test_testonly_diamond_with_testonly_branch,
             _test_transitive_resolution_marker_forks,
+            _test_multi_source_annotations_and_transitive,
+            _test_multi_source_annotation_ambiguous_fails,
+            _test_multi_source_annotation_bad_source_fails,
         ],
     )

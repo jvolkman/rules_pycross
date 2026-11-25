@@ -1,6 +1,6 @@
 """Shared constants and small helpers for thin package repo generation."""
 
-load("//pycross/private:util.bzl", "base_package_key", "is_platform_specific", "parse_package_key")
+load("//pycross/private:util.bzl", "base_package_key", "format_package_key", "is_platform_specific", "parse_package_key")
 
 NO_MATCH_ERROR_TARGET = "@rules_pycross//pycross/private:no_match_error"
 
@@ -39,9 +39,10 @@ def aggregated_key(pkg_key, aggregated_keys):
         The aggregated lock key or `pkg_key` unchanged.
     """
     parts = parse_package_key(pkg_key)
-    if aggregated_keys != None and "{}@{}".format(parts.name, parts.version) not in aggregated_keys:
+    base = base_package_key(pkg_key)
+    if aggregated_keys != None and base not in aggregated_keys:
         return pkg_key
-    return "{}[_all_]@{}".format(parts.name, parts.version)
+    return format_package_key(parts.name, parts.version, extra = "_all_", tag = parts.tag)
 
 def effective_base_target_dict(group):
     """Return group['base_target'], or derive base lock keys from extras for extras-only pins.

@@ -300,6 +300,7 @@ Common `package()` attributes (see [`docs/ext_uv.md`](docs/ext_uv.md) for the fu
 | `install_exclude_globs` | File globs to skip during wheel installation. |
 | `site_paths`, `bin_paths`, `data_paths`, `include_paths` | Override auto-detected wheel paths. |
 | `precompile` | `"auto"`, `"enabled"`, or `"disabled"` for `.pyc` compilation. |
+| `source` | Source URL or path (or `"*"` for all sources) to disambiguate when a lockfile contains the same `name@version` from multiple sources. |
 | `extra_build_tools`, `build_backend`, `build_target`, `build_tools_repo` | Source-build configuration (see [Building from source](#building-from-source)). |
 
 ---

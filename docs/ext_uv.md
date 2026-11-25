@@ -12,7 +12,7 @@ uv.repo(<a href="#uv.repo-name">name</a>, <a href="#uv.repo-constraint_values">c
 uv.package(<a href="#uv.package-name">name</a>, <a href="#uv.package-bin_paths">bin_paths</a>, <a href="#uv.package-build_backend">build_backend</a>, <a href="#uv.package-build_mode">build_mode</a>, <a href="#uv.package-build_target">build_target</a>, <a href="#uv.package-build_tools_repo">build_tools_repo</a>, <a href="#uv.package-data_paths">data_paths</a>,
            <a href="#uv.package-extra_build_tools">extra_build_tools</a>, <a href="#uv.package-extra_dependencies">extra_dependencies</a>, <a href="#uv.package-ignore_dependencies">ignore_dependencies</a>, <a href="#uv.package-include_paths">include_paths</a>,
            <a href="#uv.package-install_exclude_globs">install_exclude_globs</a>, <a href="#uv.package-post_install_patches">post_install_patches</a>, <a href="#uv.package-pre_build_patches">pre_build_patches</a>, <a href="#uv.package-precompile">precompile</a>, <a href="#uv.package-site_hooks">site_hooks</a>,
-           <a href="#uv.package-site_paths">site_paths</a>, <a href="#uv.package-wheel_library_tags">wheel_library_tags</a>, <a href="#uv.package-workspace">workspace</a>)
+           <a href="#uv.package-site_paths">site_paths</a>, <a href="#uv.package-source">source</a>, <a href="#uv.package-wheel_library_tags">wheel_library_tags</a>, <a href="#uv.package-workspace">workspace</a>)
 uv.workspace(<a href="#uv.workspace-name">name</a>, <a href="#uv.workspace-extra_project_files">extra_project_files</a>, <a href="#uv.workspace-local_wheels">local_wheels</a>, <a href="#uv.workspace-lock_file">lock_file</a>, <a href="#uv.workspace-pypi_indexes">pypi_indexes</a>)
 </pre>
 
@@ -65,6 +65,7 @@ Specify package-specific settings.
 | <a id="uv.package-precompile"></a>precompile |  Whether to precompile `.pyc` files when installing this package's wheel (`"auto"`, `"enabled"`, or `"disabled"`). `"auto"` follows the `--@rules_python//python/config_settings:precompile` flag. Defaults to inheriting from `*` if set, or `"auto"`.   | String | optional |  `""`  |
 | <a id="uv.package-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
 | <a id="uv.package-site_paths"></a>site_paths |  Override the auto-detected top-level importable paths.   | List of strings | optional |  `[]`  |
+| <a id="uv.package-source"></a>source |  Optional lockfile source value (e.g. index or git URL) to disambiguate when multiple packages share the same name@version. Use '*' to apply to all sources of that name@version.   | String | optional |  `""`  |
 | <a id="uv.package-wheel_library_tags"></a>wheel_library_tags |  Optional tags to apply to the generated pycross_wheel_library target.   | List of strings | optional |  `[]`  |
 | <a id="uv.package-workspace"></a>workspace |  The workspace name (optional if inferable).   | String | optional |  `""`  |
 

@@ -43,6 +43,7 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs, i
 def normalize_package_tag(tag):
     """Normalize a generic package tag into a struct."""
     return struct(
+        source = getattr(tag, "source", ""),
         build_mode = tag.build_mode,
         extra_build_tools = tag.extra_build_tools,
         build_tools_repo = tag.build_tools_repo,
