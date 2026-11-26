@@ -15,10 +15,11 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Sequence
 
 from pycross.private.build.tools.crossenv import utils
 
-SYSCONFIG_DATA_NAME = "_pycross_sysconfig_data"
+SYSCONFIG_DATA_NAME = "_sysconfigdata_pycross"
 
 # A tiny source file that gets the compiler to output the glibc version
 # it's going to link against without us having to actually execute the
@@ -70,25 +71,8 @@ class Context:
 
 
 def guess_target_platform(host_gnu_type: str) -> str:
-    # It was probably natively compiled, but not necessarily for this
-    # architecture. Guess from HOST_GNU_TYPE.
-    # TODO: Handle windows somehow (ha, ha)
-    host = host_gnu_type.lower().split("-")
-    if len(host) == 4:  # i.e., aarch64-unknown-linux-gnu
-        plat, machine = [host[2], host[0]]
-    elif len(host) == 3:  # i.e., aarch64-linux-gnu, unlikely.
-        plat, machine = [host[1], host[0]]
-    else:
-        raise ValueError(f"Cannot determine target platform from HOST_GNU_TYPE: {host_gnu_type}")
-
-    if plat == "apple":
-        plat = "darwin"
-
-    # On macos, aarch64 is called arm64 for whatever reason
-    if plat == "darwin" and machine == "aarch64":
-        machine = "arm64"
-
-    return f"{plat}-{machine}"
+    os_name, arch = utils.parse_target_triple(host_gnu_type)
+    return f"{os_name}-{arch}"
 
 
 def guess_uname(
@@ -109,14 +93,8 @@ def guess_uname(
         uname_sysname = target_info[0]
 
     if uname_machine is None:
-        if len(target_info) > 1 and target_info[-1] == "powerpc64le":
-            # Test that this is still a special case when we can.
-            # On uname.machine=ppc64le, _PYTHON_HOST_PLATFORM is linux-powerpc64le
-            uname_machine = "ppc64le"
-        elif len(target_info) > 1:
-            uname_machine = target_info[-1]
-        else:
-            uname_machine = host_gnu_type.split("-")[0]
+        raw_machine = target_info[-1] if len(target_info) > 1 else host_gnu_type.split("-")[0]
+        uname_machine = utils.normalize_arch(raw_machine, os_name=uname_sysname.lower())
 
     if macosx_deployment_target:
         parts = macosx_deployment_target.split(".")
@@ -267,6 +245,7 @@ def build_env(
     env_dir: str,
     target_python_exe: str,
     sysconfig_vars: Dict[str, Any],
+    extra_pythonpaths: Sequence[str] = (),
 ) -> Path:
     pyver = "python" + sysconfig.get_config_var("py_version_short")
     env_path = Path(env_dir)
@@ -301,6 +280,11 @@ def build_env(
 
     disable_frozen_modules = sys.version_info >= (3, 11)
 
+    pythonpaths: List[str] = []
+    for path_entry in (str(site_path), *extra_pythonpaths):
+        if path_entry and path_entry not in pythonpaths:
+            pythonpaths.append(path_entry)
+
     tmpl = utils.TemplateContext()
     tmpl.update(context.__dict__)
     tmpl.update(
@@ -308,6 +292,7 @@ def build_env(
             "stdlib": stdlib,
             "dynload": dynload,
             "disable_frozen_modules": disable_frozen_modules,
+            "extra_pythonpaths": pythonpaths,
         }
     )
 
@@ -360,6 +345,13 @@ def main():
         "--target-python",
         help="Path to the target Python interpreter executable.",
     )
+    parser.add_argument(
+        "--extra-pythonpath",
+        action="append",
+        default=[],
+        dest="extra_pythonpaths",
+        help="Additional path to prepend to PYTHONPATH in the crossenv wrapper (after site-packages).",
+    )
 
     args = parser.parse_args()
 
@@ -370,4 +362,5 @@ def main():
         env_dir=args.env_dir,
         target_python_exe=args.target_python,
         sysconfig_vars=sysconfig_vars,
+        extra_pythonpaths=args.extra_pythonpaths,
     )

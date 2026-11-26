@@ -73,8 +73,6 @@ def pre_build(ctx):
 
 def prepare_env(ctx):
     ctx.build_env["MESON_FORCE_BACKTRACE"] = "1"
-    for key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "AR", "ARFLAGS"]:
-        ctx.build_env.pop(key, None)
 
 
 def main():
@@ -82,6 +80,7 @@ def main():
         setup_venv=setup_venv,
         pre_build=pre_build,
         prepare_env=prepare_env,
+        export_cc_env=False,
     )
     run_standard_build_lifecycle(sys.argv[1], strategy)
 

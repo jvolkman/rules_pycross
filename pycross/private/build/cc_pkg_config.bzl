@@ -47,7 +47,7 @@ def _pycross_cc_pkg_config_impl(ctx):
     libs = get_libraries(cc_info)
     lib_dirs = []
     lib_flags = []
-    for lib in libs:
+    for lib in libs.all:
         if _is_versioned_shared_library(lib.basename) or lib.basename.endswith(".pic.a"):
             # `-l<name>` only finds an unversioned file (`libfoo.so`, `libfoo.a`),
             # not versioned wheel libraries (`libcudart.so.12`) or Bazel `.pic.a`

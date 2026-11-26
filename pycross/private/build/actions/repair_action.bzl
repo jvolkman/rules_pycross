@@ -3,6 +3,7 @@
 load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load("//pycross/private/build:cc_toolchain_util.bzl", "get_libraries")
 load("//pycross/private/build:wheel_shared_libraries.bzl", "wheel_shared_libraries")
 load(
     "//pycross/private/build/actions:pep517_action.bzl",
@@ -12,16 +13,6 @@ load(
 
 def _file_dirname(f):
     return f.dirname
-
-def _get_dynamic_libraries(cc_info):
-    """Returns dynamic library Files from CcInfo (excluding static/interface archives)."""
-    libs = []
-    for li in cc_info.linking_context.linker_inputs.to_list():
-        for library_to_link in li.libraries:
-            lib = library_to_link.resolved_symlink_dynamic_library or library_to_link.dynamic_library
-            if lib:
-                libs.append(lib)
-    return libs
 
 def register_repair_action(
         ctx,
@@ -66,7 +57,7 @@ def register_repair_action(
     wheel_lib_excludes = []
     for dep in native_deps:
         if CcInfo in dep:
-            lib_files.extend(_get_dynamic_libraries(dep[CcInfo]))
+            lib_files.extend(get_libraries(dep[CcInfo]).dynamic)
 
     # Another wheel ships these at runtime. Bundling a copy would load the library twice,
     # with separate state.

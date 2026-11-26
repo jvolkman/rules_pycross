@@ -297,29 +297,44 @@ def get_include_dirs(ccinfo):
     return collections.uniq(include_dirs)
 
 def get_libraries(ccinfo):
-    """Returns a list of libraries for the given CcInfo.
+    """Returns categorized libraries for the given CcInfo.
 
     Prefers PIC static libraries over non-PIC static libraries because Python
     extension modules are linked as shared libraries.
 
     Args:
-        ccinfo: The CcInfo provider
+        ccinfo: The CcInfo provider.
 
     Returns:
-        list: A list of library Files.
+        struct: Lists of library Files grouped as `static`, `dynamic`,
+            `interface`, and `all` (preserving original linker-input order).
     """
+    static = []
+    dynamic = []
+    interface = []
     all_libraries = []
-
-    def add(lib):
-        if lib:
-            all_libraries.append(lib)
 
     for li in ccinfo.linking_context.linker_inputs.to_list():
         for library_to_link in li.libraries:
-            add(library_to_link.pic_static_library or library_to_link.static_library)
-            add(library_to_link.resolved_symlink_dynamic_library or library_to_link.dynamic_library)
-            add(library_to_link.resolved_symlink_interface_library or library_to_link.interface_library)
-    return all_libraries
+            static_lib = library_to_link.pic_static_library or library_to_link.static_library
+            if static_lib:
+                static.append(static_lib)
+                all_libraries.append(static_lib)
+            dynamic_lib = library_to_link.resolved_symlink_dynamic_library or library_to_link.dynamic_library
+            if dynamic_lib:
+                dynamic.append(dynamic_lib)
+                all_libraries.append(dynamic_lib)
+            interface_lib = library_to_link.resolved_symlink_interface_library or library_to_link.interface_library
+            if interface_lib:
+                interface.append(interface_lib)
+                all_libraries.append(interface_lib)
+
+    return struct(
+        static = static,
+        dynamic = dynamic,
+        interface = interface,
+        all = all_libraries,
+    )
 
 # Visible for testing.
 convert_flags_for_testing = _convert_flags

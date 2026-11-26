@@ -3,11 +3,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from pycross.private.build.tools.meson_utils import generate_cross_ini
+from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
+from pycross.private.build.tools.utils.context import CcLayerState
 
 
 class MockBuildContext:
     def __init__(self, temp_dir: Path):
         self.sysconfig_vars = {}
+        self.build_env = {}
         self.prefix = temp_dir
         self.temp_dir = temp_dir
         self.sdist_dir = temp_dir / "sdist"
@@ -19,6 +22,7 @@ class MockBuildContext:
         self.target_python = self.env_dir / "bin" / "python"
         self.pkg_config_files = []
         self.config_settings = {}
+        self.cc_layer = None
 
 
 class MesonUtilsTest(unittest.TestCase):
@@ -27,12 +31,20 @@ class MesonUtilsTest(unittest.TestCase):
         self.temp_path = Path(self.temp_dir.name)
         self.ctx = MockBuildContext(self.temp_path)
 
-        # Set some variables that generate_cross_ini needs
-        self.ctx.sysconfig_vars["CC"] = "/usr/bin/gcc"
-        self.ctx.sysconfig_vars["CXX"] = "/usr/bin/g++"
-        self.ctx.sysconfig_vars["CFLAGS"] = "-O2 -fPIC"
-        self.ctx.sysconfig_vars["CXXFLAGS"] = "-O2 -fPIC -std=c++14"
-        self.ctx.sysconfig_vars["LDFLAGS"] = "-Wl,-O1"
+        self.ctx.cc_layer = CcLayerState(
+            cc_path=Path("/usr/bin/gcc"),
+            cxx_path=Path("/usr/bin/g++"),
+            cflags=["-O2", "-fPIC"],
+            cxxflags=["-O2", "-fPIC", "-std=c++14"],
+            ldflags=["-Wl,-O1"],
+            ldsharedflags=[],
+            ar_list=[],
+            arflags=[],
+            ranlib_path=None,
+            include_dirs=[],
+            layer_lib_dir=(self.temp_path / "cc_layer" / "lib").absolute(),
+            runtime_libs=[],
+        )
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -112,10 +124,9 @@ class MesonUtilsTest(unittest.TestCase):
         self.assertIn("skip_sanity_check = true", content)
 
     def test_generate_cross_ini_quoted_flags(self):
-        # Meson keeps the pre-quoting token semantics (quotes inside tokens
-        # are dropped), since projects like numpy embed c_args in generated
-        # Python sources.
-        self.ctx.sysconfig_vars["CFLAGS"] = "-O2 '-D__DATE__=\"redacted\"'"
+        # Meson drops literal double quotes inside tokens, since projects like
+        # numpy embed c_args in generated Python sources.
+        self.ctx.cc_layer.cflags = ["-O2", '-D__DATE__="redacted"']
         cc_config = {"target_os": "linux", "target_cpu": "x86_64"}
         generate_cross_ini(self.ctx, cc_config)
 
@@ -134,8 +145,8 @@ class MesonUtilsTest(unittest.TestCase):
         self.assertNotIn("[build_machine]", content)
 
     def test_generate_cross_ini_runtime_libs_not_duplicated(self):
-        # setup_cc_layer already appends runtime_libs to sysconfig LDFLAGS.
-        self.ctx.sysconfig_vars["LDFLAGS"] = "-Wl,-O1 /abs/libc++.a"
+        # setup_cc_layer already appends runtime_libs to cc_layer.ldflags.
+        self.ctx.cc_layer.ldflags = ["-Wl,-O1", "/abs/libc++.a"]
         cc_config = {
             "target_os": "linux",
             "target_cpu": "x86_64",
@@ -166,13 +177,20 @@ class MesonUtilsTest(unittest.TestCase):
         native_inc = (self.temp_path / "native_inc").absolute()
         libcxx_inc = (self.temp_path / "libcxx" / "include").absolute()
         extra_inc = (self.temp_path / "extra_inc").absolute()
-        self.ctx.sysconfig_vars["CFLAGS"] = f"-nostdlibinc -I{native_inc}"
-        self.ctx.sysconfig_vars["CXXFLAGS"] = f"-nostdlibinc -I{native_inc}"
         cc_config = {
+            "CC": "/usr/bin/gcc",
+            "CXX": "/usr/bin/g++",
+            "CFLAGS": ["-nostdlibinc", f"-I{native_inc}"],
+            "CXXFLAGS": ["-nostdlibinc", f"-I{native_inc}"],
+            "LDFLAGS": [],
+            "LDSHAREDFLAGS": ["-shared"],
+            "AR": "/usr/bin/ar",
+            "ARFLAGS": ["rcs"],
             "target_os": "linux",
             "target_cpu": "x86_64",
             "include_dirs": [str(native_inc), str(libcxx_inc), str(extra_inc)],
         }
+        setup_cc_layer(self.ctx, cc_config)
         generate_cross_ini(self.ctx, cc_config)
 
         content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
@@ -182,7 +200,7 @@ class MesonUtilsTest(unittest.TestCase):
         self.assertEqual(content.count(f"-I{extra_inc}"), 2)
 
     def test_generate_cross_ini_preserves_spaces_escapes_and_build_dir(self):
-        self.ctx.sysconfig_vars["CFLAGS"] = '-I"/path/with spaces/inc" -DNAME="o\'reilly\\x"'
+        self.ctx.cc_layer.cflags = ["-I/path/with spaces/inc", '-DNAME="o\'reilly\\x"']
         self.ctx.config_settings["build-dir"] = "custom_build"
         pc_file = self.temp_path / "demo.pc"
         pc_file.write_text("prefix=$$EXT_BUILD_ROOT$$/demo\n")

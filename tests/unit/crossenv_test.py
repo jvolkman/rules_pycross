@@ -1,12 +1,21 @@
 import importlib.machinery
+import json
+import os
 import subprocess
 import sys
 import sysconfig
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from pycross.private.build.tools.crossenv import SYSCONFIG_DATA_NAME
+from pycross.private.build.tools.crossenv import build_env
 from pycross.private.build.tools.crossenv import determine_glibc_version
+from pycross.private.build.tools.crossenv import guess_target_platform
 from pycross.private.build.tools.crossenv import guess_uname
+from pycross.private.build.tools.crossenv.utils import normalize_arch
+from pycross.private.build.tools.crossenv.utils import parse_target_triple
 from pycross.private.build.tools.crossenv.utils import target_extension_suffixes
 
 
@@ -202,6 +211,102 @@ class SysPatchTest(unittest.TestCase):
 
         with self.assertRaises(AttributeError):
             getter("not_platform")
+
+
+class TargetTripleTest(unittest.TestCase):
+    def test_parse_target_triple_and_normalize_arch(self):
+        cases = {
+            "x86_64-pc-linux-gnu": ("linux", "x86_64"),
+            "aarch64-unknown-linux-gnu": ("linux", "aarch64"),
+            "aarch64-linux-gnu": ("linux", "aarch64"),
+            "i386-pc-linux-gnu": ("linux", "i686"),
+            "arm-unknown-linux-gnueabihf": ("linux", "armv7l"),
+            "powerpc64le-unknown-linux-gnu": ("linux", "ppc64le"),
+            "aarch64-apple-darwin": ("darwin", "arm64"),
+            "aarch64-apple-darwin21.6.0": ("darwin", "arm64"),
+            "x86_64-apple-darwin": ("darwin", "x86_64"),
+        }
+        for triple, expected in cases.items():
+            with self.subTest(triple=triple):
+                self.assertEqual(parse_target_triple(triple), expected)
+                self.assertEqual(guess_target_platform(triple), f"{expected[0]}-{expected[1]}")
+
+        self.assertEqual(normalize_arch("i386"), "i686")
+        self.assertEqual(normalize_arch("arm"), "armv7l")
+        self.assertEqual(normalize_arch("powerpc64le"), "ppc64le")
+        self.assertEqual(normalize_arch("aarch64", os_name="darwin"), "arm64")
+        self.assertEqual(normalize_arch("aarch64", os_name="macosx"), "arm64")
+        self.assertEqual(normalize_arch("arm64", os_name="macosx-11.0-arm64"), "arm64")
+        for invalid in ("invalid", "two-parts", "a-b-c-d-e"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    parse_target_triple(invalid)
+
+
+class BuildEnvTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX crossenv")
+    def test_unified_sysconfig_and_single_wrapper_for_all_python_names(self):
+        self.assertEqual(SYSCONFIG_DATA_NAME, "_sysconfigdata_pycross")
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_dir = root / "env"
+            sdist_dir = root / "sdist"
+            sdist_dir.mkdir()
+            (sdist_dir / "sdist_mod.py").write_text("VALUE = 'from_sdist'\n")
+
+            target_vars = dict(sysconfig.get_config_vars())
+            target_vars["HOST_GNU_TYPE"] = "aarch64-unknown-linux-gnu"
+            target_vars["CUSTOM_MARKER"] = "initial"
+
+            build_env(
+                env_dir=str(env_dir),
+                target_python_exe=sys.executable,
+                sysconfig_vars=target_vars,
+                extra_pythonpaths=[str(sdist_dir)],
+            )
+
+            pyver = "python" + sysconfig.get_config_var("py_version_short")
+            site_dir = (env_dir / "lib").resolve() / pyver / "site-packages"
+            sysconfig_file = site_dir / "_sysconfigdata_pycross.py"
+            self.assertTrue(sysconfig_file.exists())
+            self.assertFalse((site_dir / "_pycross_sysconfig_data.py").exists())
+            self.assertTrue((env_dir / "bin" / "python").is_symlink())
+            self.assertTrue((env_dir / "bin" / "python3").is_symlink())
+
+            # Overwriting _sysconfigdata_pycross.py in place is reflected immediately.
+            target_vars["CUSTOM_MARKER"] = "updated"
+            sysconfig_file.write_text(f"build_time_vars = {repr(target_vars)}\n")
+
+            (site_dir / "site_mod.py").write_text("VALUE = 'from_site'\n")
+            probe_code = (
+                "import json, os, subprocess, sys, sysconfig, site_mod, sdist_mod; "
+                "nested = subprocess.check_output("
+                "[sys.executable, '-c', 'import os; print(os.environ.get(\"PYTHONPATH\", \"\"))'], text=True).strip(); "
+                "print(json.dumps({"
+                "'name': sysconfig._get_sysconfigdata_name(), "
+                "'marker': sysconfig.get_config_var('CUSTOM_MARKER'), "
+                "'site': site_mod.VALUE, "
+                "'sdist': sdist_mod.VALUE, "
+                "'pp': os.environ.get('PYTHONPATH', ''), "
+                "'nested_pp': nested"
+                "}))"
+            )
+            clean_env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTHON", "_PYTHON", "_OLD_"))}
+            for exe_name in ("python", "python3", pyver):
+                with self.subTest(exe_name=exe_name):
+                    out = subprocess.check_output(
+                        [str(env_dir / "bin" / exe_name), "-c", probe_code],
+                        env=clean_env,
+                        text=True,
+                    )
+                    data = json.loads(out)
+                    self.assertEqual(data["name"], "_sysconfigdata_pycross")
+                    self.assertEqual(data["marker"], "updated")
+                    self.assertEqual(data["site"], "from_site")
+                    self.assertEqual(data["sdist"], "from_sdist")
+                    expected_pp = os.pathsep.join([str(site_dir), str(sdist_dir)])
+                    self.assertEqual(data["pp"], expected_pp)
+                    self.assertEqual(data["nested_pp"], expected_pp)
 
 
 if __name__ == "__main__":

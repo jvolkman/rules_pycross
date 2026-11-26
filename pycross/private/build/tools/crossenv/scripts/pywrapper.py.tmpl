@@ -3,6 +3,13 @@
 import os
 import sys
 
+extra_paths = {{repr(extra_pythonpaths)}}
+if extra_paths:
+    existing = os.environ.get('PYTHONPATH')
+    existing_parts = existing.split(os.pathsep) if existing else []
+    to_add = [p for p in extra_paths if p not in existing_parts]
+    if to_add:
+        os.environ['PYTHONPATH'] = os.pathsep.join(to_add + existing_parts)
 
 for name in ['_PYTHON_PROJECT_BASE', '_PYTHON_HOST_PLATFORM',
         '_PYTHON_SYSCONFIGDATA_NAME', 'PYTHONHOME', 'PYTHONPATH']:

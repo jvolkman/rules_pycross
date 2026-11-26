@@ -9,6 +9,44 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Tuple
+
+
+def normalize_arch(cpu: str, *, os_name: Optional[str] = None) -> str:
+    """Normalize a CPU architecture name to its Python/uname convention."""
+    cpu = cpu.lower()
+    os_lower = os_name.lower() if os_name else ""
+    if cpu in ("aarch64", "arm64"):
+        return "arm64" if os_lower.startswith(("darwin", "macosx")) else "aarch64"
+    if cpu in ("x86_64", "amd64"):
+        return "x86_64"
+    if cpu in ("i386", "i486", "i586", "i686", "x86", "x86_32"):
+        return "i686"
+    if cpu in ("ppc64le", "powerpc64le"):
+        return "ppc64le"
+    if cpu in ("s390x", "riscv64"):
+        return cpu
+    if cpu.startswith("arm"):
+        return "armv7l" if cpu in ("arm", "armv7", "armv7a") else cpu
+    return cpu
+
+
+def parse_target_triple(host_gnu_type: str) -> Tuple[str, str]:
+    """Parse a GNU target triple into a normalized ``(os_name, arch)`` pair."""
+    parts = host_gnu_type.lower().split("-")
+    if len(parts) == 4:
+        # e.g. aarch64-unknown-linux-gnu
+        raw_arch, raw_os = parts[0], parts[2]
+    elif len(parts) == 3:
+        # e.g. aarch64-apple-darwin, aarch64-apple-darwin21.6.0, aarch64-linux-gnu
+        raw_arch, raw_os = parts[0], parts[1]
+        if raw_os == "apple" or parts[2].startswith("darwin"):
+            raw_os = "darwin"
+    else:
+        raise ValueError(f"Cannot determine target platform from HOST_GNU_TYPE: {host_gnu_type}")
+
+    os_name = "darwin" if (raw_os == "apple" or raw_os.startswith("darwin")) else raw_os
+    return os_name, normalize_arch(raw_arch, os_name=os_name)
 
 
 class TemplateContext:

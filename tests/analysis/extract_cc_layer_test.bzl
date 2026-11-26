@@ -70,9 +70,13 @@ def _test_extract_cc_layer_flags_impl(env, target):
     content.contains("-fno-strict-aliasing")
     content.contains("-Wl,-strip-all")
 
-    arflags = _cc_config(target)["ARFLAGS"]
+    cfg = _cc_config(target)
+    for key in ("CFLAGS", "CXXFLAGS", "LDFLAGS", "LDSHAREDFLAGS", "ARFLAGS"):
+        env.expect.where(key = key).that_str(type(cfg[key])).equals("list")
+
+    arflags = cfg["ARFLAGS"]
     env.expect.that_bool(bool(arflags)).equals(True)
-    env.expect.that_bool("__PYCROSS_ARCHIVER_OUTPUT__" in arflags).equals(False)
+    env.expect.that_bool(any(["__PYCROSS_ARCHIVER_OUTPUT__" in f for f in arflags])).equals(False)
 
 def _cc_config(target):
     for action in target.actions:
@@ -93,17 +97,20 @@ def _test_extract_cc_layer_user_flags(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_extract_cc_layer_user_flags_impl)
 
 def _test_extract_cc_layer_user_flags_impl(env, target):
-    cflags = _cc_config(target)["CFLAGS"]
+    cfg = _cc_config(target)
+    cflags = cfg["CFLAGS"]
 
-    # User copts are appended verbatim, even if a token also appears in the
-    # toolchain flags, and tokens with quotes/spaces are shell-quoted.
-    env.expect.that_bool(
-        cflags.endswith(" -DPYCROSS_TEST_DUP '-DPYCROSS_TEST_STR=\"a b\"' -isystem /opt/userinc"),
-    ).equals(True)
-    env.expect.that_int(cflags.count("-DPYCROSS_TEST_DUP")).equals(2)
+    # User copts are appended verbatim as structured tokens without shell quoting.
+    env.expect.that_collection(cflags[-4:]).contains_exactly([
+        "-DPYCROSS_TEST_DUP",
+        '-DPYCROSS_TEST_STR="a b"',
+        "-isystem",
+        "/opt/userinc",
+    ]).in_order()
+    env.expect.that_int(len([f for f in cflags if f == "-DPYCROSS_TEST_DUP"])).equals(2)
 
-    # `$` is left unquoted.
-    env.expect.that_bool(_cc_config(target)["LDFLAGS"].endswith(" -Wl,-rpath,$ORIGIN")).equals(True)
+    # `$` is preserved literally as a structured token.
+    env.expect.that_str(cfg["LDFLAGS"][-1]).equals("-Wl,-rpath,$ORIGIN")
 
 def _test_extract_cc_layer_main_repo_includes(name):
     util.helper_target(cc_library, name = name + "_hdrs", hdrs = ["mock.h"], includes = ["."])
@@ -152,7 +159,9 @@ def _test_extract_cc_layer_native_libraries(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_extract_cc_layer_native_libraries_impl)
 
 def _test_extract_cc_layer_native_libraries_impl(env, target):
-    static_libs = _cc_config(target)["static_libs"]
+    cfg = _cc_config(target)
+    static_libs = cfg["static_libs"]
+    shared_libs = cfg["shared_libs"]
     for path in [
         "$$EXT_BUILD_ROOT$$/tests/analysis/mock_native.a",
         "$$EXT_BUILD_ROOT$$/tests/analysis/mock_both.pic.a",
@@ -160,7 +169,13 @@ def _test_extract_cc_layer_native_libraries_impl(env, target):
         "$$EXT_BUILD_ROOT$$/tests/analysis/mock_native_interface.lib",
     ]:
         env.expect.that_collection(static_libs).contains(path)
-    env.expect.that_collection(static_libs).contains_none_of(["$$EXT_BUILD_ROOT$$/tests/analysis/mock_both.a"])
+    env.expect.that_collection(static_libs).contains_none_of([
+        "$$EXT_BUILD_ROOT$$/tests/analysis/mock_both.a",
+        "$$EXT_BUILD_ROOT$$/tests/analysis/mock_native.dll",
+    ])
+    env.expect.that_collection(shared_libs).contains_none_of([
+        "$$EXT_BUILD_ROOT$$/tests/analysis/mock_native.dll",
+    ])
 
 def _mock_template_var_impl(_ctx):
     return [platform_common.TemplateVariableInfo({"CUSTOM_CC_FLAG": "-DCUSTOM_VAR_OK"})]
@@ -180,8 +195,8 @@ def _test_extract_cc_layer_template_vars(name):
 
 def _test_extract_cc_layer_template_vars_impl(env, target):
     cfg = _cc_config(target)
-    env.expect.that_str(cfg["CFLAGS"]).contains("-DCUSTOM_VAR_OK")
-    env.expect.that_str(cfg["LDFLAGS"]).contains("-Wl,-DCUSTOM_VAR_OK")
+    env.expect.that_collection(cfg["CFLAGS"]).contains("-DCUSTOM_VAR_OK")
+    env.expect.that_collection(cfg["LDFLAGS"]).contains("-Wl,-DCUSTOM_VAR_OK")
 
 def _test_extract_cc_layer_copts_no_shadowing(name):
     util.helper_target(
@@ -204,13 +219,13 @@ def _test_extract_cc_layer_copts_no_shadowing_impl(env, target):
     cfg = _cc_config(target)
     cflags = cfg["CFLAGS"]
     cxxflags = cfg["CXXFLAGS"]
-    env.expect.that_int(cflags.count("-DCMD_COPT")).equals(1)
-    env.expect.that_int(cflags.count("-DCMD_CONLY")).equals(1)
-    env.expect.that_int(cflags.count("-DCMD_CXX")).equals(0)
-    env.expect.that_int(cxxflags.count("-DCMD_COPT")).equals(1)
-    env.expect.that_int(cxxflags.count("-DCMD_CONLY")).equals(0)
-    env.expect.that_int(cxxflags.count("-DCMD_CXX")).equals(1)
-    env.expect.that_int(cxxflags.count("-DUSER_COPT")).equals(1)
+    env.expect.that_int(len([f for f in cflags if f == "-DCMD_COPT"])).equals(1)
+    env.expect.that_int(len([f for f in cflags if f == "-DCMD_CONLY"])).equals(1)
+    env.expect.that_int(len([f for f in cflags if f == "-DCMD_CXX"])).equals(0)
+    env.expect.that_int(len([f for f in cxxflags if f == "-DCMD_COPT"])).equals(1)
+    env.expect.that_int(len([f for f in cxxflags if f == "-DCMD_CONLY"])).equals(0)
+    env.expect.that_int(len([f for f in cxxflags if f == "-DCMD_CXX"])).equals(1)
+    env.expect.that_int(len([f for f in cxxflags if f == "-DUSER_COPT"])).equals(1)
 
 def _test_convert_msvc_flags(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

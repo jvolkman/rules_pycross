@@ -13,6 +13,7 @@ from pathlib import Path
 from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import resolve_sandbox_path
+from pycross.private.build.tools.utils.sysconfig_utils import SYSCONFIG_DATA_NAME
 
 
 def load_toml_file(path: Path) -> dict:
@@ -95,7 +96,8 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     sizeof_void_p = int(ctx.sysconfig_vars.get("SIZEOF_VOID_P", 8))
     pointer_width = str(sizeof_void_p * 8)
 
-    layer_lib_dir = ctx.temp_dir / "cc_layer" / "lib"
+    cc_layer = getattr(ctx, "cc_layer", None)
+    layer_lib_dir = cc_layer.layer_lib_dir if cc_layer is not None else ctx.temp_dir / "cc_layer" / "lib"
     lib_name = f"python{version}"
     if layer_lib_dir.exists():
         for f in layer_lib_dir.glob("libpython*"):
@@ -168,7 +170,7 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
             # Older PyO3 also looks for _sysconfigdata*.py in PYO3_CROSS_LIB_DIR.
             # Since rules_pycross sets _PYTHON_SYSCONFIGDATA_NAME to _sysconfigdata_pycross,
             # we write the target sysconfig variables to that name in the lib dir.
-            sysconfigdata_path = layer_lib_dir / "_sysconfigdata_pycross.py"
+            sysconfigdata_path = layer_lib_dir / f"{SYSCONFIG_DATA_NAME}.py"
             with open(sysconfigdata_path, "w") as f:
                 f.write(f"build_time_vars = {repr(ctx.sysconfig_vars)}\n")
             print(f"Wrote target sysconfigdata to {sysconfigdata_path}", file=sys.stderr)
@@ -187,28 +189,41 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
 
     ctx.build_env["CARGO_BUILD_TARGET"] = target_triple
 
-    wrapped_cxx = ctx.sysconfig_vars.get("CXX")
+    if cc_layer is not None:
+        wrapped_cc = str(cc_layer.cc_path)
+        wrapped_cxx = str(cc_layer.cxx_path)
+        ar = cc_layer.ar_list[0] if len(cc_layer.ar_list) == 1 else shlex.join(cc_layer.ar_list)
+        ranlib_path = cc_layer.ranlib_path
+        cflags_tokens = cc_layer.cflags
+        cxxflags_tokens = cc_layer.cxxflags
+        ldflags_args = list(cc_layer.ldflags)
+    else:
+        wrapped_cc = ctx.sysconfig_vars.get("CC", "")
+        wrapped_cxx = ctx.sysconfig_vars.get("CXX", "")
+        ar = ctx.sysconfig_vars.get("AR", "")
+        _, ranlib_path = parse_ar_and_guess_ranlib(ar)
+        cflags_tokens = shlex.split(ctx.sysconfig_vars.get("CFLAGS", ""))
+        cxxflags_tokens = shlex.split(ctx.sysconfig_vars.get("CXXFLAGS", ""))
+        ldflags_args = shlex.split(ctx.sysconfig_vars.get("LDFLAGS", ""))
+
     if not wrapped_cxx:
-        raise ValueError("Wrapped CXX compiler not found in sysconfig_vars")
+        raise ValueError("Wrapped CXX compiler not found in cc_layer or sysconfig_vars")
     ctx.build_env[f"CARGO_TARGET_{triple_env_name}_LINKER"] = wrapped_cxx
 
-    ar = ctx.sysconfig_vars.get("AR")
-    _, ranlib_path = parse_ar_and_guess_ranlib(ar)
-
     for triple in (target_triple, target_triple.replace("-", "_")):
-        ctx.build_env[f"CC_{triple}"] = ctx.sysconfig_vars["CC"]
-        ctx.build_env[f"CXX_{triple}"] = ctx.sysconfig_vars["CXX"]
+        ctx.build_env[f"CC_{triple}"] = wrapped_cc
+        ctx.build_env[f"CXX_{triple}"] = wrapped_cxx
         if ar:
             ctx.build_env[f"AR_{triple}"] = ar
         if ranlib_path:
             ctx.build_env[f"RANLIB_{triple}"] = ranlib_path.as_posix()
-        # CFLAGS/CXXFLAGS are shell-quoted, but cc-rs splits them on
-        # whitespace unless CC_SHELL_ESCAPED_FLAGS is set (newer cc only).
-        # It prefers the per-target vars, so give it the unquoted tokens.
-        for flags_var in ("CFLAGS", "CXXFLAGS"):
-            flags = ctx.sysconfig_vars.get(flags_var)
-            if flags:
-                ctx.build_env[f"{flags_var}_{triple}"] = " ".join(shlex.split(flags))
+        # cc-rs splits CFLAGS_<triple>/CXXFLAGS_<triple> on whitespace unless
+        # CC_SHELL_ESCAPED_FLAGS is set (newer cc only). It prefers the
+        # per-target vars, so pass unquoted tokens joined with spaces.
+        if cflags_tokens:
+            ctx.build_env[f"CFLAGS_{triple}"] = " ".join(cflags_tokens)
+        if cxxflags_tokens:
+            ctx.build_env[f"CXXFLAGS_{triple}"] = " ".join(cxxflags_tokens)
 
     host_triple = rust_config.get("host_triple", "")
     host_rustlib_rel = rust_config.get("host_rustlib_dir")
@@ -232,9 +247,6 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
         raise RuntimeError(f"Failed to populate hermetic Rust sysroot: {e}") from e
 
     wrapper_path = ctx.temp_dir / "rustc_wrapper"
-
-    ldflags = ctx.sysconfig_vars.get("LDFLAGS", "")
-    ldflags_args = shlex.split(ldflags)
 
     sysroot_dir_str = str(sysroot_dir.absolute())
 

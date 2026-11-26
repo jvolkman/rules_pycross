@@ -10,6 +10,8 @@ from unittest import mock
 
 from private.tools import rust_common
 
+from pycross.private.build.tools.utils.context import CcLayerState
+
 
 def _make_fake_rustc(path: Path) -> Path:
     path.write_text(
@@ -267,6 +269,35 @@ class RustCommonTest(unittest.TestCase):
         self.assertNotEqual(m1, m2)
         self.assertNotEqual(m2, m3)
         self.assertNotEqual(get_metadata(host_args), get_metadata(host_args_b))
+
+    def test_consumes_cc_layer_state_for_cc_rs_and_rustc_wrapper(self):
+        os.chdir(self.sdist_dir)
+        ctx = self._make_ctx(build_env={"ARFLAGS": "rcsD"}, is_cross=True)
+        layer_lib = (self.temp_build / "cc_layer" / "lib").absolute()
+        ctx.cc_layer = CcLayerState(
+            cc_path=Path("/wrapped/clang"),
+            cxx_path=Path("/wrapped/clang++"),
+            cflags=["-O2", '-D__DATE__="redacted"'],
+            cxxflags=["-O2", "-std=c++17"],
+            ldflags=[f"-L{layer_lib}", "/rt/libc++.a"],
+            ldsharedflags=[],
+            ar_list=["/usr/bin/llvm-ar"],
+            arflags=["rcsD"],
+            ranlib_path=Path("/usr/bin/llvm-ranlib"),
+            include_dirs=[],
+            layer_lib_dir=layer_lib,
+            runtime_libs=[Path("/rt/libc++.a")],
+        )
+        rust_common.configure_rust_env(ctx, Path("."), is_maturin=True)
+
+        self.assertEqual(ctx.build_env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER"], "/wrapped/clang++")
+        self.assertEqual(ctx.build_env["CC_aarch64-unknown-linux-gnu"], "/wrapped/clang")
+        self.assertEqual(ctx.build_env["CXX_aarch64_unknown_linux_gnu"], "/wrapped/clang++")
+        self.assertEqual(ctx.build_env["AR_aarch64-unknown-linux-gnu"], "/usr/bin/llvm-ar")
+        self.assertEqual(ctx.build_env["RANLIB_aarch64-unknown-linux-gnu"], "/usr/bin/llvm-ranlib")
+        self.assertEqual(ctx.build_env["CFLAGS_aarch64-unknown-linux-gnu"], '-O2 -D__DATE__="redacted"')
+        self.assertEqual(ctx.build_env["CXXFLAGS_aarch64_unknown_linux_gnu"], "-O2 -std=c++17")
+        self.assertNotIn("ARFLAGS", ctx.build_env)
 
 
 if __name__ == "__main__":

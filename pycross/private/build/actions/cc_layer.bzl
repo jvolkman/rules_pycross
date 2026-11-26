@@ -1,6 +1,5 @@
 """Action logic for CC environment extraction."""
 
-load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
@@ -19,21 +18,8 @@ def _absolute_tool_value(workspace_name, value):
         return absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", value, True)
     return value
 
-# `$` is included so $$EXT_BUILD_ROOT$$ paths (and flags like -Wl,-rpath,$ORIGIN)
-# are left as they were.
-_UNQUOTED_FLAG_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_@%+=:,./-$"
-
-def _quote_flag(flag):
-    # Consumers re-split these strings with shell rules (shlex, distutils
-    # split_quoted, CMake/make command lines), so quote tokens that would
-    # otherwise be split or lose quotes (e.g. -D__DATE__="redacted").
-    for c in flag.elems():
-        if c not in _UNQUOTED_FLAG_CHARS:
-            return shell.quote(flag)
-    return flag
-
-def _join_flags_list(workspace_name, flags):
-    return " ".join([_quote_flag(absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag)) for flag in flags])
+def _absolutize_flags(workspace_name, flags):
+    return [absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag) for flag in flags]
 
 def _get_sysconfig_data(workspace_name, tools, flags):
     cc = _absolute_tool_value(workspace_name, tools.cc)
@@ -53,12 +39,12 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     vars = {
         "CC": cc,
         "CXX": cxx,
-        "CFLAGS": _join_flags_list(workspace_name, flags.cc),
-        "CXXFLAGS": _join_flags_list(workspace_name, flags.cxx),
-        "LDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_executable),
-        "LDSHAREDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_shared),
+        "CFLAGS": _absolutize_flags(workspace_name, flags.cc),
+        "CXXFLAGS": _absolutize_flags(workspace_name, flags.cxx),
+        "LDFLAGS": _absolutize_flags(workspace_name, flags.cxx_linker_executable),
+        "LDSHAREDFLAGS": _absolutize_flags(workspace_name, flags.cxx_linker_shared),
         "AR": ar,
-        "ARFLAGS": _join_flags_list(workspace_name, ar_flags),
+        "ARFLAGS": _absolutize_flags(workspace_name, ar_flags),
     }
     return vars
 
@@ -100,16 +86,6 @@ def _get_target_os_and_cpu(ctx):
         fail("Cannot determine target CPU. Ensure your target platform has a recognized @platforms//cpu constraint (x86_64, aarch64, arm, x86_32).")
 
     return target_os, target_cpu
-
-def _is_shared_library(path):
-    filename = path.split("/")[-1]
-    if filename.endswith(".dylib") or filename.endswith(".tbd"):
-        return True
-    if filename.endswith(".so"):
-        return True
-    if ".so." in filename:
-        return True
-    return False
 
 def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
     """Extracts CC toolchain info, headers, and libraries from native deps.
@@ -179,13 +155,19 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
         for inc in get_include_dirs(ccinfo):
             include_dirs.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc, True))
 
-        libraries = get_libraries(ccinfo)
-        transitive_files.append(depset(libraries))
-        for lib in libraries:
+        libs = get_libraries(ccinfo)
+        transitive_files.append(depset(libs.all))
+        for lib in libs.static:
+            static_libs.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path, True))
+        for lib in libs.dynamic:
+            # Windows DLLs are runtime artifacts, not link-time libraries in cc_layer/lib.
+            if not lib.basename.lower().endswith(".dll"):
+                shared_libs.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path, True))
+        for lib in libs.interface:
             lib_path = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path, True)
-            if lib.path.endswith((".a", ".lib")):
+            if lib.basename.lower().endswith(".lib"):
                 static_libs.append(lib_path)
-            elif _is_shared_library(lib.path):
+            elif lib.basename.endswith((".dylib", ".tbd", ".so")) or ".so." in lib.basename:
                 shared_libs.append(lib_path)
 
     expanded_meson_properties = {}
