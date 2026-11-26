@@ -2,10 +2,9 @@
 
 Each per-format extension (uv, pdm, poetry, pylock) follows the same pattern:
   1. Collect workspace/repo/package tags
-  2. Desugar standalone projects into workspace + member
-  3. Process workspaces (discover members, register repos)
-  4. Run translators + resolver inline
-  5. Call create_repos()
+  2. Process workspaces (discover members, register repos)
+  3. Run translators + resolver inline
+  4. Call create_repos()
 
 This factory eliminates the boilerplate, similar to make_override_extension()
 for backend extensions.
@@ -317,8 +316,6 @@ def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, 
     resolved_lock = resolve(
         lock_model_data = raw_lock_data,
         local_wheels = local_wheels,
-        remote_wheels = {},
-        always_include_sdist = False,
         annotations_data = annotations_data,
         default_extra_build_tools_args = wildcard_pkg.extra_build_tools if wildcard_pkg else [],
         include_transitive = getattr(lock_model, "include_transitive", False),
@@ -342,15 +339,12 @@ def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, 
 
 def make_format_extension(
         model_type,
-        workspace_attrs = {},
         discover_members_fn = None,
         repo_create_model_fn = None):
     """Create a module_extension for a specific lock format.
 
     Args:
         model_type: The lock model type string (e.g. "uv", "pdm", "poetry", "pylock").
-        workspace_attrs: Format-specific attrs for workspace tags.
-            Merged with WORKSPACE_COMMON_ATTRS.
         discover_members_fn: Required function(module_ctx, lock_file_label, toml_cache) -> [struct(name, path)]
             that auto-discovers workspace members from the project configuration.
         repo_create_model_fn: Required function(module_ctx, extra_project_files, lock_file, lock_model, toml_cache = ...) -> dict
@@ -371,7 +365,7 @@ def make_format_extension(
         workspace_tags = []
         member_tags = []
 
-        # Track per-workspace pypi_indexes (from workspace or standalone project tags).
+        # Track per-workspace pypi_indexes.
         workspace_pypi_indexes = {}
 
         has_is_dev_dep = hasattr(module_ctx, "is_dev_dependency")
@@ -418,7 +412,6 @@ def make_format_extension(
             workspace_tags,
             member_tags,
             discover_members_fn,
-            model_type,
             root_direct_deps,
             toml_cache = toml_cache,
             root_direct_dev_deps = root_direct_dev_deps,
@@ -551,9 +544,6 @@ def make_format_extension(
     repo_tag_attrs = dict(REPO_ATTRS)
     repo_tag_attrs.update(TRANSITION_ATTRS)
 
-    ws_attrs = dict(workspace_attrs)
-    ws_attrs.update(WORKSPACE_COMMON_ATTRS)
-
     tag_classes = {
         "repo": tag_class(
             doc = "Override a %s workspace member's settings." % model_type,
@@ -565,7 +555,7 @@ def make_format_extension(
         ),
         "workspace": tag_class(
             doc = "Declare a %s workspace from a shared lock file." % model_type,
-            attrs = ws_attrs,
+            attrs = WORKSPACE_COMMON_ATTRS,
         ),
     }
 

@@ -14,6 +14,7 @@ load("@pypackaging.bzl", "pypackaging")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
+    "combine_markers",
     "compute_requested_dependency_groups",
     "detect_package_marker_forks",
     "expand_pep735_group",
@@ -163,68 +164,6 @@ def _expand_tilde(version_str):
 
     return ">={},<{}".format(lower, upper_str)
 
-def _parse_python_versions(python_versions):
-    """Parse Poetry's python-versions string to a PEP 440 specifier.
-
-    Poetry's python-versions field uses Poetry constraint syntax (^, ~, ||)
-    rather than PEP 440 specifiers, so we need to convert.
-
-    Args:
-        python_versions: The python-versions string from poetry.lock.
-
-    Returns:
-        A PEP 440 specifier string.
-    """
-    if not python_versions or python_versions == "*":
-        return ""
-
-    # Poetry uses || for OR (union) of version constraints.
-    # PEP 440 has no OR operator — comma-separated specifiers are AND.
-    # Joining || parts with commas would turn ">=3.9,<3.10 || >=3.11"
-    # into ">=3.9,<3.10,>=3.11" which is unsatisfiable.
-    # Drop the constraint entirely: being too permissive is safe (we may
-    # include a package for a Python it doesn't support, caught at build time)
-    # while being too restrictive silently excludes valid packages.
-    if "||" in python_versions:
-        return ""
-
-    return _poetry_constraint_to_pep440(python_versions)
-
-def _get_files_for_package(files, package_name, package_version):
-    """Filter files list to only those matching the given package.
-
-    In Poetry 2.0, files are inline per-package so this is usually
-    a no-op, but we keep it for safety.
-
-    Args:
-        files: List of file dicts.
-        package_name: The canonicalized package name.
-        package_version: The version string.
-
-    Returns:
-        Filtered list of file dicts.
-    """
-    parsed_pkg_ver = pypackaging.version.try_parse(package_version)
-    normalized_pkg_version = pypackaging.version.to_string(parsed_pkg_ver) if parsed_pkg_ver != None else package_version
-
-    result = []
-    for f in files:
-        filename = f["name"]
-        if filename.endswith(".whl"):
-            # Parse wheel filename to check name and version
-            parsed = pypackaging.utils.parse_wheel_filename(filename)
-        elif filename.endswith(".tar.gz") or filename.endswith(".zip"):
-            parsed = pypackaging.utils.parse_sdist_filename(filename)
-        else:
-            # Unknown format, include it
-            result.append(f)
-            continue
-
-        if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == normalized_pkg_version:
-            result.append(f)
-
-    return result
-
 def _poetry_python_to_marker(python):
     """Convert a Poetry `python` dependency restriction to a PEP 508 marker."""
     alternatives = []
@@ -258,9 +197,7 @@ def _extract_poetry_marker(info_dict):
     elif "platform" in info_dict:
         marker = 'sys_platform == "{}"'.format(info_dict["platform"])
     python_marker = _poetry_python_to_marker(info_dict.get("python", ""))
-    if marker and python_marker:
-        return "({}) and ({})".format(marker, python_marker)
-    return marker or python_marker
+    return combine_markers(marker, python_marker)
 
 def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_only = False, allow_optional = False):
     """Parse a Poetry dependency pin into pinned_package_specs.
@@ -489,11 +426,6 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 
-    # Parse lock file metadata
-    lock_python_versions = _parse_python_versions(
-        lock_dict.get("metadata", {}).get("python-versions", ""),
-    )
-
     # Parse file info helper
     def parse_file_info(file_info, registry = None):
         filename = url_decode_filename(file_info["file"])
@@ -505,19 +437,11 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             res["index"] = registry
         return res
 
-    # In Poetry 2.0, files are per-package (not in [metadata.files])
-    # But we still support [metadata.files] as fallback for edge cases
-    lock_files_by_name = {}
-    for pkg_name, pkg_files in lock_dict.get("metadata", {}).get("files", {}).items():
-        lock_files_by_name[pkg_name] = [parse_file_info(f) for f in pkg_files]
-
     # Build package list
     packages = []
     for lock_pkg in lock_dict.get("package", []):
-        package_listed_name = lock_pkg["name"]
-        package_name = canonicalize_name(package_listed_name)
+        package_name = canonicalize_name(lock_pkg["name"])
         package_version = lock_pkg["version"]
-        package_python_versions = lock_pkg.get("python-versions", "*")
 
         # Parse dependencies
         deps = []
@@ -563,17 +487,8 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             if git_url and commit:
                 source_urls = ["git+{}#{}".format(git_url, commit)]
 
-        # Parse files (inline in Poetry 2.0)
+        # Parse files (inline in Poetry 2.0+)
         files = [parse_file_info(f, registry) for f in lock_pkg.get("files", [])]
-        if not files:
-            files = lock_files_by_name.get(package_listed_name, [])
-            if registry:
-                new_files = []
-                for f in files:
-                    nf = dict(f)
-                    nf["index"] = registry
-                    new_files.append(nf)
-                files = new_files
 
         # Handle git synthetic file if no files found
         if source_type == "git" and not files and source_urls:
@@ -596,17 +511,12 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             updated_files.append(updated_f)
         files = updated_files
 
-        # Filter to only matching files for standard sources
-        if source_type not in ("url", "git"):
-            files = _get_files_for_package(files, package_name, package_version)
-
         # Read package-level markers (Poetry 2.1+)
         package_markers = lock_pkg.get("markers", "")
 
         pkg = {
             "name": package_name,
             "version": package_version,
-            "python_versions": _parse_python_versions(package_python_versions),
             "dependencies": deps,
             "files": files,
             "is_local": is_local,
@@ -622,7 +532,6 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     return resolve_lock_graph(
         packages = packages,
         pinned_package_specs = pinned_package_specs,
-        requires_python = lock_python_versions,
         strict_dependencies = True,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,

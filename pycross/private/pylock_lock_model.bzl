@@ -429,8 +429,6 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     if str(lock_version) != "1.0":
         fail("Unsupported pylock lock-version: {}. Expected 1.0".format(lock_version))
 
-    requires_python = lock_dict.get("requires-python", "")
-
     packages_list = lock_dict.get("package", lock_dict.get("packages", []))
 
     # Directory entries are local source trees (e.g. workspace members). Like
@@ -633,12 +631,9 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         dependencies = sorted(dependencies, key = lambda d: (d["name"], d["version"]))
         files = sorted(files, key = lambda f: f["name"])
 
-        package_requires_python = pkg.get("requires-python", "")
-
         raw_package = {
             "name": name,
             "version": version,
-            "python_versions": package_requires_python,
             "dependencies": dependencies,
             "files": files,
         }
@@ -705,7 +700,6 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     result = {
         "packages": lock_packages,
         "pins": pins,
-        "python_versions": requires_python,
         "testonly_pins": testonly_pins,
     }
     if resolution_marker_exprs:

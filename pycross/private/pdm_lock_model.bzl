@@ -96,13 +96,6 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     project_dicts = project_dict if type(project_dict) == "list" else [project_dict]
     multi_project = len(project_dicts) > 1
 
-    requires_python = ""
-    for p_dict in project_dicts:
-        rp = p_dict.get("project", {}).get("requires-python", "")
-        if rp:
-            requires_python = rp
-            break
-
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
     testonly_groups = getattr(lock_model, "testonly_groups", [])
     non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
@@ -218,11 +211,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     for lock_pkg in lock_dict.get("package", []):
         name = canonicalize_name(lock_pkg["name"])
         version = lock_pkg["version"]
-        pkg_requires_python = lock_pkg.get("requires_python", "")
         pkg_extras = lock_pkg.get("extras", [])
-
-        if pkg_requires_python == "*":
-            pkg_requires_python = ""
 
         # Read package-level markers (PDM multi-target lock files)
         package_markers = lock_pkg.get("marker", "")
@@ -277,7 +266,6 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         pkg = {
             "name": name,
             "version": version,
-            "python_versions": pkg_requires_python,
             "dependencies": deps,
             "files": files,
             "is_local": is_local,
@@ -293,7 +281,6 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     return resolve_lock_graph(
         packages = packages,
         pinned_package_specs = pinned_package_specs,
-        requires_python = requires_python,
         strict_dependencies = False,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,

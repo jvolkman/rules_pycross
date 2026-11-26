@@ -3,7 +3,6 @@ load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
 load(":target_platform.bzl", "pycross_target_platform")
-load(":util.bzl", "REPO_HTTP_DEPS")
 load(":wheel_library.bzl", "pycross_unsupported_wheel")
 
 package(default_visibility = ["//visibility:public"])
@@ -286,7 +285,7 @@ bzl_library(
         ":internal_repo",
         ":lock_attrs",
         "@bazel_features//:features",
-    ] + REPO_HTTP_DEPS,
+    ],
 )
 
 bzl_library(
@@ -386,6 +385,7 @@ bzl_library(
     name = "target_platform",
     srcs = ["target_platform.bzl"],
     deps = [
+        ":lock_attrs",
         ":pep508_marker_values",
         "@pypackaging.bzl//:pypackaging",
     ],

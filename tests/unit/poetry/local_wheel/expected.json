@@ -11,13 +11,11 @@
         }
       ],
       "name": "cowsay",
-      "python_versions": ">=3.8",
       "version": "6.1"
     }
   },
   "pins": {
     "cowsay": "cowsay@6.1"
   },
-  "python_versions": ">=3.9,<3.13",
   "testonly_pins": []
 }

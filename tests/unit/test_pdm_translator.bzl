@@ -496,7 +496,6 @@ def _test_pdm_multi_project_workspace_impl(env, target):
     ])
     result = translate_pdm(all_dicts, lock, _lock_model(projects = ["*"]))
     env.expect.that_collection(result["pins"].keys()).contains_exactly(["attrs", "regex", "six"])
-    env.expect.that_str(result["python_versions"]).equals(">=3.10")
 
 def _test_pdm_multi_project_workspace(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
