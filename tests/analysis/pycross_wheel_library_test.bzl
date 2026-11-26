@@ -9,7 +9,10 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo", "PycrossUnsupportedWheelInfo")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")
+load("//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy", "pycross_thin_library_proxy")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:py_providers.bzl", "PY_COMMON_ATTRS")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
@@ -331,6 +334,89 @@ def _test_pycross_library_proxy_preserves_wheel_library_unsupported_impl(env, ta
     env.expect.that_target(target).has_provider(OutputGroupInfo)
     env.expect.that_str(target[PycrossUnsupportedWheelInfo].package).contains("_lib")
     env.expect.that_int(len([a for a in target.actions if a.mnemonic == "PycrossUnsupportedPackage"])).equals(0)
+
+_ProxyAttrsProbeInfo = provider(
+    doc = "Records attribute presence on a proxy rule target.",
+    fields = {
+        "has_deps": "bool: whether the rule defines a `deps` attribute.",
+        "has_py_common_attrs": "bool: whether the rule defines any PY_COMMON_ATTRS attribute.",
+    },
+)
+
+def _proxy_attrs_probe_aspect_impl(target, ctx):  # buildifier: disable=unused-variable
+    return [_ProxyAttrsProbeInfo(
+        has_deps = hasattr(ctx.rule.attr, "deps"),
+        has_py_common_attrs = any([hasattr(ctx.rule.attr, attr_name) for attr_name in PY_COMMON_ATTRS]),
+    )]
+
+_proxy_attrs_probe_aspect = aspect(
+    implementation = _proxy_attrs_probe_aspect_impl,
+)
+
+def _test_pycross_thin_library_proxy_forwards_providers(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_lib",
+        wheel = name + "_wheel",
+        package_name = "Foo-Bar",
+        package_version = "1.0",
+    )
+    util.helper_target(
+        pycross_thin_library_proxy,
+        name = name + "_subject",
+        actual = ":" + name + "_lib",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        extra_target_under_test_aspects = [_proxy_attrs_probe_aspect],
+        impl = _test_pycross_thin_library_proxy_forwards_providers_impl,
+    )
+
+def _test_pycross_thin_library_proxy_forwards_providers_impl(env, target):
+    env.expect.that_target(target).has_provider(PyInfo)
+    env.expect.that_bool(bool(target[PyInfo].transitive_sources.to_list())).equals(True)
+    env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
+    env.expect.that_bool(target[PycrossExtractedWheelInfo].site_packages.is_directory).equals(True)
+    env.expect.that_target(target).has_provider(PycrossPackageInfo)
+    env.expect.that_str(target[PycrossPackageInfo].package_name).equals("Foo-Bar")
+    env.expect.that_str(target[PycrossPackageInfo].package_version).equals("1.0")
+    env.expect.that_target(target).has_provider(OutputGroupInfo)
+    dist_info_files = [f.basename for f in target[OutputGroupInfo].dist_info.to_list()]
+    env.expect.that_collection(dist_info_files).contains("entry_points.txt")
+
+    attrs_info = target[_ProxyAttrsProbeInfo]
+    env.expect.that_bool(attrs_info.has_deps).equals(False)
+    env.expect.that_bool(attrs_info.has_py_common_attrs).equals(False)
+
+def _test_pycross_thin_library_proxy_no_match_deferred(name):
+    util.helper_target(
+        pycross_thin_library_proxy,
+        name = name + "_subject",
+        actual = "//pycross/private:no_match_error",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
+        },
+        impl = _test_pycross_thin_library_proxy_no_match_deferred_impl,
+    )
+
+def _test_pycross_thin_library_proxy_no_match_deferred_impl(env, target):
+    env.expect.that_target(target).has_provider(PycrossUnsupportedWheelInfo)
+    env.expect.that_str(target[PycrossUnsupportedWheelInfo].package).equals(str(target.label))
+    actions = [a for a in target.actions if a.mnemonic == "PycrossUnsupportedPackage"]
+    env.expect.that_int(len(actions)).equals(1)
+    env.expect.that_str(actions[0].env.get("PYCROSS_ERROR", "")).contains(str(target.label))
+    runfile_names = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
+    env.expect.that_bool(any([n.startswith("_unsupported_") and n.endswith(".out") for n in runfile_names])).equals(True)
 
 def _test_no_variant_selected_fails_by_default(name):
     util.helper_target(
@@ -917,6 +1003,8 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_library_proxy_no_match_deferred,
             _test_pycross_file_proxy_preserves_wheel_dir_unsupported,
             _test_pycross_library_proxy_preserves_wheel_library_unsupported,
+            _test_pycross_thin_library_proxy_forwards_providers,
+            _test_pycross_thin_library_proxy_no_match_deferred,
             _test_no_variant_selected_fails_by_default,
             _test_no_variant_selected_deferred,
             _test_no_variant_selected_long_name_deferred,
