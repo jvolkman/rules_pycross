@@ -8,11 +8,10 @@ load(
     ":format_extension.bzl",
     "make_format_extension",
 )
-load(":lock_common.bzl", "discover_pylock_all_members")
 load(":pylock_lock_model.bzl", "repo_create_pylock_model")
 
 pylock = make_format_extension(
     model_type = "pylock",
-    discover_members_fn = discover_pylock_all_members,
+    discover_members_fn = lambda _mctx, _lock_file_label, _toml_cache = None: [struct(name = "root", path = "")],
     repo_create_model_fn = repo_create_pylock_model,
 )

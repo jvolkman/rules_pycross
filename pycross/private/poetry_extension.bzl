@@ -8,11 +8,10 @@ load(
     ":format_extension.bzl",
     "make_format_extension",
 )
-load(":lock_common.bzl", "discover_poetry_all_members")
 load(":poetry_lock_model.bzl", "repo_create_poetry_model")
 
 poetry = make_format_extension(
     model_type = "poetry",
-    discover_members_fn = discover_poetry_all_members,
+    discover_members_fn = lambda _mctx, _lock_file_label, _toml_cache = None: [struct(name = "root", path = "")],
     repo_create_model_fn = repo_create_poetry_model,
 )

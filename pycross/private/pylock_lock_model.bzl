@@ -8,17 +8,21 @@ lock_resolver.bzl.
 load("@pypackaging.bzl", "pypackaging")
 load(
     ":translator_common.bzl",
-    "archive_extension",
     "canonicalize_name",
-    "compute_requested_dependency_groups",
-    "expand_pep735_group",
+    "collect_pep621_requirements",
+    "combine_markers",
+    "compute_requested_groups_for_model",
+    "detect_package_marker_forks",
+    "format_raw_lock",
+    "make_archive_file_entry",
+    "make_file_entry",
+    "make_git_file_entry",
     "parse_pep508_requirement",
     "read_project_and_lock",
     "record_root_marker",
-    "resolution_marker_constraint_name",
-    "sha256_from_string",
+    "strip_sha256_prefix",
 )
-load(":util.bzl", "parse_package_key", "url_filename")
+load(":util.bzl", "format_package_key", "parse_package_key", "url_filename")
 
 _INVERT_OP = {
     "==": "!=",
@@ -170,45 +174,22 @@ def _invert_marker_ast(marker):
                         stack.append(("visit", atom))
             else:
                 return None
-        elif kind == "combine_and":
-            # NOT (A1 and A2 ...) = (NOT A1) or (NOT A2) ...
-            parts = []
-            for _ in range(payload):
-                parts.append(results.pop())
-            parts = list(reversed(parts))
+        elif kind in ("combine_and", "combine_or"):
+            # De Morgan: NOT (A and B) = (NOT A) or (NOT B); NOT (A or B) = (NOT A) and (NOT B).
+            join_op = "or" if kind == "combine_and" else "and"
+            parts = list(reversed([results.pop() for _ in range(payload)]))
             if len(parts) == 1:
                 results.append(parts[0])
             else:
-                node = []
-                for i, p in enumerate(parts):
-                    if i > 0:
-                        node.append("or")
-                    node.append(p)
-                results.append(node)
-        elif kind == "combine_or":
-            # NOT (T1 or T2 ...) = (NOT T1) and (NOT T2) ...
-            parts = []
-            for _ in range(payload):
-                parts.append(results.pop())
-            parts = list(reversed(parts))
-            if len(parts) == 1:
-                results.append(parts[0])
-            else:
-                node = []
-                for i, p in enumerate(parts):
-                    if i > 0:
-                        node.append("and")
+                node = [parts[0]]
+                for p in parts[1:]:
+                    node.append(join_op)
                     node.append(p)
                 results.append(node)
 
     if len(results) != 1:
         return None
     return results[0]
-
-def _combine_markers(m1, m2):
-    if m1 and m2:
-        return m1 if m1 == m2 else "({}) and ({})".format(m1, m2)
-    return m1 or m2
 
 def _set_dependencies(pkg, updates):
     """Replace or append dependency entries in one pass, preserving order."""
@@ -263,27 +244,17 @@ def _link_through_hub(lock_packages, versions_all):
 def _compute_pylock_requested_groups(project_dict, lock_model):
     if not project_dict:
         return None
-    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    testonly_groups = getattr(lock_model, "testonly_groups", [])
-    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
-    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
-
     project_section = project_dict.get("project", {})
     optional_deps = project_section.get("optional-dependencies", {})
     dev_deps = project_dict.get("dependency-groups", {})
-    project_name = project_section.get("name")
-
-    return compute_requested_dependency_groups(
-        dependency_groups = dependency_groups,
-        testonly_groups = testonly_groups,
-        non_testonly_groups = non_testonly_groups,
-        wildcard_testonly = wildcard_testonly,
+    return compute_requested_groups_for_model(
+        lock_model,
         available_groups = (
             ["default"] +
             ["optional:" + g for g in optional_deps.keys()] +
             ["group:" + g for g in dev_deps.keys()]
         ),
-        project_name = project_name,
+        project_name = project_section.get("name"),
     )
 
 def _resolve_pylock_project_pins(project_dict, requested_groups_dict, lock_packages, deps_by_name, pkg_markers, versions_all):
@@ -295,50 +266,16 @@ def _resolve_pylock_project_pins(project_dict, requested_groups_dict, lock_packa
             pins.setdefault(pkg["name"], pkg_key)
         return lock_packages, pins, [], {}
 
-    project_section = project_dict.get("project", {})
-    optional_deps = project_section.get("optional-dependencies", {})
-    dev_deps = project_dict.get("dependency-groups", {})
-
-    root_req_names = []
-    testonly_root_req_names = []
+    root_package_names = {}
+    testonly_root_names = {}
     root_dependency_markers = {}
-
-    def handle_dep_str(dep_str, is_testonly):
-        req = parse_pep508_requirement(dep_str)
-        n = req.name
-        pin_names = [n] + ["{}[{}]".format(n, canonicalize_name(extra)) for extra in req.extras]
+    for req, is_testonly in collect_pep621_requirements(project_dict, requested_groups_dict):
+        pin_names = [req.name] + [format_package_key(req.name, extra = canonicalize_name(e)) for e in req.extras]
         for pin_name in pin_names:
-            if is_testonly:
-                testonly_root_req_names.append(pin_name)
-            else:
-                root_req_names.append(pin_name)
+            (testonly_root_names if is_testonly else root_package_names)[pin_name] = True
             record_root_marker(root_dependency_markers, pin_name, req.marker)
 
-    if "default" in requested_groups_dict:
-        is_testonly = requested_groups_dict["default"]
-        for dep_str in project_section.get("dependencies", []):
-            handle_dep_str(dep_str, is_testonly)
-
-    for target_name, entries in optional_deps.items():
-        key = "optional:{}".format(target_name)
-        if key not in requested_groups_dict:
-            continue
-        is_testonly = requested_groups_dict[key]
-        for entry in entries:
-            if type(entry) == "string":
-                handle_dep_str(entry, is_testonly)
-
-    for target_name in dev_deps.keys():
-        key = "group:{}".format(target_name)
-        if key not in requested_groups_dict:
-            continue
-        is_testonly = requested_groups_dict[key]
-        for dep_str in expand_pep735_group(dev_deps, target_name):
-            handle_dep_str(dep_str, is_testonly)
-
-    # Deduplicate
-    root_package_names = {n: True for n in root_req_names}
-    testonly_package_names = {n: True for n in testonly_root_req_names if n not in root_package_names}
+    testonly_package_names = {n: True for n in testonly_root_names if n not in root_package_names}
 
     # BFS from all root base package names to find reachable packages
     visited_names = {}
@@ -404,8 +341,7 @@ def _resolve_pylock_project_pins(project_dict, requested_groups_dict, lock_packa
         keys = deps_by_name.get(base_name, [])
         if keys:
             if "[" in root_name:
-                ver = parse_package_key(keys[0]).version
-                pins[root_name] = "{}@{}".format(root_name, ver)
+                pins[root_name] = format_package_key(root_name, parse_package_key(keys[0]).version)
             else:
                 pins[root_name] = keys[0]
 
@@ -424,7 +360,6 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     Returns:
         A dict in raw_lock.json format.
     """
-
     lock_version = lock_dict.get("lock-version", "")
     if str(lock_version) != "1.0":
         fail("Unsupported pylock lock-version: {}. Expected 1.0".format(lock_version))
@@ -448,9 +383,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
     requested_groups_dict = _compute_pylock_requested_groups(project_dict, lock_model)
 
-    # Create lookup map for versions.
     # Track all versions per name to support multi-target forks.
-    versions = {}  # {name: version} - first version seen
     versions_all = {}  # {name: {version: marker}} - all active versions with env markers
     all_lock_versions = {}  # {name: {version: True}} - all versions before selection pruning
     pkg_markers = {}  # {pkg_key: raw marker}
@@ -466,16 +399,14 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         if env_marker == None:
             continue
         active_packages_list.append(pkg)
-        if name not in versions:
-            versions[name] = version
-        pkg_markers["{}@{}".format(name, version)] = marker
+        pkg_markers[format_package_key(name, version)] = marker
         versions_all.setdefault(name, {})[version] = env_marker
 
     # If a multi-version fork has a single unmarked fallback branch alongside
     # marked branches whose markers can be negated into a PEP 508 expression,
     # synthesize the complementary marker so both fork edges and pins stay
     # mutually exclusive. Otherwise keep "" as the fallback branch in pins.
-    for fname, version_markers in versions_all.items():
+    for version_markers in versions_all.values():
         if len(version_markers) <= 1:
             continue
         unmarked = [v for v, m in version_markers.items() if not m]
@@ -483,19 +414,17 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         if len(unmarked) == 1 and marked:
             inverted_asts = [_invert_marker_ast(m) for m in marked]
             if all(inverted_asts):
-                combined = []
-                for i, ast in enumerate(inverted_asts):
-                    if i > 0:
-                        combined.append("and")
+                combined = [inverted_asts[0]]
+                for ast in inverted_asts[1:]:
+                    combined.append("and")
                     combined.append(ast)
                 version_markers[unmarked[0]] = pypackaging.markers.to_string(combined)
 
     lock_packages = {}
-
     for pkg in active_packages_list:
         name = canonicalize_name(pkg["name"])
         version = pkg["version"]
-        pkg_key = "{}@{}".format(name, version)
+        pkg_key = format_package_key(name, version)
 
         raw_deps = pkg.get("dependencies")
         if raw_deps == None:
@@ -505,25 +434,21 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 req = parse_pep508_requirement(req_str)
                 for extra in req.extras or [""]:
                     raw_deps.append({
-                        "name": "{}[{}]".format(req.name, extra) if extra else req.name,
+                        "name": format_package_key(req.name, extra = extra),
                         "marker": req.marker,
                     })
 
         dependencies = []
         for dep in raw_deps:
             dep_name_raw = dep["name"]
-            dep_name = canonicalize_name(dep_name_raw)
-
-            # Handle extras in dependency name
-            dep_extra = ""
             if "[" in dep_name_raw:
-                parts = dep_name_raw.split("[", 1)
-                dep_name = canonicalize_name(parts[0])
-                dep_extra = parts[1].rstrip("]").strip()
-
-            dep_display = dep_name
-            if dep_extra:
-                dep_display = "{}[{}]".format(dep_name, canonicalize_name(dep_extra))
+                base_raw, extra_raw = dep_name_raw.split("[", 1)
+                dep_name = canonicalize_name(base_raw)
+                dep_extra = canonicalize_name(extra_raw.rstrip("]").strip())
+            else:
+                dep_name = canonicalize_name(dep_name_raw)
+                dep_extra = ""
+            dep_display = format_package_key(dep_name, extra = dep_extra)
 
             dep_versions = versions_all.get(dep_name)
             if not dep_versions:
@@ -546,25 +471,16 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                             name,
                         ))
                     continue
-                dependencies.append({
-                    "name": dep_display,
-                    "version": explicit_ver,
-                    "marker": _combine_markers(dep_marker, dep_versions[explicit_ver]),
-                })
-            elif len(dep_versions) == 1:
-                only_ver = versions[dep_name]
-                dependencies.append({
-                    "name": dep_display,
-                    "version": only_ver,
-                    "marker": _combine_markers(dep_marker, dep_versions[only_ver]),
-                })
+                target_versions = [(explicit_ver, dep_versions[explicit_ver])]
             else:
-                for cand_ver, cand_marker in sorted(dep_versions.items()):
-                    dependencies.append({
-                        "name": dep_display,
-                        "version": cand_ver,
-                        "marker": _combine_markers(dep_marker, cand_marker),
-                    })
+                target_versions = sorted(dep_versions.items())
+
+            for cand_ver, cand_marker in target_versions:
+                dependencies.append({
+                    "name": dep_display,
+                    "version": cand_ver,
+                    "marker": combine_markers(dep_marker, cand_marker),
+                })
 
         files = []
         pkg_index = pkg.get("index", "")
@@ -576,26 +492,17 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         for artifact in list(pkg.get("wheels", pkg.get("wheel", []))) + list(sdist_list):
             if type(artifact) != "dict":
                 continue
-            filename = artifact.get("name", artifact.get("file", ""))
-            if not filename and "url" in artifact:
-                filename = url_filename(artifact["url"])
             url = artifact.get("url", "")
-            hash_str = artifact.get("hash", "")
-            if hash_str and hash_str.startswith("sha256:"):
-                hash_val = hash_str[7:]
-            else:
-                hash_val = artifact.get("hashes", {}).get("sha256", "")
-            file_entry = {
-                "name": filename,
-                "sha256": hash_val,
-                "package_name": name,
-                "package_version": version,
-            }
-            if url:
-                file_entry["urls"] = [url]
-            elif pkg_index:
-                file_entry["index"] = pkg_index
-            files.append(file_entry)
+            filename = artifact.get("name", artifact.get("file", "")) or (url_filename(url) if url else "")
+            hash_val = strip_sha256_prefix(artifact.get("hash", ""), required = False) or artifact.get("hashes", {}).get("sha256", "")
+            files.append(make_file_entry(
+                filename,
+                hash_val,
+                name,
+                version,
+                urls = [url] if url else None,
+                index = "" if url else pkg_index,
+            ))
 
         # Direct references: a VCS checkout or a source archive URL.
         source_dir = ""
@@ -605,37 +512,21 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             commit = vcs.get("commit-id", "")
             if vcs.get("type") != "git" or not vcs.get("url") or not commit:
                 fail("pylock package '{}': only git vcs entries with a url and commit-id are supported".format(name))
-            files.append({
-                "name": "{}-{}.tar.gz".format(name, version),
-                "sha256": sha256_from_string(commit),
-                "urls": ["git+{}#{}".format(vcs["url"], commit)],
-                "package_name": name,
-                "package_version": version,
-            })
+            files.append(make_git_file_entry(name, version, vcs["url"], commit))
             source_dir = vcs.get("subdirectory", "")
         elif archive:
             if not archive.get("url"):
                 fail("pylock package '{}': local archive entries are not supported".format(name))
-            files.append({
-                "name": "{}-{}{}".format(name, version, archive_extension(archive["url"])),
-                "sha256": archive.get("hashes", {}).get("sha256", ""),
-                "urls": [archive["url"]],
-                "package_name": name,
-                "package_version": version,
-            })
+            files.append(make_archive_file_entry(name, version, archive["url"], archive.get("hashes", {}).get("sha256", "")))
             source_dir = archive.get("subdirectory", "")
         elif not files:
             fail("pylock package '{}' has no wheels, sdist, vcs, or archive entry".format(name))
 
-        # Sort dependencies and files for determinism
-        dependencies = sorted(dependencies, key = lambda d: (d["name"], d["version"]))
-        files = sorted(files, key = lambda f: f["name"])
-
         raw_package = {
             "name": name,
             "version": version,
-            "dependencies": dependencies,
-            "files": files,
+            "dependencies": sorted(dependencies, key = lambda d: (d["name"], d["version"])),
+            "files": sorted(files, key = lambda f: f["name"]),
         }
         if source_dir:
             raw_package["source_dir"] = source_dir
@@ -645,11 +536,9 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     if len(lock_packages) > 1 and not has_graph:
         _link_through_hub(lock_packages, versions_all)
 
-    # Build dependency lookup by name
     deps_by_name = {}  # {name: [pkg_key, ...]}
     for pkg_key, pkg in lock_packages.items():
-        pkg_name = pkg["name"]
-        deps_by_name.setdefault(pkg_name, []).append(pkg_key)
+        deps_by_name.setdefault(pkg["name"], []).append(pkg_key)
 
     lock_packages, pins, testonly_pins, root_dependency_markers = _resolve_pylock_project_pins(
         project_dict,
@@ -660,58 +549,21 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         versions_all,
     )
 
-    # Detect resolution-marker forks among surviving packages.
-    surviving_versions_all = {}
-    for pkg_key, pkg in lock_packages.items():
-        fname = pkg["name"]
-        fver = pkg["version"]
-        surviving_versions_all.setdefault(fname, {})[fver] = versions_all.get(fname, {}).get(fver, "")
+    resolution_marker_exprs = detect_package_marker_forks(
+        lock_packages.values(),
+        pins,
+        markers_by_pkg = versions_all,
+        pin_value_fn = format_package_key,
+        allow_unmarked_fallback = True,
+    )
 
-    resolution_marker_exprs = {}
-    fork_constraints = {}  # {name: {version: constraint_name}}
-    for fname, version_markers in surviving_versions_all.items():
-        if len(version_markers) <= 1:
-            continue  # Single version, no fork.
-        if not any(version_markers.values()):
-            continue  # No env markers distinguish these versions.
-        seen_unmarked = False
-        for fversion, marker_expr in sorted(version_markers.items()):
-            if not marker_expr:
-                if seen_unmarked:
-                    continue
-                seen_unmarked = True
-
-                # Unmarked fallback branch: keep under "" (default select branch).
-                fork_constraints.setdefault(fname, {})[fversion] = ""
-                continue
-            cname = resolution_marker_constraint_name(fname, fversion)
-            fork_constraints.setdefault(fname, {})[fversion] = cname
-            resolution_marker_exprs[cname] = marker_expr
-
-    # If forks were detected, update pins (including base[extra] pins) to use conditional pins.
-    for fname, version_constraints in fork_constraints.items():
-        for pin_name in list(pins.keys()):
-            if pin_name == fname or pin_name.startswith(fname + "["):
-                pins[pin_name] = {
-                    cname: "{}@{}".format(pin_name, fversion)
-                    for fversion, cname in version_constraints.items()
-                }
-
-    result = {
-        "packages": lock_packages,
-        "pins": pins,
-        "testonly_pins": testonly_pins,
-    }
-    if resolution_marker_exprs:
-        result["resolution_marker_exprs"] = resolution_marker_exprs
-    filtered_root_markers = {
-        name: markers
-        for name, markers in root_dependency_markers.items()
-        if markers != None
-    }
-    if filtered_root_markers:
-        result["root_dependency_markers"] = filtered_root_markers
-    return result
+    return format_raw_lock(
+        lock_packages,
+        pins,
+        testonly_pins = testonly_pins,
+        resolution_marker_exprs = resolution_marker_exprs,
+        root_dependency_markers = root_dependency_markers,
+    )
 
 def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the pylock translator in pure Starlark."""

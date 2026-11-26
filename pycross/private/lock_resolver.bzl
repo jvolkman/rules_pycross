@@ -1,8 +1,7 @@
 """Starlark implementation of the raw lock resolver."""
 
 load("@pypackaging.bzl", "pypackaging")
-load(":translator_common.bzl", "resolution_marker_constraint_name")
-load(":util.bzl", "base_package_key", "format_package_key", "parse_package_key", "variant_item_qname")
+load(":util.bzl", "base_package_key", "format_package_key", "parse_package_key", "resolution_marker_constraint_name", "variant_item_qname")
 
 def _file_key(f):
     if not f.get("sha256"):

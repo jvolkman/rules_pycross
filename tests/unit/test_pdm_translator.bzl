@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:pdm_lock_model.bzl", "translate_pdm")
+load("//pycross/private:pdm_lock_model.bzl", "discover_pdm_all_members", "translate_pdm")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:translator_common.bzl", "read_project_dicts_for_testing")
@@ -594,6 +594,35 @@ def _test_pdm_extra_package_entry_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_extra_package_entry_markers_impl)
 
+# buildifier: disable=unused-variable
+def _test_discover_pdm_all_members_impl(env, target):
+    lock_toml = "\n".join([
+        "[[package]]",
+        'name = "app-a"',
+        'version = "0.1.0"',
+        "editable = true",
+        'path = "apps/a"',
+        "[[package]]",
+        'name = "non-editable"',
+        'version = "0.1.0"',
+        'path = "vendor/pkg"',
+        "[[package]]",
+        'name = "six"',
+        'version = "1.17.0"',
+    ])
+    mctx = struct(
+        path = lambda _lbl: struct(exists = True),
+        read = lambda _path: lock_toml,
+    )
+    members = discover_pdm_all_members(mctx, Label("//:pdm.lock"))
+    env.expect.that_collection([(m.name, m.path) for m in members]).contains_exactly([
+        ("app-a", "apps/a"),
+    ]).in_order()
+
+def _test_discover_pdm_all_members(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_discover_pdm_all_members_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -616,5 +645,6 @@ def pdm_translator_test_suite(name):
             _test_pdm_multi_project_workspace,
             _test_pdm_forked_transitive_dep,
             _test_pdm_extra_package_entry_markers,
+            _test_discover_pdm_all_members,
         ],
     )
