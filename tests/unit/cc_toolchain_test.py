@@ -191,6 +191,50 @@ class CcToolchainTest(unittest.TestCase):
         # Compiles get neither.
         self.assertEqual(run_wrapper("-shared", "-c", "a.c"), ["-shared", "-c", "a.c"])
 
+    def test_wrap_compiler_preserves_caller_archive_groups_on_linux(self):
+        bin_dir = self.temp_path / "bin"
+        bin_dir.mkdir()
+        fake_cc = self._make_fake_cc()
+        start = "-Wl,--start-group"
+        end = "-Wl,--end-group"
+        archives = ["lib a.a", "libb.a"]
+        group = [start, *archives, end]
+
+        for target_os in ("linux", "darwin", "windows", None):
+            with self.subTest(target_os=target_os):
+                wrapper = wrap_compiler(
+                    "cc",
+                    str(fake_cc),
+                    [],
+                    bin_dir,
+                    ldflags=[start, "-lexecutable", end],
+                    ldsharedflags=["-shared", end, "-lshared"],
+                    target_os=target_os,
+                )
+
+                args = ["probe.o", "-Wl,--as-needed", "-Wl,-start_group", *group, "-Wl,-end_group"]
+                expected_args = ["probe.o", *(group if target_os == "linux" else archives)]
+                for modes, tail in (([], "-lexecutable"), (["-shared"], "-lshared")):
+                    actual = json.loads(subprocess.check_output([str(wrapper), *modes, *args], text=True))
+                    self.assertEqual(actual, [*modes, *expected_args, tail])
+
+    def test_wrap_compiler_preserves_linux_groups_across_driver_syntax(self):
+        bin_dir = self.temp_path / "bin"
+        bin_dir.mkdir()
+        wrapper = wrap_compiler("cc", str(self._make_fake_cc()), [], bin_dir, ldflags=["-lpthread"], target_os="linux")
+        start = "-Wl,--start-group"
+        end = "-Wl,--end-group"
+
+        for caller_args, expected in (
+            ([start, "liba.a", "-Xlinker", "--end-group"], [start, "liba.a", "-Xlinker", "--end-group", "-lpthread"]),
+            (["-Xlinker", "--start-group", "liba.a", end], ["-Xlinker", "--start-group", "liba.a", end, "-lpthread"]),
+            (["-r", start, "liba.a", end], ["-r", start, "liba.a", end]),
+            (["-c", start, "probe.c", end], ["-c", "probe.c"]),
+        ):
+            with self.subTest(caller_args=caller_args):
+                actual = json.loads(subprocess.check_output([str(wrapper), *caller_args], text=True))
+                self.assertEqual(actual, expected)
+
     def test_setup_cc_layer_exports_no_toolchain_ldflags(self):
         ctx = MockBuildContext(self.temp_path)
         fake_cc = self._make_fake_cc()
@@ -199,9 +243,10 @@ class CcToolchainTest(unittest.TestCase):
             "CXX": str(fake_cc),
             "CFLAGS": ["-O2"],
             "CXXFLAGS": ["-O2"],
+            "target_os": "linux",
             # Like hermetic-llvm 0.8.24 on glibc.
             "LDFLAGS": ["-fuse-ld=lld", "-no-pie", "-Wl,-S"],
-            "LDSHAREDFLAGS": ["-fuse-ld=lld", "-shared", "-Wl,-S"],
+            "LDSHAREDFLAGS": ["-fuse-ld=lld", "-shared", "-Wl,-S", "-Wl,--end-group"],
             "AR": "/usr/bin/ar",
             "ARFLAGS": ["rcs"],
         }
@@ -223,9 +268,10 @@ class CcToolchainTest(unittest.TestCase):
         # distutils-style shared link (LDSHARED + $LDFLAGS): shared-valid flags appear once,
         # and no executable-only ones (-no-pie).
         ldshared = shlex.split(ctx.sysconfig_vars["LDSHARED"])[1:]
+        group = ["-Wl,--start-group", "liba.a", "libb.a", "-Wl,--end-group"]
         self.assertEqual(
-            run_wrapper(*ldshared, *shlex.split(ctx.sysconfig_vars["LDFLAGS"]), "a.o", "-o", "a.so"),
-            ["-shared", f"-L{layer_lib}", "a.o", "-o", "a.so", "-fuse-ld=lld", "-Wl,-S"],
+            run_wrapper(*ldshared, *shlex.split(ctx.sysconfig_vars["LDFLAGS"]), "a.o", *group, "-o", "a.so"),
+            ["-shared", f"-L{layer_lib}", "a.o", *group, "-o", "a.so", "-fuse-ld=lld", "-Wl,-S"],
         )
         # Executable links get the executable set, including -no-pie.
         self.assertEqual(run_wrapper("a.o", "-o", "a"), ["a.o", "-o", "a", "-fuse-ld=lld", "-no-pie", "-Wl,-S"])

@@ -53,9 +53,9 @@ def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
         return ar_list, Path(resolved_ranlib) if resolved_ranlib else None
 
 
+_GNU_ARCHIVE_GROUP_ARGS = ("-Wl,--start-group", "-Wl,--end-group")
+
 _FILTERED_LINKER_ARGS = (
-    "-Wl,--start-group",
-    "-Wl,--end-group",
     "-Wl,-start_group",
     "-Wl,-end_group",
     "-Wl,--as-needed",
@@ -63,8 +63,7 @@ _FILTERED_LINKER_ARGS = (
     "-Wl,-O1",
 )
 
-# Compiler driver modes and probes that stop before linking, plus relocatable
-# partial links (-r, which conflicts with LDFLAGS like --gc-sections / -l*).
+# Compiler driver modes and probes that stop before linking.
 _NON_LINK_ARGS = (
     "-c",
     "-E",
@@ -72,7 +71,6 @@ _NON_LINK_ARGS = (
     "-M",
     "-MM",
     "-fsyntax-only",
-    "-r",
     "--version",
     "-dumpmachine",
     "-dumpversion",
@@ -118,6 +116,8 @@ def wrap_compiler(
     bin_dir: Path,
     ldflags: Sequence[str] = (),
     ldsharedflags: Optional[Sequence[str]] = None,
+    *,
+    target_os: str | None = None,
 ) -> Path:
     """Generate POSIX /bin/sh compiler wrapper scripts to filter incompatible linker flags."""
     assert lang in ("cc", "cxx")
@@ -131,15 +131,23 @@ def wrap_compiler(
         wrapper_name = cc_path.name
 
     wrapper_flags = get_wrapper_flags(compile_flags)
-    linker_flags = [arg for arg in ldflags if arg not in _FILTERED_LINKER_ARGS]
+    # Harvested flags can contain group markers without the archives they surrounded.
+    filtered_tail_args = _GNU_ARCHIVE_GROUP_ARGS + _FILTERED_LINKER_ARGS
+    linker_flags = [arg for arg in ldflags if arg not in filtered_tail_args]
     # The caller picks the output type, so drop -shared (clang rejects -shared with -bundle).
     shared_source = ldflags if ldsharedflags is None else ldsharedflags
-    shared_linker_flags = [arg for arg in shared_source if arg not in _FILTERED_LINKER_ARGS and arg != "-shared"]
+    shared_linker_flags = [arg for arg in shared_source if arg not in filtered_tail_args and arg != "-shared"]
     wrapper_path = bin_dir / wrapper_name
 
     non_link_pattern = "|".join(_NON_LINK_ARGS) + "|-print-*|--print-*|--help=*"
     shared_link_pattern = "|".join(_SHARED_LINK_ARGS)
     filtered_pattern = "|".join(_FILTERED_LINKER_ARGS)
+    # GNU groups tell the linker to search archives repeatedly to resolve
+    # cyclic static-library dependencies. Keep their markers for Linux targets
+    # and filter them for other targets. Join both markers with "|" so a shell
+    # case pattern can match either one.
+    archive_group_pattern = "|".join(_GNU_ARCHIVE_GROUP_ARGS)
+    keep_archive_groups = int(target_os == "linux")
 
     exec_shared = _format_exec_cmd(cc_exe, wrapper_flags, shared_linker_flags)
     exec_link = _format_exec_cmd(cc_exe, wrapper_flags, linker_flags)
@@ -154,6 +162,8 @@ def wrap_compiler(
                 is_link=1
                 is_shared=0
                 needs_filter=0
+                saw_archive_groups=0
+                keep_archive_groups={keep_archive_groups}
                 if [ "$#" -eq 0 ]; then
                     is_link=0
                 fi
@@ -161,15 +171,31 @@ def wrap_compiler(
                     case "$arg" in
                         {non_link_pattern})
                             is_link=0
+                            keep_archive_groups=0
+                            ;;
+                        -r)
+                            # -r links inputs into another object file, so archive groups still matter.
+                            # Skip the normal final-link flags, which can conflict with partial links.
+                            is_link=0
                             ;;
                         {shared_link_pattern})
                             is_shared=1
+                            ;;
+                        # Either the start or end marker sets the same flag.
+                        {archive_group_pattern})
+                            saw_archive_groups=1
                             ;;
                         {filtered_pattern})
                             needs_filter=1
                             ;;
                     esac
                 done
+                # A -Wl group marker can be paired with one passed via -Xlinker or a response file.
+                # Counting only the -Wl markers can discard a valid group.
+                # The linker matches the markers and processes the group.
+                if [ "$saw_archive_groups" -eq 1 ] && [ "$keep_archive_groups" -eq 0 ]; then
+                    needs_filter=1
+                fi
                 if [ "$needs_filter" -eq 1 ]; then
                     argc=$#
                     i=0
@@ -178,6 +204,11 @@ def wrap_compiler(
                         shift
                         i=$((i + 1))
                         case "$arg" in
+                            {archive_group_pattern})
+                                if [ "$keep_archive_groups" -eq 0 ]; then
+                                    continue
+                                fi
+                                ;;
                             {filtered_pattern})
                                 continue
                                 ;;
@@ -312,6 +343,7 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> CcLayerState
         # cc_path and cxx_path point to those generated wrappers.
         orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
         orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
+        target_os = cc_config.get("target_os")
         cc_path = wrap_compiler(
             "cc",
             orig_cc,
@@ -319,6 +351,7 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> CcLayerState
             layer_bin_dir,
             ldflags=raw_ldflags,
             ldsharedflags=raw_ldsharedflags,
+            target_os=target_os,
         ).absolute()
         cxx_path = wrap_compiler(
             "cxx",
@@ -327,6 +360,7 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> CcLayerState
             layer_bin_dir,
             ldflags=raw_ldflags,
             ldsharedflags=raw_ldsharedflags,
+            target_os=target_os,
         ).absolute()
 
     # When the toolchain already handles C++ header hermeticity (indicated by
