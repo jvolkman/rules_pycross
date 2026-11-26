@@ -552,7 +552,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
 
             for req_extra in dep_extras:
                 norm_req_extra = canonicalize_name(req_extra) if req_extra else ""
-                display_name = _dependency_name_str(resolved_dep_name, norm_req_extra)
+                eff_dep_name = resolved_dep_name
                 matches = _resolve_candidates(
                     candidates,
                     parsed_spec,
@@ -563,6 +563,20 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
                     break_on_first = bool(dep_specifier),
                     dep_source_id = dep_source_id,
                 )
+                if not matches and "[" in eff_dep_name and not norm_req_extra:
+                    base_name = eff_dep_name.split("[")[0]
+                    base_candidates = packages_by_name.get(base_name, [])
+                    base_spec = _parse_specifier_parts(dep_specifier) if base_candidates else None
+                    matches = _resolve_candidates(
+                        base_candidates,
+                        base_spec,
+                        dep_marker,
+                        resolution_marker_exprs,
+                        break_on_first = bool(dep_specifier),
+                        dep_source_id = dep_source_id,
+                    )
+                    eff_dep_name = base_name
+                display_name = _dependency_name_str(eff_dep_name, norm_req_extra)
                 for cand, edge_marker in matches:
                     entry = {
                         "name": display_name,
@@ -641,6 +655,18 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
             break_on_first = True,
             dep_source_id = source_id,
         )
+        if not matches and key_name == None and "[" in pin_name:
+            base_packages = packages_by_name.get(pin_name.split("[")[0]) or []
+            base_spec = _parse_specifier_parts(specifier) if base_packages else None
+            matches = _resolve_candidates(
+                base_packages,
+                base_spec,
+                marker,
+                resolution_marker_exprs,
+                break_on_first = True,
+                dep_source_id = source_id,
+            )
+            key_name = pin_name
         if not matches and strict_dependencies:
             fail("Found no packages to satisfy pin (name={}, spec={})".format(pin_name, specifier))
         for cand, edge_marker in matches:

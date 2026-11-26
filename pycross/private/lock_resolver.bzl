@@ -24,6 +24,10 @@ def _canonicalize_package_spec(name):
     norm_name = pypackaging.utils.canonicalize_name(parts.name)
     norm_extra = pypackaging.utils.canonicalize_name(parts.extra) if parts.extra else ""
     if "@" in name:
+        if not parts.version:
+            fail("Invalid package key '{}': version cannot be empty after '@'".format(name))
+        if "~" in name.split("@", 1)[1] and not parts.tag:
+            fail("Invalid package key '{}': source tag cannot be empty after '~'".format(name))
         return format_package_key(norm_name, parts.version, extra = norm_extra, tag = parts.tag), True, bool(parts.tag)
     return format_package_key(norm_name, extra = norm_extra), False, False
 

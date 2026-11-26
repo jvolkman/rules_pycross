@@ -2490,6 +2490,25 @@ def _test_multi_source_annotation_bad_source_fails(name):
         impl = _test_multi_source_annotation_bad_source_fails_impl,
     )
 
+def _test_malformed_package_spec_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("version cannot be empty after '@'"),
+    )
+
+def _test_malformed_package_spec_fails(name):
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(_multi_source_lock_data()),
+        annotations_data = json.encode({"torch@": {"precompile": "enabled"}}),
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_malformed_package_spec_fails_impl,
+    )
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
@@ -2572,5 +2591,6 @@ def lock_resolver_test_suite(name):
             _test_multi_source_annotations_and_transitive,
             _test_multi_source_annotation_ambiguous_fails,
             _test_multi_source_annotation_bad_source_fails,
+            _test_malformed_package_spec_fails,
         ],
     )

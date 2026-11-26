@@ -2550,6 +2550,34 @@ def _test_uv_multi_source_same_version_impl(env, target):
     unsourced_dep_keys = [d["key"] for d in git_res["packages"]["unsourced@1.0.0"]["dependencies"]]
     env.expect.that_collection(unsourced_dep_keys).contains_exactly([git_a_base, git_b_base])
 
+    # 4. Empty extra on one source falls back to its base package even when another source defines optional-dependencies.
+    asym_extra_lock = _lock([
+        _vpkg("root", deps = [
+            _dep("pkg", "1.0.0", extra = ["opt"], source = git_b),
+            _dep("consumer", "1.0.0", source = pypi_reg),
+        ]),
+        _pkg(
+            "consumer",
+            "1.0.0",
+            source = pypi_reg,
+            deps = [_dep("pkg", "1.0.0", extra = ["opt"], source = git_b)],
+            wheels = [_whl("consumer-1.0.0-py3-none-any.whl", "c1")],
+        ),
+        _pkg("pkg", "1.0.0", source = git_a, opt_deps = {"opt": [_dep("extra-dep", "1.0.0", source = pypi_reg)]}),
+        _pkg("pkg", "1.0.0", source = git_b),
+        _pkg("extra-dep", "1.0.0", source = pypi_reg, wheels = [_whl("extra_dep-1.0.0-py3-none-any.whl", "e1")]),
+    ])
+    asym_res = translate_uv(_project(name = "root"), asym_extra_lock, _lock_model(projects = ["root"]))
+    asym_b_base = [
+        k
+        for k, p in asym_res["packages"].items()
+        if k.startswith("pkg@1.0.0~") and p.get("source") == "https://example.com/pkg.git#bbbb2222"
+    ][0]
+    env.expect.that_str(base_package_key(asym_res["pins"]["pkg[opt]"])).equals(asym_b_base)
+    env.expect.that_str(asym_res["packages"]["consumer@1.0.0"]["dependencies"][0]["key"]).equals(asym_b_base)
+    asym_resolved = resolve(asym_res)
+    env.expect.that_collection([md["key"] for md in asym_resolved.packages[asym_res["pins"]["pkg[opt]"]]["marker_dependencies"]]).contains_exactly([asym_b_base])
+
 def _test_uv_multi_source_same_version(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_multi_source_same_version_impl)
