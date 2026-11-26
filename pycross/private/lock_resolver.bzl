@@ -18,6 +18,8 @@ load(":variant_util.bzl", "variant_item_qname")
 #   "label": stringify scalar Label during tag conversion
 #   "label_list": stringify each Label in a list during tag conversion
 #   "dedup": deduplicate list entries while preserving order
+# Note: fields consumed by package_repo / lock_render must also be listed in
+# package_repo.bzl:_PACKAGE_REPO_PKG_FIELDS.
 PASSTHROUGH_PACKAGE_ATTRS = {
     "build_backend": (None, "plain"),
     "build_target": (None, "label"),
@@ -361,10 +363,13 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
 
     # When build_mode = "always" or build_target is set, the user explicitly wants the
     # sdist/build_target used rather than pre-built wheels from the registry.
-    # Clear wheel_candidates so the renderer aliases directly to the sdist target
-    # instead of rendering a wheel chooser that would prefer matching PyPI wheels.
+    # Clear wheel_candidates and wheel_candidate_files so the renderer aliases
+    # directly to the sdist/build_target and lock_repo_creation does not
+    # instantiate unused pycross_wheel_file repos or leak dead entries into
+    # package_repo.repo_map.
     if always_build or build_target:
         wheel_candidates = []
+        wheel_candidate_files = {}
 
     if not pkg_extra and always_build and sdist_file == None and not build_target:
         fail("Package {} has build_mode = \"always\" but no sdist to build from.".format(pkg_key))

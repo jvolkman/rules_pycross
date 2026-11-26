@@ -1520,6 +1520,61 @@ def _test_build_target_override(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_build_target_override_impl)
 
 # buildifier: disable=unused-variable
+def _test_always_build_and_build_target_omit_wheel_remote_files_impl(env, target):
+    """build_mode = "always" and build_target omit wheels from remote_files while keeping sdists."""
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [
+                _make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl", sha256 = "aaaa1111"),
+                _make_file("foo-1.0-cp312-cp312-macosx_11_0_arm64.whl", sha256 = "aaaa2222"),
+                _make_file("foo-1.0.tar.gz", sha256 = "aaaa3333"),
+            ]),
+            "bar@1.0": _make_pkg("bar", "1.0", [
+                _make_file("bar-1.0-cp310-cp310-manylinux_2_17_x86_64.whl", sha256 = "bbbb1111"),
+                _make_file("bar-1.0.tar.gz", sha256 = "bbbb2222"),
+            ]),
+            "baz@1.0": _make_pkg("baz", "1.0", [
+                _make_file("baz-1.0-cp310-cp310-manylinux_2_17_x86_64.whl", sha256 = "cccc1111"),
+            ]),
+            "plain@1.0": _make_pkg("plain", "1.0", [
+                _make_file("plain-1.0-py3-none-any.whl", sha256 = "dddd1111"),
+                _make_file("plain-1.0.tar.gz", sha256 = "dddd2222"),
+            ]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+            "bar": "bar@1.0",
+            "baz": "baz@1.0",
+            "plain": "plain@1.0",
+        },
+    }
+    annotations_data = {
+        "foo": {"build_mode": "always"},
+        "bar": {"build_target": "@//custom:bar"},
+        "baz": {"build_target": "@//custom:baz"},
+    }
+
+    res = resolve(lock_model_data, annotations_data = annotations_data)
+
+    env.expect.that_collection(res.packages["foo@1.0"]["wheel_candidates"]).has_size(0)
+    env.expect.that_collection(res.packages["bar@1.0"]["wheel_candidates"]).has_size(0)
+    env.expect.that_collection(res.packages["baz@1.0"]["wheel_candidates"]).has_size(0)
+    env.expect.that_collection(res.remote_files.keys()).contains_exactly([
+        "bar-1.0.tar.gz/bbbb2222",
+        "foo-1.0.tar.gz/aaaa3333",
+        "plain-1.0-py3-none-any.whl/dddd1111",
+        "plain-1.0.tar.gz/dddd2222",
+    ])
+
+def _test_always_build_and_build_target_omit_wheel_remote_files(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_always_build_and_build_target_omit_wheel_remote_files_impl,
+    )
+
+# buildifier: disable=unused-variable
 def _test_install_exclude_globs_impl(env, target):
     lock_model_data = {
         "packages": {
@@ -2529,6 +2584,7 @@ def lock_resolver_test_suite(name):
             _test_local_wheel_override,
             _test_always_build_annotation,
             _test_build_target_override,
+            _test_always_build_and_build_target_omit_wheel_remote_files,
             _test_install_exclude_globs,
             _test_pre_post_install_patches,
             _test_multi_tag_wheel_candidates,

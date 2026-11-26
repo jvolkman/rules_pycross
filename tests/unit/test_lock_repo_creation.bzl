@@ -20,18 +20,26 @@ load(
 load(
     "//pycross/private:lock_repo_creation.bzl",
     "extra_build_tool_names_for_testing",
+    "filter_package_repo_overrides_for_testing",
     "known_packages_from_lock_for_testing",
     "remote_file_dedup_key_and_repo_name_for_testing",
+    "slim_thin_repo_overrides_for_testing",
 )
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "merge_workspace_locks")
+load("//pycross/private:lock_resolver.bzl", "PASSTHROUGH_PACKAGE_ATTRS")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "slim_workspace_lock")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "canonicalize_package_key", "parse_flag_arg")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:variant_util.bzl", "split_variant_tokens", "variant_set_suffix")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/thin_repo:metadata.bzl", "hook_subdir_build")
 
 # buildifier: disable=unused-variable
 def _test_remote_file_dedup_key_and_repo_name_impl(env, target):
@@ -194,6 +202,277 @@ def _test_lock_contract_rejects_empty_workspace_repo(name):
         expect_failure = True,
     )
 
+_SDIST_ONLY_PASSTHROUGH_ATTRS = {
+    "build_backend": True,
+    "build_tools_repo": True,
+    "pre_build_patches": True,
+    "site_hooks": True,
+}
+
+# buildifier: disable=unused-variable
+def _test_slim_workspace_lock_impl(env, target):
+    """slim_workspace_lock drops sdist-only/default fields and keeps package_repo fields intact."""
+    merged_v1 = {
+        "packages": {
+            "default-pkg@1.0": {
+                "name": "default-pkg",
+                "version": "1.0",
+                "marker_dependencies": [],
+                "wheel_candidates": [{"filename": "default_pkg-1.0-py3-none-any.whl", "file_reference": {"key": "k1"}}],
+                "sdist_file": None,
+                "availability_markers": [],
+                "extra_build_tools": ["cython@3.0.0"],
+                "build_backend": "setuptools_build",
+                "build_target": None,
+                "build_mode": "auto",
+                "build_tools_repo": "uv__build",
+                "install_exclude_globs": [],
+                "post_install_patches": [],
+                "pre_build_patches": ["@@//patches:a.patch"],
+                "site_hooks": ["import foo"],
+                "site_paths": [],
+                "bin_paths": [],
+                "data_paths": [],
+                "include_paths": [],
+                "wheel_library_tags": [],
+                "precompile": "",
+                "source_dir": "sub/dir",
+            },
+            "full-pkg@2.0": {
+                "name": "full-pkg",
+                "version": "2.0",
+                "marker_dependencies": [{"key": "dep@1.0", "marker": "sys_platform == 'linux'"}],
+                "wheel_candidates": [{"filename": "full_pkg-2.0-cp312-cp312-manylinux.whl", "file_reference": {"key": "k2"}}],
+                "sdist_file": {"key": "s2"},
+                "availability_markers": ["sys_platform == 'linux'"],
+                "cycle_group": "group_1234",
+                "extra_build_tools": ["setuptools@68.0.0"],
+                "build_backend": "cmake_build",
+                "build_target": "@@//custom:full",
+                "build_mode": "never",
+                "build_tools_repo": "custom__build",
+                "install_exclude_globs": ["tests/**"],
+                "post_install_patches": ["@@//patches:post.patch"],
+                "pre_build_patches": ["@@//patches:pre.patch"],
+                "site_hooks": ["import bar"],
+                "site_paths": ["full_pkg"],
+                "bin_paths": ["full-cli"],
+                "data_paths": ["share"],
+                "include_paths": ["full.h"],
+                "wheel_library_tags": ["manual"],
+                "precompile": "enabled",
+                "source_dir": "packages/full",
+            },
+            "always-pkg@3.0": {
+                "name": "always-pkg",
+                "version": "3.0",
+                "sdist_file": {"key": "s3"},
+                "build_mode": "always",
+                "extra_build_tools": ["wheel@0.43.0"],
+            },
+        },
+        "cycle_groups": {"group_1234": ["full-pkg@2.0", "other@1.0"]},
+        "resolution_marker_exprs": {"res_foo_1_0": "sys_platform == 'linux'"},
+        "variant_items": {"extra_app_cpu": True},
+        "variant_sets": [{"qnames": ["extra_app_cpu"], "flags": {}, "member_flags": {}}],
+        "member_variant_flags": {"app": {"extra_cpu": True}},
+    }
+
+    slim_v1 = slim_workspace_lock(merged_v1)
+
+    # Top-level non-package keys are preserved unchanged.
+    env.expect.that_dict(slim_v1["cycle_groups"]).contains_exactly(merged_v1["cycle_groups"])
+    env.expect.that_dict(slim_v1["resolution_marker_exprs"]).contains_exactly(merged_v1["resolution_marker_exprs"])
+    env.expect.that_dict(slim_v1["variant_items"]).contains_exactly(merged_v1["variant_items"])
+    env.expect.that_collection(slim_v1["variant_sets"]).contains_exactly(merged_v1["variant_sets"])
+    env.expect.that_dict(slim_v1["member_variant_flags"]).contains_exactly(merged_v1["member_variant_flags"])
+
+    # Default/empty and sdist-only fields are dropped; only wheel_candidates remains on default-pkg.
+    env.expect.that_collection(slim_v1["packages"]["default-pkg@1.0"].keys()).contains_exactly([
+        "wheel_candidates",
+    ])
+
+    # All non-default package_repo fields are preserved on full-pkg; sdist-only & name/version dropped.
+    slim_full = slim_v1["packages"]["full-pkg@2.0"]
+    env.expect.that_collection(slim_full.keys()).contains_exactly([
+        "availability_markers",
+        "bin_paths",
+        "build_mode",
+        "build_target",
+        "cycle_group",
+        "data_paths",
+        "include_paths",
+        "install_exclude_globs",
+        "marker_dependencies",
+        "post_install_patches",
+        "precompile",
+        "sdist_file",
+        "site_paths",
+        "wheel_candidates",
+        "wheel_library_tags",
+    ])
+    env.expect.that_str(slim_full["build_mode"]).equals("never")
+    env.expect.that_str(slim_full["precompile"]).equals("enabled")
+    env.expect.that_collection(slim_full["post_install_patches"]).contains_exactly(["@@//patches:post.patch"])
+    env.expect.that_str(slim_v1["packages"]["always-pkg@3.0"]["build_mode"]).equals("always")
+
+    # Bumping extra_build_tools versions or editing sdist-only fields leaves slim_workspace_lock identical.
+    merged_v2 = dict(merged_v1)
+    merged_v2["packages"] = {k: dict(v) for k, v in merged_v1["packages"].items()}
+    merged_v2["packages"]["default-pkg@1.0"]["extra_build_tools"] = ["cython@3.1.0"]
+    merged_v2["packages"]["default-pkg@1.0"]["pre_build_patches"] = ["@@//patches:b.patch"]
+    merged_v2["packages"]["default-pkg@1.0"]["site_hooks"] = ["import baz"]
+    merged_v2["packages"]["full-pkg@2.0"]["extra_build_tools"] = ["setuptools@75.0.0"]
+    merged_v2["packages"]["full-pkg@2.0"]["build_backend"] = "meson_build"
+    merged_v2["packages"]["full-pkg@2.0"]["build_tools_repo"] = "other__build"
+    merged_v2["packages"]["full-pkg@2.0"]["source_dir"] = "other/dir"
+    env.expect.that_str(json.encode(slim_workspace_lock(merged_v2))).equals(json.encode(slim_v1))
+
+    # Drift guard: every PASSTHROUGH_PACKAGE_ATTRS key must either be retained by
+    # slim_workspace_lock or explicitly classified as sdist-repo-only.
+    all_passthrough_pkg = {
+        field: (["val"] if type(default) == "list" else "never" if field == "build_mode" else "val")
+        for field, (default, _mode) in PASSTHROUGH_PACKAGE_ATTRS.items()
+    }
+    slim_passthrough = slim_workspace_lock({"packages": {"drift@1.0": all_passthrough_pkg}})["packages"]["drift@1.0"]
+    env.expect.that_collection(slim_passthrough.keys()).contains_exactly([
+        field
+        for field in PASSTHROUGH_PACKAGE_ATTRS
+        if field not in _SDIST_ONLY_PASSTHROUGH_ATTRS
+    ])
+
+def _test_slim_workspace_lock(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_slim_workspace_lock_impl)
+
+# buildifier: disable=unused-variable
+def _test_filter_and_slim_repo_overrides_impl(env, target):
+    """Filter non-hook overrides for package_repo and strip attr values for thin_package_repo."""
+    hooks = {
+        "maturin_build": True,
+        "setuptools_rust_build": True,
+        "custom_subdir_build": True,
+        "no_subdir_hook_build": True,
+    }
+    hook_subdirs = {
+        "maturin_build": "_cargo",
+        "setuptools_rust_build": "_cargo",
+        "custom_subdir_build": "_custom",
+        "no_subdir_hook_build": "",
+    }
+
+    # 1. C/C++ overrides without package_repo hooks are completely stripped from both.
+    cc_only = {
+        "*": {"setuptools_build": {"copts": '["-O2"]'}},
+        "numpy": {"meson_build": {"build_env": '{"FOO": "1"}'}},
+        "scipy@1.14.0": {"cmake_build": {"cmake_args": '["-DFOO=ON"]'}},
+    }
+    env.expect.that_dict(filter_package_repo_overrides_for_testing(cc_only, hooks)).contains_exactly({})
+    env.expect.that_dict(slim_thin_repo_overrides_for_testing(cc_only, hooks, hook_subdirs)).contains_exactly({})
+
+    # 2. Hook-backed overrides preserve full attrs for package_repo and strip to {} for thin_package_repo.
+    #    A hook backend with package_repo_hook_subdir = "" is kept for package_repo and omitted from thin_package_repo.
+    mixed_v1 = {
+        "*": {
+            "setuptools_build": {"copts": '["-O2"]'},
+            "maturin_build": {"build_env": '{"RUSTFLAGS": "-C target-cpu=native"}'},
+        },
+        "jiter": {
+            "maturin_build": {"cargo_lock": '"@@//cargo:jiter.lock"', "copts": '["-O2"]'},
+            "setuptools_build": {"copts": '["-Wall"]'},
+        },
+        "cryptography@43.0.0": {
+            "setuptools_rust_build": {"cargo_lock": '"@@//cargo:crypto.lock"'},
+        },
+        "custom-pkg": {
+            "custom_subdir_build": {"flag": '"v1"'},
+        },
+        "nosubdir-pkg": {
+            "no_subdir_hook_build": {"opt": '"x"'},
+        },
+    }
+    pkg_filtered = filter_package_repo_overrides_for_testing(mixed_v1, hooks)
+    env.expect.that_dict(pkg_filtered).contains_exactly({
+        "*": {"maturin_build": {"build_env": '{"RUSTFLAGS": "-C target-cpu=native"}'}},
+        "jiter": {"maturin_build": {"cargo_lock": '"@@//cargo:jiter.lock"', "copts": '["-O2"]'}},
+        "cryptography@43.0.0": {"setuptools_rust_build": {"cargo_lock": '"@@//cargo:crypto.lock"'}},
+        "custom-pkg": {"custom_subdir_build": {"flag": '"v1"'}},
+        "nosubdir-pkg": {"no_subdir_hook_build": {"opt": '"x"'}},
+    })
+
+    thin_v1 = slim_thin_repo_overrides_for_testing(mixed_v1, hooks, hook_subdirs)
+    env.expect.that_dict(thin_v1).contains_exactly({
+        "*": {"maturin_build": {}},
+        "jiter": {"maturin_build": {}},
+        "cryptography@43.0.0": {"setuptools_rust_build": {}},
+        "custom-pkg": {"custom_subdir_build": {}},
+    })
+
+    # Changing copts, cargo_lock, build_env, or C/C++ overrides leaves thin_repo_overrides identical.
+    mixed_v2 = {
+        "*": {
+            "setuptools_build": {"copts": '["-O3"]'},
+            "maturin_build": {"build_env": '{"RUSTFLAGS": "-C opt-level=3"}'},
+        },
+        "jiter": {
+            "maturin_build": {"cargo_lock": '"@@//cargo:jiter_new.lock"', "copts": '["-O3"]'},
+        },
+        "cryptography@43.0.0": {
+            "setuptools_rust_build": {"cargo_lock": '"@@//cargo:crypto_v2.lock"'},
+        },
+        "custom-pkg": {
+            "custom_subdir_build": {"flag": '"v2"'},
+        },
+        "nosubdir-pkg": {
+            "no_subdir_hook_build": {"opt": '"y"'},
+        },
+    }
+    env.expect.that_str(json.encode(slim_thin_repo_overrides_for_testing(mixed_v2, hooks, hook_subdirs))).equals(
+        json.encode(thin_v1),
+    )
+
+    # 3. Legacy cargo backends without an entry in hook_subdirs still map to thin-repo overrides.
+    thin_legacy = slim_thin_repo_overrides_for_testing(
+        {"jiter": {"maturin_build": {"cargo_lock": '"@@//:Cargo.lock"'}}},
+        {"maturin_build": True},
+        {},
+    )
+    env.expect.that_dict(thin_legacy).contains_exactly({"jiter": {"maturin_build": {}}})
+
+    # 4. hook_subdir_build produces identical _cargo/BUILD.bazel for full vs slimmed overrides.
+    grouped_pins = {
+        "jiter": {"base_target": {"": "jiter@0.5.0"}, "extras": {}},
+        "cryptography": {"base_target": {"": "cryptography@43.0.0"}, "extras": {}},
+        "other": {"base_target": {"": "other@1.0.0"}, "extras": {}},
+    }
+    packages = {
+        "jiter@0.5.0": {"sdist_file": True},
+        "cryptography@43.0.0": {"sdist_file": True},
+        "other@1.0.0": {"sdist_file": True},
+    }
+    full_cargo = hook_subdir_build(
+        grouped_pins,
+        packages,
+        mixed_v1,
+        "ws__pkgs",
+        hook_backends = ["maturin_build", "setuptools_rust_build"],
+        subdir = "_cargo",
+    )
+    slim_cargo = hook_subdir_build(
+        grouped_pins,
+        packages,
+        thin_v1,
+        "ws__pkgs",
+        hook_backends = ["maturin_build", "setuptools_rust_build"],
+        subdir = "_cargo",
+    )
+    env.expect.that_bool(full_cargo != None and slim_cargo != None).equals(True)
+    env.expect.that_str(slim_cargo.build).equals(full_cargo.build)
+
+def _test_filter_and_slim_repo_overrides(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_filter_and_slim_repo_overrides_impl)
+
 def lock_repo_creation_test_suite(name):
     test_suite(
         name = name,
@@ -203,5 +482,7 @@ def lock_repo_creation_test_suite(name):
             _test_known_packages_from_lock,
             _test_lock_contract_and_helpers,
             _test_lock_contract_rejects_empty_workspace_repo,
+            _test_slim_workspace_lock,
+            _test_filter_and_slim_repo_overrides,
         ],
     )

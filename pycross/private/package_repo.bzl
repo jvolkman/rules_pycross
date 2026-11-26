@@ -185,6 +185,56 @@ def merge_workspace_locks(member_locks, skip_variant_members = None):
         result["member_variant_flags"] = member_variant_flags
     return result
 
+# Package fields read by package_repo.bzl and lock_render/*.bzl.
+# Kept only when non-empty/truthy; `build_mode` is handled separately so its
+# default ("auto") is omitted while explicit overrides ("never"/"always") remain.
+_PACKAGE_REPO_PKG_FIELDS = (
+    "marker_dependencies",
+    "wheel_candidates",
+    "sdist_file",
+    "availability_markers",
+    "cycle_group",
+    "build_target",
+    "site_paths",
+    "bin_paths",
+    "data_paths",
+    "include_paths",
+    "install_exclude_globs",
+    "post_install_patches",
+    "wheel_library_tags",
+    "precompile",
+)
+
+def slim_workspace_lock(merged_lock):
+    """Build the minimal merged workspace lock payload needed by `package_repo`.
+
+    Drops sdist-repo-only fields (`extra_build_tools`, `build_backend`,
+    `build_tools_repo`, `pre_build_patches`, `site_hooks`, `source_dir`),
+    redundant fields (`name`, `version`), and default-empty values so changes
+    that only affect `pycross_sdist_repo` do not invalidate `package_repo`.
+
+    Args:
+        merged_lock: Merged workspace lock dict from `merge_workspace_locks()`.
+
+    Returns:
+        Slimmed dict suitable for `json.encode()` into `package_repo.lock_data`.
+    """
+    slim_packages = {}
+    for pkg_key, pkg in merged_lock.get("packages", {}).items():
+        slim_pkg = {}
+        for field in _PACKAGE_REPO_PKG_FIELDS:
+            val = pkg.get(field)
+            if val:
+                slim_pkg[field] = val
+        build_mode = pkg.get("build_mode")
+        if build_mode and build_mode != "auto":
+            slim_pkg["build_mode"] = build_mode
+        slim_packages[pkg_key] = slim_pkg
+
+    slim = dict(merged_lock)
+    slim["packages"] = slim_packages
+    return slim
+
 def slim_member_lock(member_lock, merged_packages):
     """Build the minimal per-member manifest needed by `thin_package_repo`.
 
@@ -598,7 +648,7 @@ package_repo = repository_rule(
             doc = "Registered backend rule names to emit `_backend/<name>.bzl` macros for.",
         ),
         "lock_data": attr.string(
-            doc = "JSON-encoded merged workspace lock payload from merge_workspace_locks().",
+            doc = "JSON-encoded slimmed merged workspace lock payload from slim_workspace_lock().",
             mandatory = True,
         ),
         "override_configs": attr.string(
