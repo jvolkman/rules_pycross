@@ -6,6 +6,7 @@ Used by the per-format lock extensions (uv, pdm, poetry, pylock).
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS", "PACKAGE_REPO_HOOK_SUBDIRS")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "OVERRIDE_FILES")
 load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:override_helpers.bzl", "canonicalize_override_key", "merge_backend_overrides")
@@ -20,12 +21,13 @@ load(
     "sdist_repo_name",
     "whldir_name",
 )
-load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock")
+load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock", "slim_workspace_lock")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
 load("//pycross/private:util.bzl", "TRUE_FLAG_VALUES", "parse_flag_arg", "parse_package_key", "sanitize_name", "sdist_builds_disallowed")
 load("//pycross/private:variant_util.bzl", "split_variant_tokens", "variant_item_qname", "variant_set_suffix")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
+load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS")
 load(":git_file.bzl", "pycross_git_file")
 
 sdist_builds_disallowed_for_testing = sdist_builds_disallowed
@@ -269,6 +271,51 @@ def _extra_build_tool_names(extra_build_tools):
         for key in extra_build_tools
     }.keys())
 
+def _filter_package_repo_overrides(ws_overrides, package_repo_hooks):
+    """Retain only override entries whose backend has a registered package_repo hook."""
+    if not ws_overrides or not package_repo_hooks:
+        return {}
+    filtered = {}
+    for pkg_spec in sorted(ws_overrides.keys()):
+        backends = ws_overrides[pkg_spec]
+        kept = {
+            backend_name: backends[backend_name]
+            for backend_name in sorted(backends.keys())
+            if backend_name in package_repo_hooks
+        }
+        if kept:
+            filtered[pkg_spec] = kept
+    return filtered
+
+def _slim_thin_repo_overrides(ws_overrides, package_repo_hooks, hook_subdirs):
+    """Retain only hook-subdir backend presence (`{backend: {}}`) for `thin_package_repo`.
+
+    Thin repos only check whether a package has a matching hook-backed override
+    to decide whether to emit `<subdir>/BUILD.bazel` aliases; stripping attribute
+    values keeps thin repos invariant across override flag or attribute edits.
+    """
+    if not ws_overrides or not package_repo_hooks:
+        return {}
+    subdir_backends = {
+        backend_name: True
+        for backend_name in package_repo_hooks
+        if hook_subdirs.get(backend_name) or (
+            backend_name in LEGACY_CARGO_HOOK_BACKENDS and backend_name not in hook_subdirs
+        )
+    }
+    if not subdir_backends:
+        return {}
+    slimmed = {}
+    for pkg_spec in sorted(ws_overrides.keys()):
+        kept = {
+            backend_name: {}
+            for backend_name in sorted(ws_overrides[pkg_spec].keys())
+            if backend_name in subdir_backends
+        }
+        if kept:
+            slimmed[pkg_spec] = kept
+    return slimmed
+
 def create_repos(
         module_ctx,
         workspaces,
@@ -387,19 +434,21 @@ def create_repos(
 
             pycross_sdist_repo(**sdist_repo_attrs)
 
-        # Compute per-package override configs for package and thin repo hooks.
+        # Compute filtered override configs for package and thin repo hooks.
         ws_overrides = override_configs.get(workspace_name)
-        ws_overrides_json = json.encode(ws_overrides) if ws_overrides else None
+        pkg_repo_overrides = _filter_package_repo_overrides(ws_overrides, PACKAGE_REPO_HOOKS)
+        thin_repo_overrides = _slim_thin_repo_overrides(ws_overrides, PACKAGE_REPO_HOOKS, PACKAGE_REPO_HOOK_SUBDIRS)
+        thin_repo_overrides_json = json.encode(thin_repo_overrides) if thin_repo_overrides else None
 
         package_repo_attrs = dict(
             name = workspace_repo_name,
             build_repo = build_repo_name(workspace_name),
             repo_map = merged_repo_map,
             backend_names = backend_names,
-            lock_data = json.encode(merged_lock),
+            lock_data = json.encode(slim_workspace_lock(merged_lock)),
         )
-        if ws_overrides_json:
-            package_repo_attrs["override_configs"] = ws_overrides_json
+        if pkg_repo_overrides:
+            package_repo_attrs["override_configs"] = json.encode(pkg_repo_overrides)
         package_repo(**package_repo_attrs)
 
         # Create thin repos for each workspace member.
@@ -433,8 +482,8 @@ def create_repos(
             if transition.platform:
                 thin_repo_attrs["platform"] = transition.platform
 
-            if ws_overrides_json:
-                thin_repo_attrs["override_configs"] = ws_overrides_json
+            if thin_repo_overrides_json:
+                thin_repo_attrs["override_configs"] = thin_repo_overrides_json
 
             thin_package_repo(**thin_repo_attrs)
 
@@ -444,3 +493,5 @@ normalize_override_name_for_testing = _normalize_override_name
 remote_file_dedup_key_and_repo_name_for_testing = _remote_file_dedup_key_and_repo_name
 known_packages_from_lock_for_testing = _known_packages_from_lock
 extra_build_tool_names_for_testing = _extra_build_tool_names
+filter_package_repo_overrides_for_testing = _filter_package_repo_overrides
+slim_thin_repo_overrides_for_testing = _slim_thin_repo_overrides

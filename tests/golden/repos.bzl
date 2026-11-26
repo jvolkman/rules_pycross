@@ -1,7 +1,7 @@
 """Dev-only module extension generating golden snapshots of package_repo and thin_package_repo outputs."""
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock")
+load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock", "slim_workspace_lock")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
@@ -147,7 +147,7 @@ def _register_case(
         name = pkgs_repo,
         build_repo = build_repo or "golden_{}__build".format(case_name),
         repo_map = merged_repo_map,
-        lock_data = json.encode(merged_lock),
+        lock_data = json.encode(slim_workspace_lock(merged_lock)),
     )
     if backend_names:
         pkg_attrs["backend_names"] = backend_names
