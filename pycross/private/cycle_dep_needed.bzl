@@ -98,8 +98,9 @@ def _pycross_cycle_dep_needed_impl(ctx):
     reachable = is_reachable(edges, ctx.attr.source, ctx.attr.target, markers)
     return [config_common.FeatureFlagInfo(value = "true" if reachable else "false")]
 
-_pycross_cycle_dep_needed = rule(
+pycross_cycle_dep_needed = rule(
     implementation = _pycross_cycle_dep_needed_impl,
+    doc = "Determine whether a cycle target member is reachable from a source member under current PEP 508 markers.",
     attrs = {
         "source": attr.string(
             mandatory = True,
@@ -116,12 +117,3 @@ _pycross_cycle_dep_needed = rule(
     } | marker_value_attrs(),
     provides = [config_common.FeatureFlagInfo],
 )
-
-def pycross_cycle_dep_needed(name, **kwargs):
-    """Public macro wrapping _pycross_cycle_dep_needed.
-
-    Args:
-        name: Target name.
-        **kwargs: Forwarded to the underlying rule.
-    """
-    _pycross_cycle_dep_needed(name = name, **kwargs)

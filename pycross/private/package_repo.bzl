@@ -35,9 +35,6 @@ load(":resolved_lock_renderer.bzl", "render_lock_bzl_with_meta", "render_reset_b
 load(":util.bzl", "format_package_key", "is_wheel_platform_specific", "parse_package_key", "underscore_name")
 load(":variant_util.bzl", "variant_item_qname", "variant_set_suffix")
 
-def _normalize_name(name):
-    return pypackaging.utils.canonicalize_name(name)
-
 def _backend_tool_deps_labels(tool_packages, packages, build_repo):
     """Resolve backend tool_packages to `@<build_repo>//<pkg>:pkg` labels for packages present in `packages`.
 
@@ -50,11 +47,11 @@ def _backend_tool_deps_labels(tool_packages, packages, build_repo):
         parts = parse_package_key(k)
         if parts.extra:
             continue
-        known_base_packages[_normalize_name(parts.name)] = True
+        known_base_packages[pypackaging.utils.canonicalize_name(parts.name)] = True
 
     labels = []
     for pkg in tool_packages:
-        if _normalize_name(pkg) in known_base_packages:
+        if pypackaging.utils.canonicalize_name(pkg) in known_base_packages:
             labels.append("@{}//{}:pkg".format(build_repo, underscore_name(pkg)))
     return labels
 
@@ -540,7 +537,7 @@ def _package_repo_impl(rctx):
         # own wheels or sdists; they share the base package's artifacts.
         if parts.extra:
             continue
-        norm_name = _normalize_name(parts.name)
+        norm_name = pypackaging.utils.canonicalize_name(parts.name)
         target_name = format_package_key(norm_name, parts.version, tag = parts.tag)
 
         # Versioned target: _wheel:name@version[~tag] -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
@@ -617,7 +614,7 @@ def _package_repo_impl(rctx):
             parts = parse_package_key(pkg_key)
             if parts.extra:
                 continue
-            norm_name = _normalize_name(parts.name)
+            norm_name = pypackaging.utils.canonicalize_name(parts.name)
             has_sdist = bool(packages[pkg_key].get("sdist_file"))
             versions = packages_info.get(norm_name, {"versions": []})
             versions["versions"].append(struct(

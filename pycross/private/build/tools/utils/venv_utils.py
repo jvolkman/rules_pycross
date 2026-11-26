@@ -133,12 +133,8 @@ def resolve_base_prefix(
         candidate = Path(installed_value)
         if candidate.exists():
             return candidate.resolve()
-        # installed_base is stale — fall back to grandparent if possible.
-        if prefix in target_python.parents:
-            return target_python.parent.parent.resolve()
-        return None
 
-    # No sysconfig value at all — use the grandparent heuristic.
+    # Missing or stale sysconfig value — fall back to the grandparent heuristic.
     if prefix in target_python.parents:
         return target_python.parent.parent.resolve()
     return None

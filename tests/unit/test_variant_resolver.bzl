@@ -680,7 +680,7 @@ def _test_variants_with_evaluator(name):
         expr = "sys_platform == 'linux' and '__variant_group_cuda' == extra and extra != '__variant_group_cpu' and extra == 'cudart'",
         extra = "cudart",
         sys_platform = "linux",
-        variants = [":" + name + "_resolver"],
+        variants = [":" + name + "_resolver_state"],
         tags = ["manual"],
     )
     native.config_setting(
@@ -710,10 +710,10 @@ def _string_flag_resolver(name, usable = "*", default = ""):
     str_flag = _setup_string(name + "_variants", "")
     spec = json.encode({
         "display": "@pypi//_variants",
-        "valid": ["extra_cpu", "extra_gpu", "group_test"],
         "map": {
             "extra_cpu": ["extra_app_cpu"],
             "extra_gpu": ["extra_app_gpu"],
+            "group_test": ["group_app_test"],
         },
     })
     _single_set_resolver(
@@ -833,7 +833,6 @@ def _overlapping_rival_resolver(name, other_usable = "*", s2_default = "a", s1_p
     )
     spec = {
         "display": "@repo//_variants",
-        "valid": ["a", "b", "c"],
         "map": {"a": ["a"], "b": ["b"], "c": ["c"]},
     }
     variant_state(
@@ -960,7 +959,6 @@ def _test_string_flag_unknown_fails_when_pinned(name):
         string_flags = {
             sf: json.encode({
                 "display": "@repo//_variants",
-                "valid": ["extra_cpu", "extra_gpu"],
                 "map": {"extra_cpu": ["extra_cpu"], "extra_gpu": ["extra_gpu"]},
             }),
         },
@@ -985,7 +983,6 @@ def _test_string_flag_unknown_fails_when_unusable(name):
         string_flags = {
             sf: json.encode({
                 "display": "@repo//_variants",
-                "valid": ["extra_cpu", "extra_gpu"],
                 "map": {"extra_cpu": ["extra_cpu"], "extra_gpu": ["extra_gpu"]},
             }),
         },
@@ -1011,7 +1008,6 @@ def _test_multi_flag_conflict_omits_internal_qnames(name):
         string_flags = {
             sf: json.encode({
                 "display": "@repo//_variants",
-                "valid": ["extra_cpu", "extra_gpu"],
                 "map": {
                     "extra_cpu": ["extra_my-app_cpu"],
                     "extra_gpu": ["extra_my-app_gpu"],
@@ -1120,18 +1116,6 @@ def _setup_direct_state_targets(name):
         flags = dict(zip(flag_refs, ["a", "b", "c", "d", "e"])),
         tags = ["manual"],
     )
-    variant_set_projection(
-        name = name + "_proj_s1",
-        state = ":" + name + "_state",
-        set_key = "s1",
-        tags = ["manual"],
-    )
-    variant_set_projection(
-        name = name + "_proj_s2",
-        state = ":" + name + "_state",
-        set_key = "s2",
-        tags = ["manual"],
-    )
     return flag_refs
 
 def _expect_extra_value(expected):
@@ -1214,12 +1198,6 @@ def _test_direct_variant_state_single_overlapping_dedup(name):
         variants = [":" + name + "_state"],
         tags = ["manual"],
     )
-    _marker_probe(
-        name = name + "_probe_projections",
-        extra = "cudart",
-        variants = [":" + name + "_proj_s1", ":" + name + "_proj_s2"],
-        tags = ["manual"],
-    )
     pycross_pep508_evaluator(
         name = name + "_eval",
         expr = "extra == '__variant_a' and extra != '__variant_d' and extra == 'cudart'",
@@ -1250,12 +1228,6 @@ def _test_direct_variant_state_single_overlapping_dedup(name):
         config_settings = cfg,
     )
     analysis_test(
-        name = name + "_probe_projections_test",
-        target = name + "_probe_projections",
-        impl = _expect_extra_value(["cudart", "__variant_a"]),
-        config_settings = cfg,
-    )
-    analysis_test(
         name = name + "_eval_test",
         target = name + "_eval",
         impl = _expect_value("true"),
@@ -1277,7 +1249,6 @@ def _test_direct_variant_state_single_overlapping_dedup(name):
         name = name,
         tests = [
             name + "_probe_state_test",
-            name + "_probe_projections_test",
             name + "_eval_test",
             name + "_cycle_hop1_test",
             name + "_cycle_hop2_test",

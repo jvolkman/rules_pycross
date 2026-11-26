@@ -8,12 +8,9 @@ load("//pycross/private:providers.bzl", "PycrossPackageInfo")
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
-def is_sibling_repository_layout_enabled():
-    # This checks if sibling repository layout is enabled.
-    test = Label("@pycross_internal_deps//:BUILD.bazel")
-    return test.workspace_root.startswith("..")
+_SIBLING_REPOSITORY_LAYOUT = Label("@pycross_internal_deps//:BUILD.bazel").workspace_root.startswith("..")
 
-def resolve_import_path_fn(workspace_name, root_path, sibling_layout):
+def _resolve_import_path_fn(workspace_name, root_path, sibling_layout):
     """Returns a function mapping PyInfo.imports entries to execroot paths.
 
     Args:
@@ -49,18 +46,17 @@ def resolve_import_path_fn(workspace_name, root_path, sibling_layout):
 
     return fn
 
-def collect_py_import_paths(ctx, targets, fallback_bin_dir = None):
+def collect_py_import_paths(ctx, targets):
     """Collects execroot import paths and transitive sources from PyInfo targets.
 
     Resolves each target's ``PyInfo.imports`` against the distinct root paths present in
-    ``PyInfo.transitive_sources`` (falling back to ``fallback_bin_dir`` or ``ctx.bin_dir.path``
-    only when ``transitive_sources`` is empty), and appends ``<dir>/site-packages`` for
+    ``PyInfo.transitive_sources`` (falling back to ``ctx.bin_dir.path`` when
+    ``transitive_sources`` is empty), and appends ``<dir>/site-packages`` for
     directory TreeArtifacts (installed wheels under ``venvs_site_packages``).
 
     Args:
         ctx: The rule context.
         targets: list[Target], targets that may provide PyInfo.
-        fallback_bin_dir: optional str, root path used when transitive_sources is empty.
 
     Returns:
         struct(
@@ -84,11 +80,10 @@ def collect_py_import_paths(ctx, targets, fallback_bin_dir = None):
             seen_roots[root_path] = True
             root_paths.append(root_path)
     if not root_paths:
-        root_paths = [fallback_bin_dir if fallback_bin_dir != None else ctx.bin_dir.path]
+        root_paths = [ctx.bin_dir.path]
 
-    sibling_layout = is_sibling_repository_layout_enabled()
     map_fns = [
-        resolve_import_path_fn(ctx.workspace_name, root_path, sibling_layout)
+        _resolve_import_path_fn(ctx.workspace_name, root_path, _SIBLING_REPOSITORY_LAYOUT)
         for root_path in root_paths
     ]
 
@@ -278,10 +273,7 @@ def register_pep517_action(
         target_python = interpreter
 
     # Resolve site-packages python paths for dependencies
-    dummy_target = ctx.attr._dummy_bin_file[0] if type(ctx.attr._dummy_bin_file) == "list" else ctx.attr._dummy_bin_file
-    deps_bin_dir = dummy_target[DefaultInfo].files.to_list()[0].root.path
-
-    py_imports = collect_py_import_paths(ctx, deps + build_deps, fallback_bin_dir = deps_bin_dir)
+    py_imports = collect_py_import_paths(ctx, deps + build_deps)
     python_paths = py_imports.paths
     transitive_inputs.append(py_imports.sources)
 

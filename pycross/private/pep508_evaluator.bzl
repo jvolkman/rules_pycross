@@ -21,8 +21,9 @@ def _pycross_pep508_evaluator_impl(ctx):
 
     return [config_common.FeatureFlagInfo(value = "true" if result else "false")]
 
-_pycross_pep508_evaluator = rule(
+pycross_pep508_evaluator = rule(
     implementation = _pycross_pep508_evaluator_impl,
+    doc = "Evaluate a PEP 508 marker expression at analysis time, returning FeatureFlagInfo with value \"true\" or \"false\".",
     attrs = dict(
         expr = attr.string(
             mandatory = True,
@@ -31,19 +32,3 @@ _pycross_pep508_evaluator = rule(
         **marker_value_attrs()
     ),
 )
-
-def pycross_pep508_evaluator(name, **kwargs):
-    """Evaluate a PEP 508 marker expression at analysis time.
-
-    This macro wraps the underlying rule and returns
-    config_common.FeatureFlagInfo with value "true" or "false".
-
-    Args:
-        name: The target name.
-        **kwargs: Forwarded to the underlying rule.  Must include ``expr``
-            and may include any PEP 508 marker dimension overrides.
-    """
-    _pycross_pep508_evaluator(
-        name = name,
-        **kwargs
-    )

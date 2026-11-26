@@ -8,7 +8,13 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:lock_common.bzl", "parse_dependency_group_entries")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:translator_common.bzl", "compute_requested_dependency_groups", "resolve_lock_graph")
+load("//pycross/private:translator_graph.bzl", "resolve_lock_graph")
+
+# buildifier: disable=bzl-visibility
+load(
+    "//pycross/private:translator_project.bzl",
+    compute_requested_dependency_groups = "compute_requested_dependency_groups_for_testing",
+)
 
 # --- test: basic testonly group ---
 

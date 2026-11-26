@@ -63,7 +63,7 @@ def _parse_string_flags(ctx):
         spec = json.decode(spec_json)
         display = spec.get("display") or str(flag.label)
         flag_map = spec.get("map", {})
-        valid = spec.get("valid", sorted(flag_map.keys()))
+        valid = sorted(flag_map.keys())
         for token in split_variant_tokens(raw):
             if token not in valid:
                 fail("{} selects unknown variant '{}' (expected one of: {})".format(
@@ -201,7 +201,7 @@ variant_state = rule(
         "string_flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],
             doc = "Maps each repo's `//_variants` string_flag to a JSON-encoded spec " +
-                  "`{\"display\": str, \"valid\": [flag_name, ...], \"map\": {flag_name: [qname, ...]}}`.",
+                  "`{\"display\": str, \"map\": {flag_name: [qname, ...]}}`.",
         ),
     },
 )

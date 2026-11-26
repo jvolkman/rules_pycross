@@ -642,7 +642,7 @@ def _test_repo_time_cycle_rendering_impl(env, _target):
     env.expect.that_int(mh_res.count('name = "_cycle_needed_a_1_0_c_1_0_match",')).equals(1)
     env.expect.that_str(mh_res).contains('":_cycle_needed_a_1_0_c_1_0_match": [":_raw_c@1.0"]')
 
-    # 2b. Direct render_marker_cycle_member_deps call with marker absent from available_eval_matches
+    # 2b. Direct render_marker_cycle_member_deps call with marker absent from unique_markers
     #     falls back to canonical-source-deduplicated _cycle_needed_*.
     fallback_lines = []
     fallback_loads = {}
@@ -661,7 +661,6 @@ def _test_repo_time_cycle_rendering_impl(env, _target):
             "m2_a[dev]@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
             "m2_c@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
         },
-        available_eval_matches = {},
         loads = fallback_loads,
     )
     fallback_text = "\n".join(fallback_lines)

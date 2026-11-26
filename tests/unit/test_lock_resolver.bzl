@@ -5,7 +5,7 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:lock_resolver.bzl", "resolve")
+load("//pycross/private:lock_resolver.bzl", "resolve", "resolve_workspace")
 
 def _make_file(name, sha256 = "1234"):
     return {"name": name, "sha256": sha256}
@@ -2532,6 +2532,133 @@ def _test_malformed_package_spec_fails(name):
         impl = _test_malformed_package_spec_fails_impl,
     )
 
+def _resolved_to_dict(resolved):
+    return {
+        "packages": resolved.packages,
+        "pins": resolved.pins,
+        "remote_files": resolved.remote_files,
+        "cycle_groups": resolved.cycle_groups,
+        "variants": resolved.variants,
+        "resolution_marker_exprs": resolved.resolution_marker_exprs,
+        "testonly_pins": resolved.testonly_pins,
+    }
+
+# buildifier: disable=unused-variable
+def _test_resolve_workspace_shared_packages_matches_standalone_impl(env, target):
+    """resolve_workspace(..., shared_packages=True) matches standalone resolve() across all per-member features."""
+    shared_pkgs = {
+        "cyc-a@1.0": _make_pkg("cyc-a", "1.0", [_make_file("cyc_a-1.0-py3-none-any.whl", "aa")], deps = [_make_dep("cyc-b", "1.0")]),
+        "cyc-b@1.0": _make_pkg("cyc-b", "1.0", [_make_file("cyc_b-1.0-py3-none-any.whl", "bb")], deps = [_make_dep("cyc-a", "1.0")]),
+        "extra-pkg@1.0": _make_pkg(
+            "extra-pkg",
+            "1.0",
+            [_make_file("extra_pkg-1.0-py3-none-any.whl", "ee")],
+            deps = [_make_dep("opt-dep", "1.0", marker = "extra == 'opt'")],
+        ),
+        "opt-dep@1.0": _make_pkg("opt-dep", "1.0", [_make_file("opt_dep-1.0-py3-none-any.whl", "oo")]),
+        "var-pkg@1.0": _make_pkg("var-pkg", "1.0", [_make_file("var_pkg-1.0-py3-none-any.whl", "v1")]),
+        "var-pkg@2.0": _make_pkg("var-pkg", "2.0", [_make_file("var_pkg-2.0-py3-none-any.whl", "v2")]),
+    }
+    initial_pkg_keys = sorted(shared_pkgs.keys())
+
+    variants = [{
+        "items": [
+            {"package": "app", "kind": "group", "name": "cpu"},
+            {"package": "app", "kind": "group", "name": "cuda"},
+        ],
+    }]
+    member_a = {
+        "packages": shared_pkgs,
+        "pins": {"cyc-a": "cyc-a@1.0"},
+        "root_dependency_markers": {"cyc-a": ["sys_platform == 'linux'"]},
+        "testonly_pins": ["cyc-a"],
+    }
+    member_b = {
+        "packages": shared_pkgs,
+        "pins": {
+            "cyc-a": "cyc-a@1.0",
+            "extra-pkg[opt]": "extra-pkg[opt]@1.0",
+        },
+        "root_dependency_markers": {
+            "cyc-a": ["sys_platform == 'darwin'"],
+            "extra-pkg[opt]": ["python_version >= '3.10'"],
+        },
+    }
+    member_c = {
+        "packages": shared_pkgs,
+        "pins": {
+            "cyc-a": "cyc-a@1.0",
+            "var-pkg": {"group_app_cpu": "var-pkg@1.0", "group_app_cuda": "var-pkg@2.0"},
+        },
+        "variants": variants,
+    }
+
+    annotations = {
+        "*": {"precompile": "enabled"},
+        "cyc-a@1.0": {"wheel_library_tags": ["custom"]},
+    }
+
+    for local_wheels in (None, {"extra_pkg-1.0-py3-none-any.whl": "@local//:extra_pkg.whl"}):
+        entries = [
+            struct(name = "member_a", lock_model_data = member_a, include_transitive = True, transitive_testonly = True, ungated_fallback = False),
+            struct(name = "member_b", lock_model_data = member_b, include_transitive = True, transitive_testonly = False, ungated_fallback = False),
+            struct(name = "member_c", lock_model_data = member_c, include_transitive = False, transitive_testonly = False, ungated_fallback = True),
+        ]
+        hoisted = resolve_workspace(
+            entries,
+            local_wheels = local_wheels,
+            annotations_data = annotations,
+            shared_packages = True,
+        )
+
+        # Input shared_pkgs dict must never be mutated with synthesized extras.
+        env.expect.that_collection(sorted(shared_pkgs.keys())).contains_exactly(initial_pkg_keys).in_order()
+
+        for entry in entries:
+            standalone = resolve(
+                lock_model_data = entry.lock_model_data,
+                local_wheels = local_wheels,
+                annotations_data = annotations,
+                include_transitive = entry.include_transitive,
+                transitive_testonly = entry.transitive_testonly,
+                ungated_fallback = entry.ungated_fallback,
+            )
+            env.expect.that_str(json.encode(hoisted[entry.name])).equals(json.encode(_resolved_to_dict(standalone)))
+
+        # Verify member-specific availability_markers stayed isolated across members.
+        env.expect.that_collection(hoisted["member_a"]["packages"]["cyc-a@1.0"]["availability_markers"]).contains_exactly(["sys_platform == 'linux'"])
+        env.expect.that_collection(hoisted["member_b"]["packages"]["cyc-a@1.0"]["availability_markers"]).contains_exactly(["sys_platform == 'darwin'"])
+        env.expect.that_collection(hoisted["member_c"]["packages"]["cyc-a@1.0"]["availability_markers"]).has_size(0)
+        env.expect.that_bool("extra-pkg[opt]@1.0" in hoisted["member_b"]["packages"]).equals(True)
+        env.expect.that_bool("extra-pkg[opt]@1.0" in hoisted["member_a"]["packages"]).equals(False)
+
+    # Also verify shared_packages=False resolves distinct per-member package sets independently.
+    unshared_entries = [
+        struct(
+            name = "only_opt",
+            lock_model_data = {
+                "packages": {"opt-dep@1.0": shared_pkgs["opt-dep@1.0"]},
+                "pins": {"opt-dep": "opt-dep@1.0"},
+            },
+        ),
+        struct(
+            name = "only_var",
+            lock_model_data = {
+                "packages": {"var-pkg@1.0": shared_pkgs["var-pkg@1.0"]},
+                "pins": {"var-pkg": "var-pkg@1.0"},
+            },
+        ),
+    ]
+    unshared = resolve_workspace(unshared_entries, shared_packages = False)
+    for entry in unshared_entries:
+        env.expect.that_str(json.encode(unshared[entry.name])).equals(
+            json.encode(_resolved_to_dict(resolve(entry.lock_model_data))),
+        )
+
+def _test_resolve_workspace_shared_packages_matches_standalone(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_resolve_workspace_shared_packages_matches_standalone_impl)
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
@@ -2614,5 +2741,6 @@ def lock_resolver_test_suite(name):
             _test_multi_source_annotation_ambiguous_fails,
             _test_multi_source_annotation_bad_source_fails,
             _test_malformed_package_spec_fails,
+            _test_resolve_workspace_shared_packages_matches_standalone,
         ],
     )

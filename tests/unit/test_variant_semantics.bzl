@@ -300,7 +300,6 @@ def _wire_chain_resolvers(prefix, pins = {}, defaults = {}, usables = {}):
     state_name = "{}_state".format(prefix)
     spec = {
         "display": "@repo//_variants",
-        "valid": list(_CHAIN_ALL_ITEMS),
         "map": {item: [item] for item in _CHAIN_ALL_ITEMS},
     }
     util.helper_target(
