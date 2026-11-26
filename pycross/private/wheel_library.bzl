@@ -40,8 +40,8 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir, expect
         fail("Expected at least one wheel file or directory in 'wheel' attribute of {}".format(ctx.label))
     wheel_input = ctx.files.wheel[0]
 
-    args = ctx.actions.args().use_param_file("--flagfile=%s")
-    if type(wheel_input) == "File" and wheel_input.is_directory:
+    args = ctx.actions.args().set_param_file_format("multiline").use_param_file("--params-file=%s")
+    if wheel_input.is_directory:
         args.add_all([wheel_input], before_each = "--wheel-dir", expand_directories = False)
     else:
         # Plain file (e.g., local override wheel) — pass directly as --wheel

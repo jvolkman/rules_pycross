@@ -24,13 +24,14 @@ def _copy_from_wheel(ctx, site_packages, attr_name, rel_path):
     out = ctx.actions.declare_file("_{}/{}/{}".format(ctx.label.name, attr_name, paths.basename(rel_path)))
 
     args = ctx.actions.args()
+    args.add("extract-lib")
     args.add_all([site_packages], expand_directories = False)
     args.add(rel_path)
     args.add(attr_name)
     args.add(out)
 
     ctx.actions.run(
-        executable = ctx.executable._extract_wheel_lib,
+        executable = ctx.executable._wheel_file_op,
         arguments = [args],
         inputs = [site_packages],
         outputs = [out],
@@ -179,8 +180,8 @@ Use one target per library, as with `cc_import`, and connect them with
                   "entry in `includes`.",
         ),
         "_cc_toolchain": attr.label(default = "@bazel_tools//tools/cpp:current_cc_toolchain"),
-        "_extract_wheel_lib": attr.label(
-            default = Label("//pycross/private/tools:extract_wheel_lib"),
+        "_wheel_file_op": attr.label(
+            default = Label("//pycross/private/tools:wheel_file_op"),
             executable = True,
             cfg = "exec",
         ),

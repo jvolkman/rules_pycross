@@ -26,7 +26,7 @@ def _pycross_wheel_transform_impl(ctx):
 
     # Build arguments for the wheel transformer wrapper.
     args = ctx.actions.args()
-    if type(wheel_input) == "File" and wheel_input.is_directory:
+    if wheel_input.is_directory:
         args.add_all([wheel_input], before_each = "--in-wheel-dir", expand_directories = False)
     else:
         # Plain file (e.g., local override wheel) — pass directly as --in-wheel.

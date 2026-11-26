@@ -179,6 +179,7 @@ def _test_pycross_wheel_dir_basic_impl(env, target):
     env.expect.that_bool(wheel_dir.is_directory).equals(True)
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("PycrossWheelDir")
+    action.argv().contains("wrap-wheel")
     action.argv().contains(wheel_dir.path)
 
 # ── no_match_error compatibility probe ──────────────────────────────
@@ -689,7 +690,7 @@ def _test_pycross_wheel_zipimport_library_file_uses_symlink_impl(env, target):
     env.expect.that_collection(mnemonics).not_contains("PycrossLinkWheel")
     env.expect.that_collection(mnemonics).contains("Symlink")
 
-def _test_pycross_wheel_zipimport_library_dir_uses_link_wheel(name):
+def _test_pycross_wheel_zipimport_library_dir_uses_wheel_file_op(name):
     util.helper_target(
         native.filegroup,
         name = name + "_wheel_src",
@@ -709,11 +710,12 @@ def _test_pycross_wheel_zipimport_library_dir_uses_link_wheel(name):
     analysis_test(
         name = name,
         target = name + "_subject",
-        impl = _test_pycross_wheel_zipimport_library_dir_uses_link_wheel_impl,
+        impl = _test_pycross_wheel_zipimport_library_dir_uses_wheel_file_op_impl,
     )
 
-def _test_pycross_wheel_zipimport_library_dir_uses_link_wheel_impl(env, target):
+def _test_pycross_wheel_zipimport_library_dir_uses_wheel_file_op_impl(env, target):
     action = env.expect.that_target(target).action_named("PycrossLinkWheel")
+    action.argv().contains("unwrap-wheel")
     action.argv().contains_predicate(matching.str_endswith("test-1.0.whldir"))
 
 def _test_pycross_wheel_library_precompile_single_file_pyc_symlinks(name):
@@ -935,7 +937,7 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_library_precompile_invalidation_mode_flag,
             _test_pycross_wheel_library_precompile_invalidation_mode_attr_overrides_flag,
             _test_pycross_wheel_zipimport_library_file_uses_symlink,
-            _test_pycross_wheel_zipimport_library_dir_uses_link_wheel,
+            _test_pycross_wheel_zipimport_library_dir_uses_wheel_file_op,
             _test_pycross_wheel_library_precompile_single_file_pyc_symlinks,
             _test_pycross_wheel_library_bin_only_venv_symlinks,
             _test_pycross_wheel_library_sdist_advisory_site_paths,

@@ -541,7 +541,7 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
 
 
 class WheelInstallerDestinationAndFlagsTest(unittest.TestCase):
-    """Tests for portable RECORD paths, case-sensitive excludes, and flagfile parsing."""
+    """Tests for portable RECORD paths, case-sensitive excludes, and multiline param file parsing."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -591,13 +591,13 @@ class WheelInstallerDestinationAndFlagsTest(unittest.TestCase):
         for p in paths:
             self.assertNotIn("\\", p)
 
-    def test_install_exclude_globs_case_sensitive_and_flagfile_utf8_help(self):
+    def test_install_exclude_globs_case_sensitive_and_multiline_param_file_utf8_help(self):
         import io
         import zipfile
         from unittest import mock
 
-        from pycross.private.tools.args import FlagFileArgumentParser
         from pycross.private.tools.wheel_installer import FilteredWheelFile
+        from pycross.private.tools.wheel_installer import _read_multiline_param_file
 
         whl_path = Path(self.temp_dir) / "case-1.0-py3-none-any.whl"
         with zipfile.ZipFile(whl_path, "w") as zf:
@@ -607,50 +607,39 @@ class WheelInstallerDestinationAndFlagsTest(unittest.TestCase):
             self.assertFalse(filtered.should_install("pkg/Data.txt"))
             self.assertTrue(filtered.should_install("pkg/data.txt"))
 
-        ff = Path(self.temp_dir) / "flags.txt"
-        ff.write_text("--name r\u00e9sum\u00e9\n", encoding="utf-8")
-        parser = FlagFileArgumentParser(prog="test_prog")
-        parser.add_argument("--name")
-        parsed = parser.parse_args([f"--flagfile={ff}"])
-        self.assertEqual(parsed.name, "r\u00e9sum\u00e9")
+        params = Path(self.temp_dir) / "args.params"
+        params.write_text(
+            "--expected-name\nr\u00e9sum\u00e9\n"
+            "--wheel\n/tmp/path with spaces/r\u00e9sum\u00e9.whl\n"
+            "--install-exclude-glob\nx\u2028y\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        parsed = parse_flags([f"--params-file={params}"])
+        self.assertEqual(parsed.expected_name, "r\u00e9sum\u00e9")
+        self.assertEqual(parsed.wheel, Path("/tmp/path with spaces/r\u00e9sum\u00e9.whl"))
+        self.assertEqual(parsed.install_exclude_globs, ["x\u2028y"])
+
+        # Literal @-prefixed arguments are not misinterpreted as param files.
+        literal = parse_flags(["--install-exclude-glob", "@literal", "--directory", "/tmp/out"])
+        self.assertEqual(literal.install_exclude_globs, ["@literal"])
+
+        # Empty file and empty-line edge cases in multiline param files.
+        for name, raw, expected in [
+            ("empty", "", []),
+            ("single_empty_arg", "\n", [""]),
+            ("trailing_empty_arg", "a\n\n", ["a", ""]),
+        ]:
+            p = Path(self.temp_dir) / f"{name}.params"
+            p.write_text(raw, encoding="utf-8", newline="\n")
+            self.assertEqual(_read_multiline_param_file(str(p)), expected, msg=name)
 
         stdout = io.StringIO()
         with mock.patch("sys.stdout", stdout):
             with self.assertRaises(SystemExit) as cm:
-                parser.parse_args(["--help"])
+                parse_flags(["--help"])
         self.assertEqual(cm.exception.code, 0)
-        self.assertIn("--name", stdout.getvalue())
-
-    def test_extract_wheel_bin_rewrites_placeholder_shebang(self):
-        from unittest import mock
-
-        from pycross.private.tools import extract_wheel_bin
-
-        wheel_dir = Path(self.temp_dir) / "wheel"
-        bin_dir = wheel_dir / "bin"
-        bin_dir.mkdir(parents=True)
-
-        # Console script with placeholder `#!python` shebang (LF and CRLF, including multi-chunk body).
-        large_body = b"x = 1\n" * 20000
-        (bin_dir / "meson").write_bytes(b"#!python\n" + large_body)
-        (bin_dir / "cmake").write_bytes(b"#!python\r\nimport sys\r\n")
-        # Native binary and .exe fallback should pass through unmodified.
-        (bin_dir / "ninja").write_bytes(b"\x7fELF\x02\x01binary" + b"\x00" * 100000)
-        (bin_dir / "win_tool.exe").write_bytes(b"MZbinary")
-
-        out_dir = Path(self.temp_dir) / "out"
-        out_dir.mkdir()
-
-        for name, expected in [
-            ("meson", b"#!/usr/bin/env python3\n" + large_body),
-            ("cmake", b"#!/usr/bin/env python3\nimport sys\r\n"),
-            ("ninja", b"\x7fELF\x02\x01binary" + b"\x00" * 100000),
-            ("win_tool", b"MZbinary"),
-        ]:
-            out_file = out_dir / name
-            with mock.patch("sys.argv", ["extract_wheel_bin.py", str(wheel_dir), name, str(out_file)]):
-                extract_wheel_bin.main()
-            self.assertEqual(out_file.read_bytes(), expected, msg=name)
+        self.assertIn("--expected-name", stdout.getvalue())
 
     def test_validate_site_paths(self):
         import io

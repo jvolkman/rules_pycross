@@ -14,13 +14,6 @@ py_library(
 )
 
 py_library(
-    name = "args",
-    srcs = [
-        "args.py",
-    ],
-)
-
-py_library(
     name = "inspect_package",
     srcs = ["inspect_package.py"],
     visibility = ["//visibility:public"],
@@ -40,7 +33,6 @@ py_binary(
     imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
-        ":args",
         ":inspect_package",
         ":installer",
         "//pycross/private/patching",
@@ -48,25 +40,7 @@ py_binary(
 )
 
 py_binary(
-    name = "extract_wheel_bin",
-    srcs = ["extract_wheel_bin.py"],
-    visibility = ["//visibility:public"],
-)
-
-py_binary(
-    name = "extract_wheel_lib",
-    srcs = ["extract_wheel_lib.py"],
-    visibility = ["//visibility:public"],
-)
-
-py_binary(
-    name = "copy_file",
-    srcs = ["copy_file.py"],
-    visibility = ["//visibility:public"],
-)
-
-py_binary(
-    name = "link_wheel",
-    srcs = ["link_wheel.py"],
+    name = "wheel_file_op",
+    srcs = ["wheel_file_op.py"],
     visibility = ["//visibility:public"],
 )

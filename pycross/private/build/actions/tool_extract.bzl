@@ -28,6 +28,7 @@ def register_bin_extract_action(ctx, wheel_dir, binary_name):
     out_file = ctx.actions.declare_file(paths.join(ctx.label.name + "_tools", binary_name))
 
     args = ctx.actions.args()
+    args.add("extract-bin")
     args.add_all([wheel_dir], expand_directories = False)
     args.add(binary_name)
     args.add(out_file)
@@ -68,7 +69,7 @@ extract_wheel_tool_aspect = aspect(
     implementation = _extract_wheel_tool_aspect_impl,
     attrs = {
         "_extract_wheel_bin": attr.label(
-            default = Label("//pycross/private/tools:extract_wheel_bin"),
+            default = Label("//pycross/private/tools:wheel_file_op"),
             executable = True,
             cfg = "exec",
         ),

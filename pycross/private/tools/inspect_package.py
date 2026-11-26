@@ -6,8 +6,9 @@ import os
 import sys
 import tarfile
 import tempfile
-import tomllib
 import zipfile
+from collections.abc import Iterable
+from collections.abc import Iterator
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Callable
@@ -39,6 +40,17 @@ _WELL_KNOWN_NAMESPACE_PACKAGES = frozenset({"nvidia"})
 
 # Reads an archive-relative file path (as in all_files), returning None if unavailable.
 FileReader = Callable[[str], Optional[str]]
+# Unified sdist entry: (archive_path, is_dir, is_file, read_bytes).
+SdistEntry = tuple[str, bool, bool, Callable[[], Optional[bytes]]]
+
+
+def _load_tomllib():
+    """Load tomllib (Python 3.11+) or pip's vendored tomli (Python 3.10)."""
+    try:
+        import tomllib
+    except ImportError:
+        from pip._vendor import tomli as tomllib  # type: ignore[no-redef]
+    return tomllib
 
 
 _NAMESPACE_MODULES = frozenset({"pkgutil", "pkg_resources"})
@@ -419,84 +431,98 @@ def _find_site_paths_from_items(
     return sorted(pkgs)
 
 
-def _inspect_unpatched_sdist(sdist_path: Path, source_dir: str = "") -> tuple[str, list[str]]:
-    """Inspect an unpatched sdist archive in a single pass, returning (pyproject_content, site_paths)."""
+def _collect_sdist_entries(
+    entries: Iterable[SdistEntry],
+    source_dir: str = "",
+) -> tuple[str, list[str]]:
+    """Collect pyproject.toml, top_level.txt, and site_paths in a single pass over sdist entries."""
     source_dir_path = PurePosixPath(source_dir.strip("/")) if source_dir else None
     pyproject_content = ""
     top_level_names: list[str] | None = None
     items: list[tuple[str, bool, bool]] = []
+    init_contents: dict[str, str] = {}
 
-    if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
-        init_contents: dict[str, str] = {}
-        with tarfile.open(sdist_path) as t:
-            for member in t:
-                is_dir = member.isdir()
-                is_file = member.isfile()
-                items.append((member.name, is_dir, is_file))
-                if not is_file:
-                    continue
-                clean_name = member.name.rstrip("/")
-                rel = _rel_under_effective_root(clean_name, source_dir_path)
-                is_pyproject = not pyproject_content and (
-                    (rel == PurePosixPath("pyproject.toml"))
-                    or (not source_dir_path and PurePosixPath(clean_name) == PurePosixPath("pyproject.toml"))
-                )
-                is_top_level = (
-                    not source_dir_path and top_level_names is None and rel is not None and _is_top_level_txt_rel(rel)
-                )
-                is_init = rel is not None and rel.name == "__init__.py"
-                if not (is_pyproject or is_top_level or is_init):
-                    continue
-                f = t.extractfile(member)
-                if not f:
-                    continue
-                raw = f.read()
-                if is_pyproject and not pyproject_content:
-                    pyproject_content = raw.decode("utf-8")
-                elif is_top_level:
-                    names = [line.strip() for line in raw.decode("utf-8").splitlines() if line.strip()]
-                    if names:
-                        top_level_names = names
-                elif is_init:
-                    init_contents[clean_name] = raw.decode("utf-8", "replace")
-
-        site_paths = _find_site_paths_from_items(
-            items,
-            source_dir=source_dir,
-            read_member=init_contents.get,
-            top_level_names=top_level_names,
+    for name, is_dir, is_file, read_bytes in entries:
+        items.append((name, is_dir, is_file))
+        if not is_file:
+            continue
+        clean_name = name.rstrip("/")
+        rel = _rel_under_effective_root(clean_name, source_dir_path)
+        is_pyproject = not pyproject_content and (
+            rel == PurePosixPath("pyproject.toml")
+            or (not source_dir_path and PurePosixPath(clean_name) == PurePosixPath("pyproject.toml"))
         )
-        return pyproject_content, site_paths
+        is_top_level = (
+            not source_dir_path and top_level_names is None and rel is not None and _is_top_level_txt_rel(rel)
+        )
+        is_init = rel is not None and rel.name == "__init__.py"
+        if not (is_pyproject or is_top_level or is_init):
+            continue
+        raw = read_bytes()
+        if raw is None:
+            continue
+        if is_pyproject:
+            pyproject_content = raw.decode("utf-8")
+        elif is_top_level:
+            names = [line.strip() for line in raw.decode("utf-8").splitlines() if line.strip()]
+            if names:
+                top_level_names = names
+        elif is_init:
+            init_contents[clean_name] = raw.decode("utf-8", "replace")
+
+    site_paths = _find_site_paths_from_items(
+        items,
+        source_dir=source_dir,
+        read_member=init_contents.get,
+        top_level_names=top_level_names,
+    )
+    return pyproject_content, site_paths
+
+
+def _iter_tar_entries(tar: tarfile.TarFile) -> Iterator[SdistEntry]:
+    for member in tar:
+        is_dir = member.isdir()
+        is_file = member.isfile()
+
+        def _read(m: tarfile.TarInfo = member) -> Optional[bytes]:
+            f = tar.extractfile(m)
+            return f.read() if f else None
+
+        yield member.name, is_dir, is_file, _read
+
+
+def _iter_zip_entries(zf: zipfile.ZipFile) -> Iterator[SdistEntry]:
+    for name in zf.namelist():
+        is_dir = name.endswith("/")
+        yield name, is_dir, not is_dir, (lambda n=name: zf.read(n))
+
+
+def _iter_dir_entries(
+    root: Path,
+    base: Path,
+    archive_dirs: set[str],
+) -> Iterator[SdistEntry]:
+    # Only mark extracted directories as explicit directory entries when the
+    # original archive had a matching directory entry, so file-only sdists keep
+    # excluding non-package trees (e.g. bench/, crates/) after extraction.
+    for p in sorted(root.rglob("*"), key=lambda path: (len(path.parts), path.as_posix())):
+        rel_posix = p.relative_to(base).as_posix()
+        is_file = p.is_file()
+        is_dir = p.is_dir() and rel_posix in archive_dirs
+        if not is_file and not is_dir:
+            continue
+        yield rel_posix, is_dir, is_file, p.read_bytes
+
+
+def _inspect_unpatched_sdist(sdist_path: Path, source_dir: str = "") -> tuple[str, list[str]]:
+    """Inspect an unpatched sdist archive in a single pass, returning (pyproject_content, site_paths)."""
+    if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
+        with tarfile.open(sdist_path) as t:
+            return _collect_sdist_entries(_iter_tar_entries(t), source_dir=source_dir)
 
     if sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
-            for name in z.namelist():
-                is_dir = name.endswith("/")
-                items.append((name, is_dir, not is_dir))
-                if is_dir:
-                    continue
-                clean_name = name.rstrip("/")
-                rel = _rel_under_effective_root(clean_name, source_dir_path)
-                if not pyproject_content and (
-                    (rel == PurePosixPath("pyproject.toml"))
-                    or (not source_dir_path and PurePosixPath(clean_name) == PurePosixPath("pyproject.toml"))
-                ):
-                    pyproject_content = z.read(name).decode("utf-8")
-                elif not source_dir_path and top_level_names is None and rel is not None and _is_top_level_txt_rel(rel):
-                    names = [line.strip() for line in z.read(name).decode("utf-8").splitlines() if line.strip()]
-                    if names:
-                        top_level_names = names
-
-            def read_zip_member(name: str) -> Optional[str]:
-                return z.read(name).decode("utf-8", "replace")
-
-            site_paths = _find_site_paths_from_items(
-                items,
-                source_dir=source_dir,
-                read_member=read_zip_member,
-                top_level_names=top_level_names,
-            )
-            return pyproject_content, site_paths
+            return _collect_sdist_entries(_iter_zip_entries(z), source_dir=source_dir)
 
     return "", []
 
@@ -516,9 +542,14 @@ def _inspect_patched_sdist(
             with tarfile.open(sdist_path, "r") as f:
                 if hasattr(tarfile, "data_filter"):
                     f.extraction_filter = tarfile.data_filter
-                f.extractall(tmp_path)
+                members = f.getmembers()
+                archive_dirs = {PurePosixPath(m.name.rstrip("/")).as_posix() for m in members if m.isdir()}
+                f.extractall(tmp_path, members=members)
         elif sdist_path.name.endswith(".zip"):
             with zipfile.ZipFile(sdist_path, "r") as f:
+                archive_dirs = {
+                    PurePosixPath(info.filename.rstrip("/")).as_posix() for info in f.infolist() if info.is_dir()
+                }
                 f.extractall(tmp_path)
         else:
             raise ValueError(f"Unsupported sdist format: {sdist_path}")
@@ -533,32 +564,10 @@ def _inspect_patched_sdist(
         for orig_patch_path, abs_patch_path in resolved_patches:
             apply_patch_or_exit(sdist_dir, abs_patch_path, display_name=str(orig_patch_path))
 
-        pyproject_path = sdist_dir / "pyproject.toml"
-        content = pyproject_path.read_text(encoding="utf-8") if pyproject_path.is_file() else ""
-
-        top_level_names: list[str] | None = None
-        if not source_dir:
-            candidates = sorted(sdist_root_dir.glob("*.egg-info/top_level.txt")) + sorted(
-                sdist_root_dir.glob("src/*.egg-info/top_level.txt")
-            )
-            for p in candidates:
-                if not p.is_file():
-                    continue
-                tl_content = p.read_text(encoding="utf-8")
-                names = [line.strip() for line in tl_content.splitlines() if line.strip()]
-                if names:
-                    top_level_names = names
-                    break
-
-        def read_extracted(name: str) -> Optional[str]:
-            return (tmp_path / name).read_text(encoding="utf-8", errors="replace")
-
-        items = [(p.relative_to(tmp_path).as_posix(), p.is_dir(), p.is_file()) for p in sdist_root_dir.rglob("*")]
-        site_paths = _find_site_paths_from_items(
-            items, source_dir=source_dir, read_member=read_extracted, top_level_names=top_level_names
+        return _collect_sdist_entries(
+            _iter_dir_entries(sdist_dir, tmp_path, archive_dirs),
+            source_dir=source_dir,
         )
-
-        return content, site_paths
 
 
 def _classify_site_paths(
@@ -687,6 +696,7 @@ def inspect_sdist(
 
     warnings = []
     if content:
+        tomllib = _load_tomllib()
         try:
             pyproject = tomllib.loads(content)
         except tomllib.TOMLDecodeError as exc:

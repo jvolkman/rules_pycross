@@ -130,6 +130,7 @@ def _test_cc_import_shared_library_impl(env, target):
     env.expect.that_collection(shared).contains_exactly(["libtorch.so", "libbar.so.2"])
 
     copy = env.expect.that_target(target).action_named("PycrossExtractWheelLib")
+    copy.argv().contains("extract-lib")
     copy.argv().contains("torch/lib/libtorch.so")
 
 def _test_cc_import_static_library(name):
