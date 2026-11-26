@@ -6,7 +6,7 @@ Used by the per-format lock extensions (uv, pdm, poetry, pylock).
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
-load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
+load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "OVERRIDE_FILES")
 load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:override_helpers.bzl", "canonicalize_override_key", "merge_backend_overrides")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
@@ -296,12 +296,7 @@ def create_repos(
                 norm_pkg = _normalize_override_name(pkg_name, backend_name, key)
                 override_configs.setdefault(key, {}).setdefault(norm_pkg, {})[backend_name] = backend_attrs
 
-    # Serialize backend configs for passing to package_repo and sdist_repo.
-    backend_configs_json = {name: json.encode(config) for name, config in BACKEND_CONFIGS.items()}
-    backend_tool_packages = {
-        name: list(config.get("tool_packages", []))
-        for name, config in BACKEND_CONFIGS.items()
-    }
+    backend_names = sorted(BACKEND_CONFIGS.keys())
 
     known_packages_by_repo = {
         repo.name: _known_packages_from_lock(resolved_locks[repo.name])
@@ -367,11 +362,7 @@ def create_repos(
                 "sdist": sdist_label,
                 "deps": sdist_deps,
                 "known_packages": known_packages_by_repo.get(thin_repo, default_known_packages),
-                "lock_repo": workspace_repo_name,
                 "thin_repo": thin_repo,
-                "backend_to_rule": BACKEND_TO_RULE,
-                "backend_tool_packages": backend_tool_packages,
-                "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name(pkg_key),
             }
             remote_file = merged_remote_files.get(sdist_file_key, {})
@@ -404,7 +395,7 @@ def create_repos(
             name = workspace_repo_name,
             build_repo = build_repo_name(workspace_name),
             repo_map = merged_repo_map,
-            backend_configs = backend_configs_json,
+            backend_names = backend_names,
             lock_data = json.encode(merged_lock),
         )
         if ws_overrides_json:
@@ -420,7 +411,7 @@ def create_repos(
                 lock_data = json.encode(slim_member_lock(resolved_locks[repo.name], merged_packages)),
                 workspace_repo = workspace_repo_name,
                 member_name = repo.name,
-                backend_configs = backend_configs_json,
+                backend_names = backend_names,
             )
             if repo.is_auto_build_repo:
                 thin_repo_attrs["expose_variant_flags"] = False

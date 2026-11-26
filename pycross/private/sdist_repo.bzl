@@ -3,6 +3,7 @@
 The common logic is factored into _sdist_repo_common() so it can be called before hooks are invoked.
 """
 
+load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND")
 load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS", "SDIST_HOOK_FILES")
 load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
@@ -69,27 +70,25 @@ def _resolve_backend(backend_to_rule, default_backend, pyproject_backend, build_
 
     return best_rule if best_rule else default_backend
 
-def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, extra_build_snippets = None):
-    """Render the BUILD.bazel file for an sdist repo.
+def _render_build_content(macro_attrs, backend_macro, rule_bzl, site_paths, bin_paths, extra_build_snippets = None):
+    """Render the BUILD.bazel content string for an sdist repo.
 
     Args:
-        rctx: The repository context.
         macro_attrs: Dict of macro attribute name -> Starlark literal string.
-        backend_macro: The backend macro name (e.g. 'meson_build').
+        backend_macro: The backend rule/macro name (e.g. 'meson_build').
+        rule_bzl: Label string of the .bzl file exporting `backend_macro`.
         site_paths: The site-packages paths for the package.
         bin_paths: The bin paths for the package.
         extra_build_snippets: Optional list of raw BUILD file content strings.
+
+    Returns:
+        The rendered BUILD.bazel file content.
     """
     attr_lines = []
     for key, val in sorted(macro_attrs.items()):
         attr_lines.append("    {} = {},".format(key, val))
 
-    # Load the backend macro from this lock repo's _backend directory.
-    # The macro inherits attrs from the underlying rule and pre-fills
-    # tool_deps defaults from packages present in the lockfile.
-    backend_bzl = "_backend:{}.bzl".format(backend_macro)
-
-    build_content = """\nload("@{lock_repo}//{backend_bzl}", "{backend_macro}")
+    build_content = """\nload("{rule_bzl}", "{backend_macro}")
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
 
 package(default_visibility = ["//visibility:public"])
@@ -108,8 +107,7 @@ pycross_wheel_metadata(
     bin_paths = {bin_paths},
 )
 """.format(
-        lock_repo = rctx.attr.lock_repo,
-        backend_bzl = backend_bzl,
+        rule_bzl = rule_bzl,
         backend_macro = backend_macro,
         attrs = "\n".join(attr_lines),
         site_paths = site_paths,
@@ -120,17 +118,50 @@ pycross_wheel_metadata(
         for snippet in extra_build_snippets:
             build_content += "\n" + snippet + "\n"
 
+    return build_content
+
+def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, extra_build_snippets = None, backend_configs = None):
+    """Render the BUILD.bazel file for an sdist repo.
+
+    Args:
+        rctx: The repository context.
+        macro_attrs: Dict of macro attribute name -> Starlark literal string.
+        backend_macro: The backend macro name (e.g. 'meson_build').
+        site_paths: The site-packages paths for the package.
+        bin_paths: The bin paths for the package.
+        extra_build_snippets: Optional list of raw BUILD file content strings.
+        backend_configs: Optional backend config registry override (defaults to `BACKEND_CONFIGS`).
+    """
+    configs = backend_configs if backend_configs != None else BACKEND_CONFIGS
+    config = configs.get(backend_macro)
+    if config == None:
+        fail("Unknown build backend: " + backend_macro +
+             ". Registered backends: " + ", ".join(sorted(configs.keys())))
+
+    build_content = _render_build_content(
+        macro_attrs,
+        backend_macro,
+        config["rule_bzl"],
+        site_paths,
+        bin_paths,
+        extra_build_snippets = extra_build_snippets,
+    )
+
     rctx.file("BUILD.bazel", build_content)
     rctx.file("REPO.bazel", "")
 
-def _validate_build_backend(attr):
+def _validate_build_backend(attr, backend_to_rule = None, backend_configs = None, default_backend = None):
     if not attr.build_backend:
         return
-    known_backends = {v: True for v in attr.backend_to_rule.values()}
-    for name in (getattr(attr, "backend_tool_packages", None) or {}).keys():
+    backend_to_rule = backend_to_rule if backend_to_rule != None else BACKEND_TO_RULE
+    backend_configs = backend_configs if backend_configs != None else BACKEND_CONFIGS
+    default_backend = default_backend if default_backend != None else DEFAULT_BACKEND
+
+    known_backends = {name: True for name in backend_configs.keys()}
+    for name in backend_to_rule.values():
         known_backends[name] = True
-    if attr.default_backend:
-        known_backends[attr.default_backend] = True
+    if default_backend:
+        known_backends[default_backend] = True
     if attr.build_backend not in known_backends:
         fail("Unknown build backend: " + attr.build_backend +
              ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
@@ -157,21 +188,30 @@ def _merge_tool_deps_override(tool_deps, override, tool_packages, backend_macro,
             ))
         tool_deps[norm_name] = label
 
-def _compute_sdist_build_config(attr, metadata):
+def _compute_sdist_build_config(attr, metadata, backend_to_rule = None, backend_configs = None, default_backend = None):
     """Compute macro attributes, resolved backend, and paths from sdist metadata and repo attrs.
 
     Args:
         attr: A struct or rctx.attr with sdist_repo attributes.
         metadata: Decoded dict from inspect_package.py.
+        backend_to_rule: Optional pyproject-backend -> rule-name map (defaults to `BACKEND_TO_RULE`).
+        backend_configs: Optional rule-name -> config dict map (defaults to `BACKEND_CONFIGS`).
+        default_backend: Optional fallback rule name (defaults to `DEFAULT_BACKEND`).
 
     Returns:
         A struct with macro_attrs, backend_macro, site_paths, bin_paths,
         applied_override_config, non_matching_override_backends.
     """
-    _validate_build_backend(attr)
+    backend_to_rule = backend_to_rule if backend_to_rule != None else BACKEND_TO_RULE
+    backend_configs = backend_configs if backend_configs != None else BACKEND_CONFIGS
+    default_backend = default_backend if default_backend != None else DEFAULT_BACKEND
 
-    backend_to_rule = attr.backend_to_rule
-    default_backend = attr.default_backend
+    _validate_build_backend(
+        attr,
+        backend_to_rule = backend_to_rule,
+        backend_configs = backend_configs,
+        default_backend = default_backend,
+    )
 
     macro_attrs = {
         "name": repr("wheel_build"),
@@ -239,8 +279,10 @@ def _compute_sdist_build_config(attr, metadata):
 
     # Populate tool_deps from the resolved backend's tool_packages that are present in the lock.
     # Keyed by normalized tool package name so that override tool_deps can replace single entries.
-    backend_tool_packages = getattr(attr, "backend_tool_packages", None) or {}
-    tool_packages = [extract_pep508_name(pkg) for pkg in backend_tool_packages.get(backend_macro, [])]
+    tool_packages = [
+        extract_pep508_name(pkg)
+        for pkg in backend_configs.get(backend_macro, {}).get("tool_packages", [])
+    ]
     tool_deps = {}
     for pkg_name in tool_packages:
         if pkg_name in known_packages_set:
@@ -288,16 +330,18 @@ def _compute_sdist_build_config(attr, metadata):
         non_matching_override_backends = non_matching_backends,
     )
 
-def _select_hook_extract_patterns(attr, hook_files_by_backend):
+def _select_hook_extract_patterns(attr, hook_files_by_backend, backend_to_rule = None, default_backend = None):
     """Return sorted deduplicated sdist file patterns requested by applicable sdist hooks."""
     if not hook_files_by_backend:
         return []
     if attr.build_backend:
         raw_patterns = hook_files_by_backend.get(attr.build_backend, [])
     else:
-        possible = {v: True for v in attr.backend_to_rule.values()}
-        if attr.default_backend:
-            possible[attr.default_backend] = True
+        backend_to_rule = backend_to_rule if backend_to_rule != None else BACKEND_TO_RULE
+        default_backend = default_backend if default_backend != None else DEFAULT_BACKEND
+        possible = {v: True for v in backend_to_rule.values()}
+        if default_backend:
+            possible[default_backend] = True
         raw_patterns = []
         for backend_name, backend_patterns in hook_files_by_backend.items():
             if backend_name in possible:
@@ -431,20 +475,10 @@ _SDIST_REPO_ATTRS = {
     ),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "Sorted canonical package names pinned in the build tools repo, used to filter build_requires."),
-    "lock_repo": attr.string(doc = "Name of the lock workspace repo (e.g. 'uv__pkgs').", mandatory = True),
     "build_backend": attr.string(doc = "The build backend to use."),
-    "backend_to_rule": attr.string_dict(
-        doc = "Registry mapping pyproject backend names to pycross rule names.",
-    ),
-    "backend_tool_packages": attr.string_list_dict(
-        doc = "Registry mapping backend rule names to their tool_packages lists.",
-    ),
     "thin_repo": attr.string(
         doc = "Name of the thin workspace repo.",
         mandatory = True,
-    ),
-    "default_backend": attr.string(
-        doc = "The rule name used when no pyproject backend name matches.",
     ),
     "extra_build_tools": attr.string_list(doc = "Additional build-time tool packages."),
     "override_backend_configs": attr.string(
@@ -464,4 +498,5 @@ pycross_sdist_repo = repository_rule(
 
 # Visible for testing
 compute_sdist_build_config_for_testing = _compute_sdist_build_config
+render_build_content_for_testing = _render_build_content
 select_hook_extract_patterns_for_testing = _select_hook_extract_patterns

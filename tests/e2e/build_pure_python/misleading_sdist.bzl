@@ -9,10 +9,7 @@ def _misleading_sdist_ext_impl(mctx):
         name = "misleading_sdist",
         sdist = "//:misleading_pkg-0.1.0.tar.gz",
         thin_repo = "uv",
-        lock_repo = "uv",
         known_packages = ["hatchling"],
-        backend_to_rule = {"hatchling.build": "pep517_build"},
-        default_backend = "pep517_build",
     )
 
 misleading_sdist_ext = module_extension(

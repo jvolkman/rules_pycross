@@ -130,6 +130,7 @@ bzl_library(
         ":variant_resolver",
         ":variant_util",
         "@pycross_backends//:package_repo_dispatch",
+        "@pycross_backends//:registry",
         "@pypackaging.bzl//:pypackaging",
     ],
 )
@@ -291,6 +292,7 @@ bzl_library(
     srcs = ["sdist_repo.bzl"],
     deps = [
         ":internal_repo",
+        "@pycross_backends//:registry",
         "@pycross_backends//:sdist_dispatch",
         "@pypackaging.bzl//:pypackaging",
     ],

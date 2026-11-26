@@ -16,6 +16,7 @@ The file structure is as follows:
 """
 
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
+load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS")
 load("@pypackaging.bzl", "pypackaging")
 load(":build_text.bzl", "alias", "flag_setting")
 load(
@@ -518,13 +519,16 @@ def _package_repo_impl(rctx):
         "exports_files(glob(['*.bzl']))\n",
     )
 
-    backend_configs = {}
-    for name, config_json in rctx.attr.backend_configs.items():
-        backend_configs[name] = json.decode(config_json)
-
     build_repo = rctx.attr.build_repo
 
-    for macro_name, config in backend_configs.items():
+    for macro_name in sorted(rctx.attr.backend_names):
+        config = BACKEND_CONFIGS.get(macro_name)
+        if config == None:
+            fail("Unknown build backend '{}' in package_repo '{}'. Registered backends: {}".format(
+                macro_name,
+                rctx.name,
+                ", ".join(sorted(BACKEND_CONFIGS.keys())),
+            ))
         rule_bzl = config["rule_bzl"]
         tool_deps_labels = _backend_tool_deps_labels(config["tool_packages"], packages, build_repo)
 
@@ -593,8 +597,8 @@ package_repo = repository_rule(
         "repo_map": attr.string_dict(
             doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@pypi_foo//:wheel').",
         ),
-        "backend_configs": attr.string_dict(
-            doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
+        "backend_names": attr.string_list(
+            doc = "Registered backend rule names to emit `_backend/<name>.bzl` macros for.",
         ),
         "lock_data": attr.string(
             doc = "JSON-encoded merged workspace lock payload from merge_workspace_locks().",

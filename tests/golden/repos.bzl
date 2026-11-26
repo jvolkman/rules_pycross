@@ -6,16 +6,10 @@ load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_rep
 # buildifier: disable=bzl-visibility
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
 
-_SAMPLE_BACKEND_CONFIGS = {
-    "pep517_build": json.encode({
-        "rule_bzl": "@rules_pycross//pycross/backends:pep517.bzl",
-        "tool_packages": [],
-    }),
-    "setuptools_build": json.encode({
-        "rule_bzl": "@rules_pycross//pycross/backends:setuptools.bzl",
-        "tool_packages": ["setuptools", "wheel"],
-    }),
-}
+_SAMPLE_BACKEND_NAMES = [
+    "pep517_build",
+    "setuptools_build",
+]
 
 def _build_repo_map(lock_data):
     """Build a deterministic fake repo_map covering every wheel and sdist in `lock_data`."""
@@ -45,6 +39,8 @@ def _golden_snapshot_repo_impl(rctx):
             normalizations.append((canonical, apparent))
     normalizations = sorted(normalizations, key = lambda pair: (-len(pair[0]), pair[0]))
 
+    rules_pycross_canonical = Label("@rules_pycross//:MODULE.bazel").repo_name
+
     manifest = []
     for repo_label, prefix in sorted(rctx.attr.repo_roots.items(), key = lambda item: item[1]):
         root_dir = rctx.path(repo_label).dirname
@@ -67,6 +63,7 @@ def _golden_snapshot_repo_impl(rctx):
                     content = rctx.read(entry)
                     for canonical, apparent in normalizations:
                         content = content.replace("@@" + canonical, "@@" + apparent)
+                    content = content.replace("@@" + rules_pycross_canonical + "//pycross/", "@rules_pycross//pycross/")
                     dest = "{}/{}.golden".format(prefix, rel_path)
                     rctx.file(dest, content, executable = False)
                     manifest.append(dest)
@@ -123,7 +120,7 @@ def _register_case(
         case_name,
         members,
         build_repo = None,
-        backend_configs = None,
+        backend_names = None,
         skip_variant_members = None):
     """Instantiate package_repo + thin_package_repo(s) for one golden case."""
     pkgs_repo = "golden_{}__pkgs".format(case_name)
@@ -152,8 +149,8 @@ def _register_case(
         repo_map = merged_repo_map,
         lock_data = json.encode(merged_lock),
     )
-    if backend_configs:
-        pkg_attrs["backend_configs"] = backend_configs
+    if backend_names:
+        pkg_attrs["backend_names"] = backend_names
     package_repo(**pkg_attrs)
 
     pkgs_prefix = "{}/pkgs".format(case_name)
@@ -168,8 +165,8 @@ def _register_case(
             workspace_repo = pkgs_repo,
             member_name = member_name,
         )
-        if member.get("backend_configs"):
-            thin_attrs["backend_configs"] = member["backend_configs"]
+        if member.get("backend_names"):
+            thin_attrs["backend_names"] = member["backend_names"]
         if member.get("flags"):
             thin_attrs["flags"] = member["flags"]
         if member.get("settings"):
@@ -197,13 +194,13 @@ def _golden_snapshot_repos_impl(module_ctx):
         repo_roots,
         apparent_names,
         case_name = "plain",
-        backend_configs = _SAMPLE_BACKEND_CONFIGS,
+        backend_names = _SAMPLE_BACKEND_NAMES,
         members = [
             {
                 "repo_name": "golden_plain",
                 "snapshot_dir": "thin",
                 "lock_file": "//tests/golden/fixtures:plain.json",
-                "backend_configs": _SAMPLE_BACKEND_CONFIGS,
+                "backend_names": _SAMPLE_BACKEND_NAMES,
             },
         ],
     )
@@ -283,14 +280,14 @@ def _golden_snapshot_repos_impl(module_ctx):
         apparent_names,
         case_name = "sdist_reset",
         build_repo = "golden_sdist_reset__build",
-        backend_configs = _SAMPLE_BACKEND_CONFIGS,
+        backend_names = _SAMPLE_BACKEND_NAMES,
         skip_variant_members = ["golden_sdist_reset__build"],
         members = [
             {
                 "repo_name": "golden_sdist_reset",
                 "snapshot_dir": "thin_main",
                 "lock_file": "//tests/golden/fixtures:sdist_reset_main.json",
-                "backend_configs": _SAMPLE_BACKEND_CONFIGS,
+                "backend_names": _SAMPLE_BACKEND_NAMES,
             },
             {
                 "repo_name": "golden_sdist_reset__build",
