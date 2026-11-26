@@ -1,10 +1,11 @@
 """Tests for lock_common.bzl helpers."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:lock_common.bzl", "process_workspaces", "read_toml_cached", "register_workspace_repo", "resolve_member_project_file", "sibling_project_file")
+load("//pycross/private:lock_common.bzl", "process_workspaces", "read_toml_cached", "resolve_member_project_file", "sibling_project_file")
 
 # buildifier: disable=unused-variable
 def _test_member_project_files_impl(env, target):
@@ -68,91 +69,115 @@ def _test_read_toml_cached(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_read_toml_cached_impl)
 
 # buildifier: disable=unused-variable
-def _test_register_workspace_repo_dev_dependency_impl(env, target):
-    """Verify dev_dependency = True tags route to root_direct_dev_deps while non-dev route to root_direct_deps."""
-    lock_owners = {}
-    lock_repos = {}
-    lock_model_structs = {}
-    root_direct_deps = []
-    root_direct_dev_deps = []
-    ws_tag = struct(lock_file = Label("//:uv.lock"), local_wheels = [])
+def _test_process_workspaces_impl(env, target):
+    """Verify structured workspace descriptors, dev_dependency routing, build repo flags, and native Label preservation."""
     root_mod = struct(name = "root", is_root = True)
     dep_mod = struct(name = "dep", is_root = False)
-    transition = dict(flags = [], settings = {}, constraint_values = [], platform = None)
+    fake_mctx = struct(path = lambda _lbl: struct(exists = True))
 
-    register_workspace_repo(
-        lock_owners,
-        lock_repos,
-        lock_model_structs,
-        root_direct_deps,
-        ws_tag,
-        "ws",
-        "prod_repo",
-        ["app"],
-        ["default"],
-        transition,
-        root_mod,
-        [],
-        root_direct_dev_deps = root_direct_dev_deps,
-        is_dev_dependency = False,
+    ws_tag = struct(
+        name = "ws",
+        lock_file = Label("//:uv.lock"),
+        local_wheels = [],
+        pypi_indexes = ["https://example.com/simple"],
+        extra_project_files = [],
     )
-    register_workspace_repo(
-        lock_owners,
-        lock_repos,
-        lock_model_structs,
-        root_direct_deps,
-        ws_tag,
-        "ws",
-        "dev_repo",
-        ["app"],
-        ["default"],
-        transition,
-        root_mod,
-        [],
-        root_direct_dev_deps = root_direct_dev_deps,
-        is_dev_dependency = True,
-    )
-    register_workspace_repo(
-        lock_owners,
-        lock_repos,
-        lock_model_structs,
-        root_direct_deps,
-        ws_tag,
-        "ws",
-        "dep_repo",
-        ["app"],
-        ["default"],
-        transition,
-        dep_mod,
-        [],
-        root_direct_dev_deps = root_direct_dev_deps,
-        is_dev_dependency = True,
+    res = process_workspaces(
+        fake_mctx,
+        [struct(tag = ws_tag, module = root_mod, is_dev_dependency = False)],
+        [
+            struct(tag = struct(workspace = "ws", name = "prod_repo", projects = ["app"], dependency_groups = ["default"]), module = root_mod, is_dev_dependency = False),
+            struct(tag = struct(workspace = "ws", name = "dev_repo", projects = ["app"], dependency_groups = ["default"]), module = root_mod, is_dev_dependency = True),
+            struct(tag = struct(workspace = "ws", name = "dep_repo", projects = ["app"], dependency_groups = ["default"]), module = dep_mod, is_dev_dependency = True),
+        ],
+        lambda _mctx, _lock, _cache: [struct(name = "app", path = "apps/app")],
     )
 
-    env.expect.that_collection(root_direct_deps).contains_exactly(["prod_repo"])
-    env.expect.that_collection(root_direct_dev_deps).contains_exactly(["dev_repo"])
+    env.expect.that_collection(res.root_direct_deps).contains_exactly(["prod_repo"])
+    env.expect.that_collection(res.root_direct_dev_deps).contains_exactly(["dev_repo"])
+
+    ws = res.workspaces["ws"]
+    env.expect.that_collection(ws.pypi_indexes).contains_exactly(["https://example.com/simple"])
+    repos_by_name = {r.name: r for r in ws.repos}
+    env.expect.that_collection(repos_by_name.keys()).contains_exactly(["prod_repo", "dev_repo", "dep_repo", "ws__build"])
+
+    # Auto-generated <ws>__build sets both is_auto_build_repo and is_build_tools_repo.
+    auto_build = repos_by_name["ws__build"]
+    env.expect.that_bool(auto_build.is_auto_build_repo).equals(True)
+    env.expect.that_bool(auto_build.is_build_tools_repo).equals(True)
+    env.expect.that_bool(auto_build.lock_model.is_build_tools_repo).equals(True)
+
+    # Native Labels are preserved on lock_model, with sibling pyproject.toml first.
+    prod_model = repos_by_name["prod_repo"].lock_model
+    env.expect.that_str(type(prod_model.lock_file)).equals("Label")
+    env.expect.that_str(type(prod_model.extra_project_files[0])).equals("Label")
+    env.expect.that_collection([str(f) for f in prod_model.extra_project_files]).contains_exactly([
+        str(Label("//:pyproject.toml")),
+        str(Label("//:apps/app/pyproject.toml")),
+    ]).in_order()
+
+    # User-declared <ws>__build shadows auto-generated <ws>__build:
+    # is_build_tools_repo is True, is_auto_build_repo is False, and it stays a root direct dep.
+    ws_custom = struct(name = "custom", lock_file = Label("//:uv.lock"), local_wheels = [])
+    custom_res = process_workspaces(
+        fake_mctx,
+        [struct(tag = ws_custom, module = root_mod, is_dev_dependency = False)],
+        [struct(tag = struct(workspace = "custom", name = "custom__build", projects = ["app"], dependency_groups = ["*"]), module = root_mod, is_dev_dependency = False)],
+        lambda _mctx, _lock, _cache: [struct(name = "app", path = "")],
+    )
+    env.expect.that_collection(custom_res.root_direct_deps).contains_exactly(["custom__build"])
+    env.expect.that_int(len(custom_res.workspaces["custom"].repos)).equals(1)
+    custom_build = custom_res.workspaces["custom"].repos[0]
+    env.expect.that_bool(custom_build.is_build_tools_repo).equals(True)
+    env.expect.that_bool(custom_build.lock_model.is_build_tools_repo).equals(True)
+    env.expect.that_bool(custom_build.is_auto_build_repo).equals(False)
 
     # process_workspaces propagates is_dev_dependency from a single-project workspace to its implicit repo.
-    ws_direct = []
-    ws_dev = []
-    fake_mctx = struct(path = lambda _lbl: struct(exists = True))
-    process_workspaces(
+    dev_ws_tag = struct(name = "dev_ws", lock_file = Label("//:uv.lock"), local_wheels = [])
+    dev_res = process_workspaces(
         fake_mctx,
-        {},
-        {},
-        {},
-        [struct(tag = ws_tag, module = root_mod, ws_name = "dev_ws", is_dev_dependency = True)],
+        [struct(tag = dev_ws_tag, module = root_mod, is_dev_dependency = True)],
         [],
         lambda _mctx, _lock, _cache: [struct(name = "app", path = "")],
-        ws_direct,
-        root_direct_dev_deps = ws_dev,
     )
-    env.expect.that_collection(ws_direct).contains_exactly([])
-    env.expect.that_collection(ws_dev).contains_exactly(["dev_ws"])
+    env.expect.that_collection(dev_res.root_direct_deps).contains_exactly([])
+    env.expect.that_collection(dev_res.root_direct_dev_deps).contains_exactly(["dev_ws"])
 
-def _test_register_workspace_repo_dev_dependency(name):
+def _test_process_workspaces(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_register_workspace_repo_dev_dependency_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_process_workspaces_impl)
+
+def _duplicate_repo_subject_impl(_ctx):
+    mod_a = struct(name = "mod_a", is_root = True)
+    mod_b = struct(name = "mod_b", is_root = False)
+    fake_mctx = struct(path = lambda _lbl: struct(exists = True))
+    ws_tag = struct(name = "ws", lock_file = Label("//:uv.lock"), local_wheels = [])
+    process_workspaces(
+        fake_mctx,
+        [struct(tag = ws_tag, module = mod_a, is_dev_dependency = False)],
+        [
+            struct(tag = struct(workspace = "ws", name = "ws__build", projects = ["app"], dependency_groups = ["*"]), module = mod_a),
+            struct(tag = struct(workspace = "ws", name = "ws__build", projects = ["app"], dependency_groups = ["*"]), module = mod_b),
+        ],
+        lambda _mctx, _lock, _cache: [struct(name = "app", path = "")],
+    )
+    return []
+
+_duplicate_repo_subject = rule(implementation = _duplicate_repo_subject_impl)
+
+def _test_duplicate_repo_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("lock repo 'ws__build' wanted by module 'mod_b' already created by module 'mod_a'"),
+    )
+
+def _test_duplicate_repo_fails(name):
+    util.helper_target(_duplicate_repo_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_duplicate_repo_fails_impl,
+    )
 
 def lock_common_test_suite(name):
     test_suite(
@@ -160,6 +185,7 @@ def lock_common_test_suite(name):
         tests = [
             _test_member_project_files,
             _test_read_toml_cached,
-            _test_register_workspace_repo_dev_dependency,
+            _test_process_workspaces,
+            _test_duplicate_repo_fails,
         ],
     )

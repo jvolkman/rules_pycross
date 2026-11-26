@@ -92,12 +92,11 @@ def _test_compute_workspace_pkg_has_deps_impl(env, target):
             },
         },
     }
-    memberships = {
-        "ws__build": "ws",
-        "ws_app": "ws",
-        "other_ws": "other_ws",
+    workspaces = {
+        "ws": struct(repos = [struct(name = "ws__build"), struct(name = "ws_app")]),
+        "other_ws": struct(repos = [struct(name = "other_ws")]),
     }
-    res = compute_workspace_pkg_has_deps_for_testing(all_resolved_locks, memberships)
+    res = compute_workspace_pkg_has_deps_for_testing(workspaces, all_resolved_locks)
     env.expect.that_bool(("ws", "pkg@1.0") in res).equals(True)
     env.expect.that_bool(("ws", "empty@1.0") in res).equals(False)
     env.expect.that_bool(("other_ws", "pkg@1.0") in res).equals(False)

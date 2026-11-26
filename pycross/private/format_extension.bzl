@@ -14,13 +14,11 @@ load("@bazel_features//:features.bzl", "bazel_features")
 load(":json_file_repo.bzl", "json_file_repo")
 load(
     ":lock_common.bzl",
-    "normalize_package_tag",
     "process_workspaces",
     "validate_transition_attrs",
 )
-load(":lock_contract.bzl", "build_repo_name")
 load(":lock_repo_creation.bzl", "create_repos")
-load(":lock_resolver.bzl", "resolve")
+load(":lock_resolver.bzl", "PASSTHROUGH_PACKAGE_ATTRS", "resolve")
 load(":util.bzl", "canonicalize_package_key", "parse_flag_arg")
 
 # Shared attrs for workspace tags.
@@ -176,38 +174,28 @@ PACKAGE_ATTRS = dict(
     ),
 )
 
-def _tag_to_annotation_data(pkg, wildcard_pkg = None):
-    """Convert a normalized package tag struct to an annotation data dict.
+_DEP_PACKAGE_ATTRS = ("extra_build_tools", "ignore_dependencies", "extra_dependencies")
 
-    Args:
-        pkg: A normalized package tag struct.
-        wildcard_pkg: Optional wildcard package tag struct for fallback values.
+def _package_tag_to_dict(tag):
+    """Convert a raw package() tag into a sparse annotation dict, omitting unset/falsy defaults."""
+    data = {}
+    for field, (_, mode) in PASSTHROUGH_PACKAGE_ATTRS.items():
+        val = getattr(tag, field, None)
+        if not val:
+            continue
+        if mode == "label":
+            data[field] = str(val)
+        elif mode == "label_list":
+            data[field] = [str(v) for v in val]
+        else:
+            data[field] = val
+    for field in _DEP_PACKAGE_ATTRS:
+        val = getattr(tag, field, None)
+        if val:
+            data[field] = val
+    return data
 
-    Returns:
-        A dict of annotation fields.
-    """
-    return dict(
-        source = getattr(pkg, "source", ""),
-        build_mode = pkg.build_mode or (wildcard_pkg.build_mode if wildcard_pkg else "") or "auto",
-        extra_build_tools = pkg.extra_build_tools or (wildcard_pkg.extra_build_tools if wildcard_pkg else []),
-        build_tools_repo = pkg.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
-        build_target = str(pkg.build_target) if pkg.build_target else (str(wildcard_pkg.build_target) if wildcard_pkg and wildcard_pkg.build_target else None),
-        ignore_dependencies = pkg.ignore_dependencies or (wildcard_pkg.ignore_dependencies if wildcard_pkg else []),
-        extra_dependencies = pkg.extra_dependencies or (wildcard_pkg.extra_dependencies if wildcard_pkg else []),
-        install_exclude_globs = pkg.install_exclude_globs or (wildcard_pkg.install_exclude_globs if wildcard_pkg else []),
-        post_install_patches = pkg.post_install_patches or (wildcard_pkg.post_install_patches if wildcard_pkg else []),
-        pre_build_patches = pkg.pre_build_patches or (wildcard_pkg.pre_build_patches if wildcard_pkg else []),
-        site_hooks = pkg.site_hooks or (wildcard_pkg.site_hooks if wildcard_pkg else []),
-        build_backend = pkg.build_backend or (wildcard_pkg.build_backend if wildcard_pkg else None),
-        site_paths = pkg.site_paths or (wildcard_pkg.site_paths if wildcard_pkg else []),
-        bin_paths = pkg.bin_paths or (wildcard_pkg.bin_paths if wildcard_pkg else []),
-        data_paths = pkg.data_paths or (wildcard_pkg.data_paths if wildcard_pkg else []),
-        include_paths = pkg.include_paths or (wildcard_pkg.include_paths if wildcard_pkg else []),
-        wheel_library_tags = pkg.wheel_library_tags or (wildcard_pkg.wheel_library_tags if wildcard_pkg else []),
-        precompile = pkg.precompile or (wildcard_pkg.precompile if wildcard_pkg else ""),
-    )
-
-tag_to_annotation_data_for_testing = _tag_to_annotation_data
+package_tag_to_dict_for_testing = _package_tag_to_dict
 
 def _normalize_flag(flag, is_root):
     """Validate a `--<flag>[=<value>]` repo flag and make its label resolve from the generated repo.
@@ -260,59 +248,44 @@ def _normalize_settings(settings, flags):
 
 canonicalize_package_tag_name_for_testing = _canonicalize_package_tag_name
 
-def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, repo_create_model_fn, toml_cache = None):
+def _resolve_lock_inline(module_ctx, repo, annotations_data, repo_create_model_fn, toml_cache = None):
     """Run translator + resolver inline within module_ctx.
 
     Args:
         module_ctx: The module_ctx object.
-        lock_info: The lock repo info struct.
-        lock_model: The lock model struct.
-        workspace_packages: Dict of workspace_name -> {pkg_name -> normalized_tag}.
+        repo: Structured repo descriptor from `process_workspaces()`.
+        annotations_data: Sparse annotation dicts for this workspace (`{pkg_key: dict}` or None).
         repo_create_model_fn: The format-specific translator function.
         toml_cache: Optional dict caching decoded TOML files by label.
 
     Returns:
         A dict containing the resolved lock data (packages, pins, remote_files, etc.).
     """
-
-    extra_project_files = [Label(f) for f in getattr(lock_model, "extra_project_files", [])]
-    lock_file = Label(lock_model.lock_file)
-
+    lock_model = repo.lock_model
     raw_lock_data = repo_create_model_fn(
         module_ctx,
-        extra_project_files,
-        lock_file,
+        lock_model.extra_project_files,
+        lock_model.lock_file,
         lock_model,
         toml_cache = toml_cache,
     )
 
-    # Compute annotations from package tags.
-    all_packages = dict(workspace_packages.get(lock_info.workspace, {}))
-
-    wildcard_pkg = all_packages.pop("*", None)
-
-    annotations_data = {}
-    if wildcard_pkg:
-        annotations_data["*"] = _tag_to_annotation_data(wildcard_pkg)
-    for package_name, package in all_packages.items():
-        annotations_data[package_name] = _tag_to_annotation_data(package, wildcard_pkg)
-
-    local_wheels = {}
-    for w in lock_info.local_wheels:
-        local_wheels[module_ctx.path(w).basename] = str(w)
+    local_wheels = {
+        module_ctx.path(w).basename: str(w)
+        for w in repo.local_wheels
+    }
 
     resolved_lock = resolve(
         lock_model_data = raw_lock_data,
         local_wheels = local_wheels,
         annotations_data = annotations_data,
-        default_extra_build_tools_args = wildcard_pkg.extra_build_tools if wildcard_pkg else [],
-        include_transitive = getattr(lock_model, "include_transitive", False),
-        transitive_testonly = getattr(lock_model, "transitive_testonly", False),
+        include_transitive = lock_model.include_transitive,
+        transitive_testonly = lock_model.transitive_testonly,
         # The workspace's build tools repo serves sdist builds from every repo, so
         # its variant-only pins get an unconditional fallback. Repos named in
         # `build_tools_repo` annotations are left alone: they're user repos that
         # may also serve runtime targets, where an unselected variant must fail.
-        ungated_fallback = lock_info.repo_name == build_repo_name(lock_info.workspace),
+        ungated_fallback = repo.is_build_tools_repo,
     )
 
     return {
@@ -343,74 +316,49 @@ def make_format_extension(
     """
 
     def _impl(module_ctx):
-        lock_owners = {}
-        lock_repos = {}
-        root_direct_deps = []
-        root_direct_dev_deps = []
-        lock_model_structs = {}
-
-        # Collect tags per module.
         workspace_tags = []
         member_tags = []
-
-        # Track per-workspace pypi_indexes.
-        workspace_pypi_indexes = {}
+        module_workspaces = {}
 
         has_is_dev_dep = hasattr(module_ctx, "is_dev_dependency")
 
         for module in module_ctx.modules:
+            module_workspaces[module.name] = [tag.name for tag in module.tags.workspace]
+
             # 1. Process workspace tags.
             for tag in module.tags.workspace:
-                ws_name = tag.name
                 workspace_tags.append(struct(
                     tag = tag,
                     module = module,
-                    ws_name = ws_name,
                     is_dev_dependency = module_ctx.is_dev_dependency(tag) if has_is_dev_dep else False,
                 ))
-                if tag.pypi_indexes:
-                    workspace_pypi_indexes[ws_name] = tag.pypi_indexes
 
             # 2. Process repo tags (member overrides).
             for tag in module.tags.repo:
                 validate_transition_attrs(tag, "repo")
                 flags = [_normalize_flag(f, module.is_root) for f in getattr(tag, "flags", [])]
-                member_tag = struct(
-                    workspace = tag.workspace,
-                    projects = getattr(tag, "projects", []),
-                    repo = getattr(tag, "name", ""),
-                    dependency_groups = getattr(tag, "dependency_groups", ["default"]),
+                transition = struct(
                     flags = flags,
                     settings = _normalize_settings(getattr(tag, "settings", {}), flags),
-                    constraint_values = getattr(tag, "constraint_values", []),
-                    platform = getattr(tag, "platform", None),
+                    constraint_values = [str(c) for c in getattr(tag, "constraint_values", [])],
+                    platform = str(tag.platform) if getattr(tag, "platform", None) else None,
                 )
                 member_tags.append(struct(
-                    tag = member_tag,
+                    tag = tag,
+                    transition = transition,
                     module = module,
                     is_dev_dependency = module_ctx.is_dev_dependency(tag) if has_is_dev_dep else False,
                 ))
 
         toml_cache = {}
-        process_workspaces(
+        processed = process_workspaces(
             module_ctx,
-            lock_owners,
-            lock_repos,
-            lock_model_structs,
             workspace_tags,
             member_tags,
             discover_members_fn,
-            root_direct_deps,
             toml_cache = toml_cache,
-            root_direct_dev_deps = root_direct_dev_deps,
         )
-
-        # Track which workspaces each module declares for validation
-        module_workspaces = {}
-        valid_workspaces = {r.workspace: True for r in lock_repos.values()}
-
-        for module in module_ctx.modules:
-            module_workspaces[module.name] = [tag.name for tag in module.tags.workspace]
+        workspaces = processed.workspaces
 
         # Process package annotations.
         workspace_packages = {}
@@ -431,22 +379,22 @@ def make_format_extension(
                 if ws_name not in workspaces_in_module:
                     fail("package '{}': workspace '{}' not declared by this module".format(tag.name, ws_name))
 
-                if ws_name not in valid_workspaces:
+                if ws_name not in workspaces:
                     fail("Package override specifies workspace '{}' which does not exist".format(ws_name))
 
-                normalized = normalize_package_tag(tag)
+                source = getattr(tag, "source", "")
                 pkg_key = _canonicalize_package_tag_name(tag.name)
-                if pkg_key == "*" and normalized.source:
+                if pkg_key == "*" and source:
                     fail("package '*' cannot specify 'source' in workspace '{}'".format(ws_name))
-                ann_key = (pkg_key, normalized.source) if normalized.source else pkg_key
+                ann_key = (pkg_key, source) if source else pkg_key
                 ws_pkgs = workspace_packages.setdefault(ws_name, {})
                 if ann_key in ws_pkgs:
-                    if normalized.source:
-                        fail("Multiple package entries for package '{}' (source '{}') in workspace '{}'".format(tag.name, normalized.source, ws_name))
+                    if source:
+                        fail("Multiple package entries for package '{}' (source '{}') in workspace '{}'".format(tag.name, source, ws_name))
                     fail("Multiple package entries for package '{}' in workspace '{}'".format(tag.name, ws_name))
-                ws_pkgs[ann_key] = normalized
+                ws_pkgs[ann_key] = _package_tag_to_dict(tag)
 
-        if not lock_repos:
+        if not workspaces:
             if bazel_features.external_deps.extension_metadata_has_reproducible:
                 return module_ctx.extension_metadata(reproducible = True)
             return module_ctx.extension_metadata()
@@ -456,76 +404,49 @@ def make_format_extension(
         resolved_locks_json = {}
         all_locks = {}
 
-        for repo_name, repo_info in lock_repos.items():
-            resolved_data = _resolve_lock_inline(
-                module_ctx,
-                repo_info,
-                lock_model_structs[repo_name],
-                workspace_packages,
-                repo_create_model_fn,
-                toml_cache = toml_cache,
-            )
-            resolved_locks[repo_info.repo_name] = resolved_data
+        for ws_name, ws in workspaces.items():
+            ws_annotations = workspace_packages.get(ws_name)
+            for repo in ws.repos:
+                resolved_data = _resolve_lock_inline(
+                    module_ctx,
+                    repo,
+                    ws_annotations,
+                    repo_create_model_fn,
+                    toml_cache = toml_cache,
+                )
+                resolved_locks[repo.name] = resolved_data
 
-            # package_repo and thin_package_repo don't read remote_files; omit it
-            # from the serialized JSON and reuse the encoded string for both.
-            repo_lock_data = {k: v for k, v in resolved_data.items() if k != "remote_files"}
-            encoded_lock = json.encode(repo_lock_data)
-            resolved_locks_json[repo_info.repo_name] = encoded_lock
+                # package_repo and thin_package_repo don't read remote_files; omit it
+                # from the serialized JSON and reuse the encoded string for both.
+                repo_lock_data = {k: v for k, v in resolved_data.items() if k != "remote_files"}
+                encoded_lock = json.encode(repo_lock_data)
+                resolved_locks_json[repo.name] = encoded_lock
 
-            # Write the resolved lock JSON to a repo.
-            lock_repo_name = "{}_lock_json".format(repo_info.repo_name)
-            json_file_repo(
-                name = lock_repo_name,
-                content = encoded_lock,
-            )
-            all_locks[repo_info.repo_name] = "@{}//:data.json".format(lock_repo_name)
-
-        # Compute workspace metadata.
-        workspace_memberships = {}
-        repo_flags = {}
-        repo_settings = {}
-        repo_constraint_values = {}
-        repo_platforms = {}
-        auto_build_repos = []
-
-        for repo_info in lock_repos.values():
-            workspace_memberships[repo_info.repo_name] = repo_info.workspace
-
-            if getattr(repo_info, "is_auto_build_repo", False):
-                auto_build_repos.append(repo_info.repo_name)
-            if repo_info.flags:
-                repo_flags[repo_info.repo_name] = repo_info.flags
-            if repo_info.settings:
-                repo_settings[repo_info.repo_name] = repo_info.settings
-            if repo_info.constraint_values:
-                repo_constraint_values[repo_info.repo_name] = repo_info.constraint_values
-            if repo_info.platform:
-                repo_platforms[repo_info.repo_name] = repo_info.platform
+                # Write the resolved lock JSON to a repo.
+                lock_repo_name = "{}_lock_json".format(repo.name)
+                json_file_repo(
+                    name = lock_repo_name,
+                    content = encoded_lock,
+                )
+                all_locks[repo.name] = "@{}//:data.json".format(lock_repo_name)
 
         create_repos(
             module_ctx = module_ctx,
+            workspaces = workspaces,
             all_locks = all_locks,
-            workspace_memberships = workspace_memberships,
-            repo_flags = repo_flags,
-            repo_settings = repo_settings,
-            repo_constraint_values = repo_constraint_values,
-            repo_platforms = repo_platforms,
-            workspace_pypi_indexes = workspace_pypi_indexes,
             resolved_locks = resolved_locks,
             resolved_locks_json = resolved_locks_json,
-            auto_build_repos = auto_build_repos,
         )
 
         if bazel_features.external_deps.extension_metadata_has_reproducible:
             return module_ctx.extension_metadata(
-                root_module_direct_deps = root_direct_deps,
-                root_module_direct_dev_deps = root_direct_dev_deps,
+                root_module_direct_deps = processed.root_direct_deps,
+                root_module_direct_dev_deps = processed.root_direct_dev_deps,
                 reproducible = True,
             )
         return module_ctx.extension_metadata(
-            root_module_direct_deps = root_direct_deps,
-            root_module_direct_dev_deps = root_direct_dev_deps,
+            root_module_direct_deps = processed.root_direct_deps,
+            root_module_direct_dev_deps = processed.root_direct_dev_deps,
         )
 
     # Build the repo tag_class by merging shared and transition attrs.

@@ -11,6 +11,33 @@ load(
 )
 load(":variant_util.bzl", "variant_item_qname")
 
+# Declarative spec for package() annotation fields passed through to resolved packages:
+#   field_name -> (default, mode)
+# where `mode` controls tag-to-dict conversion and resolver post-processing:
+#   "plain": pass value through unchanged
+#   "label": stringify scalar Label during tag conversion
+#   "label_list": stringify each Label in a list during tag conversion
+#   "dedup": deduplicate list entries while preserving order
+PASSTHROUGH_PACKAGE_ATTRS = {
+    "build_backend": (None, "plain"),
+    "build_target": (None, "label"),
+    "build_mode": ("auto", "plain"),
+    "build_tools_repo": (None, "plain"),
+    "install_exclude_globs": ([], "dedup"),
+    "post_install_patches": ([], "label_list"),
+    "pre_build_patches": ([], "label_list"),
+    "site_hooks": ([], "plain"),
+    "site_paths": ([], "plain"),
+    "bin_paths": ([], "plain"),
+    "data_paths": ([], "plain"),
+    "include_paths": ([], "plain"),
+    "wheel_library_tags": ([], "plain"),
+    "precompile": ("", "plain"),
+}
+
+def _default_value(default):
+    return list(default) if type(default) == "list" else default
+
 def _file_key(f):
     if not f.get("sha256"):
         fail("PackageFile missing sha256: " + str(f))
@@ -147,16 +174,10 @@ def _resolve_single_version(name, pkg_index, attr_name, source = ""):
     )[0]
 
 def _apply_annotation(ann, pkg_index):
-    build_deps = None
-    if "extra_build_tools" in ann:
-        build_deps = []
-        for dep in ann["extra_build_tools"]:
-            resolved_dep = _resolve_single_version(
-                dep,
-                pkg_index,
-                "extra_build_tools",
-            )
-            build_deps.append(resolved_dep)
+    build_deps = [
+        _resolve_single_version(dep, pkg_index, "extra_build_tools")
+        for dep in ann.get("extra_build_tools", [])
+    ]
 
     ignore_deps = {}
     for dep in ann.get("ignore_dependencies", []):
@@ -165,43 +186,33 @@ def _apply_annotation(ann, pkg_index):
             fail('ignore_dependencies entry "{}" matches no packages'.format(dep))
         ignore_deps[canonical] = True
 
-    extra_deps = []
-    for dep in ann.get("extra_dependencies", []):
-        resolved_dep = _resolve_single_version(
-            dep,
-            pkg_index,
-            "extra_dependencies",
-        )
-        extra_deps.append(resolved_dep)
+    extra_deps = [
+        _resolve_single_version(dep, pkg_index, "extra_dependencies")
+        for dep in ann.get("extra_dependencies", [])
+    ]
+
+    passthrough = {}
+    for field, (default, mode) in PASSTHROUGH_PACKAGE_ATTRS.items():
+        val = ann.get(field)
+        if not val:
+            passthrough[field] = _default_value(default)
+        elif mode == "dedup":
+            passthrough[field] = list({g: True for g in val}.keys())
+        else:
+            passthrough[field] = val
 
     return struct(
         extra_build_tools = build_deps,
-        build_tools_repo = ann.get("build_tools_repo"),
-        build_target = ann.get("build_target"),
-        build_mode = ann.get("build_mode", "auto"),
         ignore_dependencies = ignore_deps,
         extra_dependencies = extra_deps,
-        install_exclude_globs = list({g: True for g in ann.get("install_exclude_globs", [])}.keys()),
-        post_install_patches = ann.get("post_install_patches", []),
-        pre_build_patches = ann.get("pre_build_patches", []),
-        site_hooks = ann.get("site_hooks", []),
-        build_backend = ann.get("build_backend"),
-        site_paths = ann.get("site_paths", []),
-        bin_paths = ann.get("bin_paths", []),
-        data_paths = ann.get("data_paths", []),
-        include_paths = ann.get("include_paths", []),
-        wheel_library_tags = ann.get("wheel_library_tags", []),
-        precompile = ann.get("precompile", ""),
+        passthrough = passthrough,
     )
 
 def _collect_package_annotations(annotations_data, pkg_index):
     annotations = {}
 
     wildcard_annotation = annotations_data.get("*")
-    specific_annotations = {}
-    for k, v in annotations_data.items():
-        if k != "*":
-            specific_annotations[k] = v
+    specific_annotations = {k: v for k, v in annotations_data.items() if k != "*"}
 
     specific_keys = {}
     for pkg, ann in specific_annotations.items():
@@ -214,7 +225,12 @@ def _collect_package_annotations(annotations_data, pkg_index):
             source = pkg_source,
             allow_multiple_sources = True,
         )
-        applied = _apply_annotation(ann, pkg_index)
+        if wildcard_annotation:
+            merged = dict(wildcard_annotation)
+            merged.update(ann)
+        else:
+            merged = ann
+        applied = _apply_annotation(merged, pkg_index)
         for resolved_pkg in resolved_pkgs:
             if resolved_pkg in specific_keys:
                 fail('Multiple annotations match package "{}"'.format(resolved_pkg))
@@ -233,7 +249,7 @@ def _collect_package_annotations(annotations_data, pkg_index):
 
     return annotations, wildcard_only_keys
 
-def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, context):
+def _create_package_resolver(pkg_key, pkg, ann, context):
     parts = parse_package_key(pkg_key)
     pkg_name = parts.name
     pkg_version = parts.version
@@ -301,28 +317,17 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
 
     extra_build_tools = []
     all_dependency_keys = []
-    ann_build_deps = ann.extra_build_tools if ann else None
+    ann_build_deps = ann.extra_build_tools if ann else []
     ann_ignore_deps = ann.ignore_dependencies if ann else {}
 
     normal_deps = {d.get("key") or "{}@{}".format(d["name"], d["version"]): True for d in pkg.get("dependencies", [])}
 
-    def _base_key(key):
-        return base_package_key(key)
-
-    if ann_build_deps != None:
-        for dep_key in ann_build_deps:
-            if _base_key(dep_key) == pkg_key_no_extra:
-                continue
-            if dep_key not in normal_deps:
-                extra_build_tools.append(dep_key)
-                all_dependency_keys.append(dep_key)
-    else:
-        for dep_key in default_extra_build_tools:
-            if _base_key(dep_key) == pkg_key_no_extra:
-                continue
-            if not _dep_is_ignored(dep_key, ann_ignore_deps) and dep_key not in normal_deps:
-                extra_build_tools.append(dep_key)
-                all_dependency_keys.append(dep_key)
+    for dep_key in ann_build_deps:
+        if base_package_key(dep_key) == pkg_key_no_extra:
+            continue
+        if dep_key not in normal_deps:
+            extra_build_tools.append(dep_key)
+            all_dependency_keys.append(dep_key)
 
     marker_dependencies = []
     for dep in pkg.get("dependencies", []):
@@ -337,7 +342,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
 
     ann_extra_deps = ann.extra_dependencies if ann else []
     for dep_key in ann_extra_deps:
-        if _base_key(dep_key) == pkg_key_no_extra:
+        if base_package_key(dep_key) == pkg_key_no_extra:
             continue
         if dep_key not in normal_deps:
             marker_dependencies.append({
@@ -346,9 +351,10 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
             })
             all_dependency_keys.append(dep_key)
 
-    build_mode = ann.build_mode if ann else "auto"
+    passthrough = ann.passthrough if ann else None
+    build_mode = passthrough["build_mode"] if passthrough else "auto"
     always_build = build_mode == "always"
-    build_target = ann.build_target if ann else None
+    build_target = passthrough["build_target"] if passthrough else None
 
     if not pkg_extra and not wheel_candidates and sdist_file == None and not build_target:
         fail("Package {} has no compatible wheels and no sdist found.".format(pkg_key))
@@ -375,24 +381,12 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "version": pkg_version,
         "marker_dependencies": marker_dependencies,
         "sdist_file": sdist_file,
-        "build_target": build_target,
-        "build_tools_repo": ann.build_tools_repo if ann else None,
-        "build_mode": build_mode,
         "extra_build_tools": extra_build_tools,
-        "install_exclude_globs": ann.install_exclude_globs if ann else [],
-        "post_install_patches": ann.post_install_patches if ann else [],
-        "pre_build_patches": ann.pre_build_patches if ann else [],
-        "site_hooks": ann.site_hooks if ann else [],
-        "build_backend": ann.build_backend if ann else None,
-        "site_paths": ann.site_paths if ann else [],
-        "bin_paths": ann.bin_paths if ann else [],
-        "data_paths": ann.data_paths if ann else [],
-        "include_paths": ann.include_paths if ann else [],
-        "wheel_library_tags": ann.wheel_library_tags if ann else [],
-        "precompile": ann.precompile if ann else "",
         "wheel_candidates": wheel_candidates,
         "availability_markers": availability_markers,
     }
+    for field, (default, _) in PASSTHROUGH_PACKAGE_ATTRS.items():
+        resolved_pkg[field] = passthrough[field] if passthrough else _default_value(default)
     if pkg.get("source_dir"):
         resolved_pkg["source_dir"] = pkg["source_dir"]
 
@@ -439,7 +433,6 @@ def _resolve_packages(
         pins,
         context,
         annotations,
-        default_extra_build_tools,
         wildcard_only_keys):
     work_set = {k: True for k in lock_model_packages.keys()}
     for pin_dict in pins.values():
@@ -455,12 +448,12 @@ def _resolve_packages(
     # Because `enqueued` prevents pushing any package key more than once, each
     # iteration pops a distinct key. The total number of distinct keys is
     # bounded by initial keys + all distinct dep keys referenced by lock
-    # packages, annotations, and default build tools.
-    extra_refs = len(default_extra_build_tools)
+    # packages and annotations.
+    extra_refs = 0
     for pkg in lock_model_packages.values():
         extra_refs += len(pkg.get("dependencies", []))
     for ann in annotations.values():
-        extra_refs += len(ann.extra_dependencies) + len(ann.extra_build_tools or [])
+        extra_refs += len(ann.extra_dependencies) + len(ann.extra_build_tools)
     max_iters = len(work) + extra_refs + 1
 
     for _ in range(max_iters):
@@ -483,7 +476,6 @@ def _resolve_packages(
             next_package_key,
             raw_pkg,
             ann,
-            default_extra_build_tools,
             context,
         )
         packages_by_package_key[next_package_key] = entry
@@ -670,7 +662,6 @@ def resolve(
         lock_model_data,
         local_wheels = None,
         annotations_data = None,
-        default_extra_build_tools_args = None,
         include_transitive = False,
         transitive_testonly = False,
         ungated_fallback = False):
@@ -680,7 +671,6 @@ def resolve(
         lock_model_data: The lock model data.
         local_wheels: Dictionary of local wheels.
         annotations_data: Annotations data.
-        default_extra_build_tools_args: Default extra build tools args.
         include_transitive: Whether to include transitive dependencies.
         transitive_testonly: Whether to perform reachability analysis to assign testonly status.
         ungated_fallback: Give every pin that only has uv conflict-variant branches an
@@ -693,7 +683,6 @@ def resolve(
     local_wheels = local_wheels or {}
     if type(local_wheels) != "dict":
         fail("local_wheels must be a dict (filename -> label), got {}".format(type(local_wheels)))
-    default_extra_build_tools_args = default_extra_build_tools_args or []
     local_wheels_by_pkg = {}
     for filename, label in local_wheels.items():
         parsed = pypackaging.utils.parse_wheel_filename(filename)
@@ -741,15 +730,6 @@ def resolve(
             pkg_index,
         )
 
-    default_extra_build_tools = []
-    for dep in default_extra_build_tools_args:
-        resolved_dep = _resolve_single_version(
-            dep,
-            pkg_index,
-            "extra_build_tools",
-        )
-        default_extra_build_tools.append(resolved_dep)
-
     raw_pins = lock_model_data.get("pins", {})
     pins = {}
     for k, v in raw_pins.items():
@@ -769,7 +749,6 @@ def resolve(
         pins,
         context,
         annotations,
-        default_extra_build_tools,
         wildcard_only_keys,
     )
 

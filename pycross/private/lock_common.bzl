@@ -28,41 +28,12 @@ def check_unique_repo_name(owners, module_name, repo_name):
         ))
     owners[repo_name] = module_name
 
-def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs, is_auto_build_repo = False):
-    """Create a lock struct for a workspace member, inheriting workspace-level settings."""
-    return struct(
-        repo_name = repo_name,
-        workspace = workspace_name,
-        local_wheels = ws_tag.local_wheels,
-        flags = transition_attrs.get("flags", []),
-        settings = transition_attrs.get("settings", {}),
-        constraint_values = transition_attrs.get("constraint_values", []),
-        platform = transition_attrs.get("platform"),
-        is_auto_build_repo = is_auto_build_repo,
-    )
-
-def normalize_package_tag(tag):
-    """Normalize a generic package tag into a struct."""
-    return struct(
-        source = getattr(tag, "source", ""),
-        build_mode = tag.build_mode,
-        extra_build_tools = tag.extra_build_tools,
-        build_tools_repo = tag.build_tools_repo,
-        build_target = tag.build_target,
-        ignore_dependencies = tag.ignore_dependencies,
-        extra_dependencies = tag.extra_dependencies,
-        install_exclude_globs = tag.install_exclude_globs,
-        post_install_patches = [str(label) for label in tag.post_install_patches],
-        pre_build_patches = [str(label) for label in tag.pre_build_patches],
-        site_hooks = tag.site_hooks,
-        build_backend = tag.build_backend if tag.build_backend else None,
-        site_paths = tag.site_paths,
-        bin_paths = tag.bin_paths,
-        data_paths = tag.data_paths,
-        include_paths = tag.include_paths,
-        wheel_library_tags = tag.wheel_library_tags,
-        precompile = tag.precompile,
-    )
+_EMPTY_TRANSITION = struct(
+    flags = [],
+    settings = {},
+    constraint_values = [],
+    platform = None,
+)
 
 def read_toml_cached(ctx, file_label, toml_cache = None):
     """Read and decode a TOML file, caching the decoded dict by label.
@@ -115,81 +86,6 @@ def resolve_member_project_file(lock_file_label, member_path):
 def sibling_project_file(lock_file_label):
     """Return the label of the pyproject.toml next to a lock file."""
     return resolve_member_project_file(lock_file_label, "")
-
-def get_member_transition_attrs(tag):
-    """Extract normalized transition attributes from a repo tag."""
-    return dict(
-        flags = getattr(tag, "flags", []),
-        settings = getattr(tag, "settings", {}),
-        constraint_values = [str(c) for c in getattr(tag, "constraint_values", [])],
-        platform = str(tag.platform) if getattr(tag, "platform", None) else None,
-    )
-
-def register_workspace_repo(
-        lock_owners,
-        lock_repos,
-        lock_model_structs,
-        root_direct_deps,
-        ws_tag,
-        ws_name,
-        repo_name,
-        projects,
-        raw_dependency_groups,
-        transition_attrs,
-        lock_module,
-        extra_project_files,
-        is_auto_build_repo = False,
-        root_direct_dev_deps = None,
-        is_dev_dependency = False):
-    """Register a workspace lock repo.
-
-    Args:
-        lock_owners: Dict to track repo ownership.
-        lock_repos: Dict to store repo configs.
-        lock_model_structs: Dict to store lock model structs.
-        root_direct_deps: List to store root direct dependencies.
-        ws_tag: The workspace tag.
-        ws_name: The workspace name.
-        repo_name: The repo name for this member.
-        projects: List of projects included in this repo.
-        raw_dependency_groups: Raw dependency group strings from user config
-            (e.g. ["default", "group:dev;testonly", "transitive"]).
-        transition_attrs: Transition attributes dict.
-        lock_module: The module owning this lock.
-        extra_project_files: List of extra pyproject.toml files.
-        is_auto_build_repo: Whether this repo is the auto-generated `<ws>__build`
-            build-tools repo (not declared explicitly by the user).
-        root_direct_dev_deps: Optional list to store root direct dev dependencies.
-        is_dev_dependency: Whether the tag declaring this repo was on a `dev_dependency = True` extension proxy.
-    """
-    check_unique_repo_name(lock_owners, lock_module.name, repo_name)
-    lock_repos[repo_name] = workspace_lock_struct(
-        ws_tag,
-        repo_name,
-        ws_name,
-        transition_attrs,
-        is_auto_build_repo = is_auto_build_repo,
-    )
-    if lock_module.is_root:
-        if is_dev_dependency and root_direct_dev_deps != None:
-            root_direct_dev_deps.append(repo_name)
-        else:
-            root_direct_deps.append(repo_name)
-
-    parsed = parse_dependency_group_entries(raw_dependency_groups)
-
-    lock_model_structs[repo_name] = struct(
-        extra_project_files = [str(f) for f in extra_project_files],
-        lock_file = str(ws_tag.lock_file),
-        projects = projects,
-        dependency_groups = parsed.dependency_groups,
-        testonly_groups = parsed.testonly_groups,
-        non_testonly_groups = parsed.non_testonly_groups,
-        wildcard_testonly = parsed.wildcard_testonly,
-        include_transitive = parsed.include_transitive,
-        transitive_testonly = parsed.transitive_testonly,
-        is_build_tools_repo = repo_name == build_repo_name(ws_name),
-    )
 
 def parse_dependency_group_entries(raw_groups):
     """Parse dependency group entries with last-wins testonly semantics.
@@ -259,33 +155,7 @@ def parse_dependency_group_entries(raw_groups):
         transitive_testonly = transitive_testonly,
     )
 
-def process_repo(
-        lock_owners,
-        lock_repos,
-        lock_model_structs,
-        root_direct_deps,
-        ws_tag,
-        ws_name,
-        tag_info,
-        extra_project_files,
-        root_direct_dev_deps = None):
-    """Processes a single repo tag.
-
-    Args:
-        lock_owners: Dict to track repo ownership.
-        lock_repos: Dict to store repo configs.
-        lock_model_structs: Dict to store lock model structs.
-        root_direct_deps: List to store root direct dependencies.
-        ws_tag: The workspace tag.
-        ws_name: The workspace name.
-        tag_info: The repo tag info.
-        extra_project_files: List of extra pyproject.toml files.
-        root_direct_dev_deps: Optional list to store root direct dev dependencies.
-    """
-    tag = tag_info.tag
-
-    raw_groups = tag.dependency_groups
-
+def _warn_redundant_dependency_groups(repo_name, ws_name, raw_groups):
     has_wildcard = False
     wildcard_is_testonly = False
     redundant_specific = False
@@ -303,71 +173,83 @@ def process_repo(
 
     if has_wildcard and redundant_specific:
         # buildifier: disable=print
-        print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, raw_groups))
+        print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(repo_name, ws_name, raw_groups))
 
-    # Get transition attrs
-    transition_attrs = get_member_transition_attrs(tag)
-
-    register_workspace_repo(
-        lock_owners,
-        lock_repos,
-        lock_model_structs,
-        root_direct_deps,
+def _make_repo(
         ws_tag,
         ws_name,
-        tag.repo,
-        tag.projects,
-        raw_groups,
-        transition_attrs,
-        tag_info.module,
+        repo_name,
+        projects,
+        raw_dependency_groups,
+        transition,
         extra_project_files,
-        root_direct_dev_deps = root_direct_dev_deps,
-        is_dev_dependency = getattr(tag_info, "is_dev_dependency", False),
+        is_auto_build_repo = False):
+    parsed = parse_dependency_group_entries(raw_dependency_groups)
+    is_build_tools_repo = repo_name == build_repo_name(ws_name)
+    return struct(
+        name = repo_name,
+        workspace = ws_name,
+        local_wheels = getattr(ws_tag, "local_wheels", []),
+        transition = transition,
+        is_auto_build_repo = is_auto_build_repo,
+        is_build_tools_repo = is_build_tools_repo,
+        lock_model = struct(
+            extra_project_files = extra_project_files,
+            lock_file = ws_tag.lock_file,
+            projects = projects,
+            dependency_groups = parsed.dependency_groups,
+            testonly_groups = parsed.testonly_groups,
+            non_testonly_groups = parsed.non_testonly_groups,
+            wildcard_testonly = parsed.wildcard_testonly,
+            include_transitive = parsed.include_transitive,
+            transitive_testonly = parsed.transitive_testonly,
+            is_build_tools_repo = is_build_tools_repo,
+        ),
     )
+
+def _record_root_dep(module, repo_name, is_dev_dependency, root_direct_deps, root_direct_dev_deps):
+    if not module.is_root:
+        return
+    if is_dev_dependency:
+        root_direct_dev_deps.append(repo_name)
+    else:
+        root_direct_deps.append(repo_name)
 
 def process_workspaces(
         module_ctx,
-        lock_owners,
-        lock_repos,
-        lock_model_structs,
         workspace_tags,
         member_tags,
         discover_members_fn,
-        root_direct_deps,
-        toml_cache = None,
-        root_direct_dev_deps = None):
-    """Processes workspace definitions, discovers members, and processes them.
+        toml_cache = None):
+    """Process workspace definitions, discover members, and return structured workspace descriptors.
 
     Args:
         module_ctx: The module_ctx object.
-        lock_owners: Dict to track repo ownership.
-        lock_repos: Dict to store repo configs.
-        lock_model_structs: Dict to store lock model structs.
-        workspace_tags: List of workspace tags.
-        member_tags: List of member tags.
-        discover_members_fn: Function to discover members.
-        root_direct_deps: List to store root direct dependencies.
+        workspace_tags: List of `struct(tag, module, is_dev_dependency)` workspace tag wrappers.
+        member_tags: List of `struct(tag, transition, module, is_dev_dependency)` repo tag wrappers.
+        discover_members_fn: Function(module_ctx, lock_file_label, toml_cache) -> [struct(name, path)].
         toml_cache: Optional dict caching decoded TOML files by label.
-        root_direct_dev_deps: Optional list to store root direct dev dependencies.
+
+    Returns:
+        `struct(workspaces, root_direct_deps, root_direct_dev_deps)` where `workspaces` maps
+        workspace name -> `struct(name, pypi_indexes, repos)`.
     """
 
-    # Collect workspace definitions
-    workspaces = {}
+    # Collect workspace definitions.
+    ws_infos = {}
     for tag_info in workspace_tags:
-        if tag_info.ws_name in workspaces:
-            fail("Duplicate workspace name: '{}'".format(tag_info.ws_name))
-        workspaces[tag_info.ws_name] = tag_info
+        ws_name = tag_info.tag.name
+        if ws_name in ws_infos:
+            fail("Duplicate workspace name: '{}'".format(ws_name))
+        ws_infos[ws_name] = tag_info
 
-    # Auto-discover members for each workspace
-    workspace_discovered_members = {}
-    for name, ws_info in workspaces.items():
-        discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file, toml_cache)
-        workspace_discovered_members[name] = {m.name: m for m in discovered}
-
-    # Compute extra_project_files for each workspace (explicit or auto-discovered)
-    workspace_extra_project_files = {}
-    for name, ws_info in workspaces.items():
+    # Auto-discover members and compute extra_project_files for each workspace.
+    ws_discovered = {}
+    ws_extra_project_files = {}
+    for ws_name, ws_info in ws_infos.items():
         ws_tag = ws_info.tag
+        discovered = {m.name: m for m in discover_members_fn(module_ctx, ws_tag.lock_file, toml_cache)}
+        ws_discovered[ws_name] = discovered
 
         # The pyproject.toml next to the lock comes first: it's the workspace root
         # (whose settings, such as default-groups, apply to repos spanning several
@@ -377,7 +259,6 @@ def process_workspaces(
         sibling = sibling_project_file(ws_tag.lock_file)
         if module_ctx.path(sibling).exists:
             project_files.append(sibling)
-        discovered = workspace_discovered_members[name]
         for member_info in discovered.values():
             label = resolve_member_project_file(ws_tag.lock_file, member_info.path)
             if label not in project_files:
@@ -392,116 +273,124 @@ def process_workspaces(
             if f not in project_files:
                 project_files.append(f)
 
-        workspace_extra_project_files[name] = project_files
+        ws_extra_project_files[ws_name] = project_files
 
-    # Count repos per workspace
-    workspace_repo_count = {name: 0 for name in workspaces}
+    # Count explicit repo tags per workspace and validate references.
+    ws_repo_count = {ws_name: 0 for ws_name in ws_infos}
     for tag_info in member_tags:
-        if tag_info.tag.workspace in workspace_repo_count:
-            workspace_repo_count[tag_info.tag.workspace] += 1
-        else:
-            fail("repo tag references non-existent workspace: '{}'".format(tag_info.tag.workspace))
+        ws_name = tag_info.tag.workspace
+        if ws_name not in ws_repo_count:
+            fail("repo tag references non-existent workspace: '{}'".format(ws_name))
+        ws_repo_count[ws_name] += 1
 
-    # Apply Defaulting Rules
-    for ws_name, ws_info in workspaces.items():
-        if workspace_repo_count[ws_name] != 0:
-            continue
-        discovered = workspace_discovered_members[ws_name]
-        if not discovered:
-            fail("workspace '{}' contains no projects.".format(ws_name))
-        if len(discovered) > 1:
-            fail("workspace '{}' contains multiple projects but has no repo tags.".format(ws_name))
+    owners = {}
+    root_direct_deps = []
+    root_direct_dev_deps = []
+    ws_repos = {ws_name: [] for ws_name in ws_infos}
+    ws_repo_names = {ws_name: {} for ws_name in ws_infos}
 
-        # Auto-create implicit repo for the only project
-        project_name = list(discovered.keys())[0]
-        implicit_tag = struct(
-            workspace = ws_name,
-            projects = [project_name],
-            repo = ws_name,
-            dependency_groups = ["default"],
-            flags = [],
-            settings = {},
-            constraint_values = [],
-            platform = None,
-        )
-        member_tags.append(struct(
-            tag = implicit_tag,
-            module = ws_info.module,
-            is_dev_dependency = getattr(ws_info, "is_dev_dependency", False),
-        ))
-        workspace_repo_count[ws_name] += 1
-
+    # Register explicit repo tags.
     for tag_info in member_tags:
         tag = tag_info.tag
         ws_name = tag.workspace
-        discovered = workspace_discovered_members[ws_name]
-        ws_info = workspaces[ws_name]
+        discovered = ws_discovered[ws_name]
+        ws_info = ws_infos[ws_name]
 
-        projects = getattr(tag, "projects", [])
+        projects = list(getattr(tag, "projects", []))
         if not projects:
             if len(discovered) != 1:
                 fail("projects list is empty but workspace '{}' has {} members".format(ws_name, len(discovered)))
             projects = [list(discovered.keys())[0]]
 
-        repo = tag.repo
-        if not repo:
-            if workspace_repo_count[ws_name] != 1:
+        repo_name = getattr(tag, "name", "")
+        if not repo_name:
+            if ws_repo_count[ws_name] != 1:
                 fail("repo name is required for repo tags in workspace '{}' (multiple repo tags exist)".format(ws_name))
-            repo = ws_name
+            repo_name = ws_name
 
-        # Build complete tag
-        new_tag = struct(
-            workspace = ws_name,
-            projects = projects,
-            repo = repo,
-            dependency_groups = getattr(tag, "dependency_groups", ["default"]),
-            flags = getattr(tag, "flags", []),
-            settings = getattr(tag, "settings", {}),
-            constraint_values = getattr(tag, "constraint_values", []),
-            platform = getattr(tag, "platform", None),
-        )
-        new_tag_info = struct(
-            tag = new_tag,
-            module = tag_info.module,
-            is_dev_dependency = getattr(tag_info, "is_dev_dependency", False),
-        )
+        raw_groups = getattr(tag, "dependency_groups", ["default"])
+        _warn_redundant_dependency_groups(repo_name, ws_name, raw_groups)
 
-        process_repo(
-            lock_owners,
-            lock_repos,
-            lock_model_structs,
+        check_unique_repo_name(owners, tag_info.module.name, repo_name)
+        _record_root_dep(
+            tag_info.module,
+            repo_name,
+            getattr(tag_info, "is_dev_dependency", False),
             root_direct_deps,
-            ws_info.tag,
-            ws_name,
-            new_tag_info,
-            workspace_extra_project_files[ws_name],
-            root_direct_dev_deps = root_direct_dev_deps,
+            root_direct_dev_deps,
         )
+        repo = _make_repo(
+            ws_tag = ws_info.tag,
+            ws_name = ws_name,
+            repo_name = repo_name,
+            projects = projects,
+            raw_dependency_groups = raw_groups,
+            transition = getattr(tag_info, "transition", _EMPTY_TRANSITION),
+            extra_project_files = ws_extra_project_files[ws_name],
+        )
+        ws_repos[ws_name].append(repo)
+        ws_repo_names[ws_name][repo_name] = True
 
-    # Auto-generate the __build thin repo for this workspace.
-    for ws_name, ws_info in workspaces.items():
+    # Apply defaulting rules for workspaces with no explicit repo tags.
+    for ws_name, ws_info in ws_infos.items():
+        if ws_repo_count[ws_name] != 0:
+            continue
+        discovered = ws_discovered[ws_name]
+        if not discovered:
+            fail("workspace '{}' contains no projects.".format(ws_name))
+        if len(discovered) > 1:
+            fail("workspace '{}' contains multiple projects but has no repo tags.".format(ws_name))
+
+        project_name = list(discovered.keys())[0]
+        check_unique_repo_name(owners, ws_info.module.name, ws_name)
+        _record_root_dep(
+            ws_info.module,
+            ws_name,
+            getattr(ws_info, "is_dev_dependency", False),
+            root_direct_deps,
+            root_direct_dev_deps,
+        )
+        repo = _make_repo(
+            ws_tag = ws_info.tag,
+            ws_name = ws_name,
+            repo_name = ws_name,
+            projects = [project_name],
+            raw_dependency_groups = ["default"],
+            transition = _EMPTY_TRANSITION,
+            extra_project_files = ws_extra_project_files[ws_name],
+        )
+        ws_repos[ws_name].append(repo)
+        ws_repo_names[ws_name][ws_name] = True
+
+    # Auto-generate the `<ws>__build` thin repo for each workspace unless the user declared one.
+    for ws_name, ws_info in ws_infos.items():
         auto_build_repo = build_repo_name(ws_name)
-
-        if auto_build_repo in lock_repos:
+        if auto_build_repo in ws_repo_names[ws_name]:
             continue
 
-        register_workspace_repo(
-            lock_owners = lock_owners,
-            lock_repos = lock_repos,
-            lock_model_structs = lock_model_structs,
-            root_direct_deps = [],  # Do not report as root direct dep
+        check_unique_repo_name(owners, ws_info.module.name, auto_build_repo)
+        repo = _make_repo(
             ws_tag = ws_info.tag,
             ws_name = ws_name,
             repo_name = auto_build_repo,
             projects = ["*"],
             raw_dependency_groups = ["*", "transitive"],
-            transition_attrs = dict(
-                flags = [],
-                settings = {},
-                constraint_values = [],
-                platform = None,
-            ),
-            lock_module = ws_info.module,
-            extra_project_files = workspace_extra_project_files[ws_name],
+            transition = _EMPTY_TRANSITION,
+            extra_project_files = ws_extra_project_files[ws_name],
             is_auto_build_repo = True,
         )
+        ws_repos[ws_name].append(repo)
+
+    workspaces = {
+        ws_name: struct(
+            name = ws_name,
+            pypi_indexes = list(getattr(ws_info.tag, "pypi_indexes", [])),
+            repos = ws_repos[ws_name],
+        )
+        for ws_name, ws_info in ws_infos.items()
+    }
+    return struct(
+        workspaces = workspaces,
+        root_direct_deps = root_direct_deps,
+        root_direct_dev_deps = root_direct_dev_deps,
+    )
