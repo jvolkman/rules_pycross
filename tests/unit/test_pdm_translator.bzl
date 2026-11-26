@@ -4,10 +4,13 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:lock_resolver.bzl", "resolve", "resolve_workspace")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:pdm_lock_model.bzl", "discover_pdm_all_members", "translate_pdm")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:translator_common.bzl", "read_project_dicts_for_testing")
+load("//pycross/private:translator_project.bzl", "read_project_dicts_for_testing")
 
 def _lock_model(
         projects = ["*"],
@@ -623,6 +626,97 @@ def _test_discover_pdm_all_members(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_discover_pdm_all_members_impl)
 
+# buildifier: disable=unused-variable
+def _test_pdm_workspace_cache_matches_standalone_impl(env, target):
+    """Cached multi-member PDM translation and resolve_workspace match standalone runs exactly."""
+    proj_a = {
+        "project": {
+            "name": "app-a",
+            "version": "0.1.0",
+            "dependencies": ['forked>=1.0 ; sys_platform == "linux"', "local-lib==0.1.0"],
+        },
+        "dependency-groups": {"test": ["pytest==8.0.0"]},
+    }
+    proj_b = {
+        "project": {
+            "name": "app-b",
+            "version": "0.1.0",
+            "dependencies": ["forked>=1.0", "helper[opt]==1.0.0"],
+        },
+    }
+    lock = _minimal_lock([
+        {"name": "local-lib", "version": "0.1.0", "path": "libs/local", "dependencies": ["core==1.0.0"]},
+        {"name": "core", "version": "1.0.0", "files": [_whl("core-1.0.0-py3-none-any.whl", "0")]},
+        {"name": "forked", "version": "1.0.0", "marker": 'python_version < "3.11"', "files": [_whl("forked-1.0.0-py3-none-any.whl", "1")]},
+        {"name": "forked", "version": "2.0.0", "marker": 'python_version >= "3.11"', "files": [_whl("forked-2.0.0-py3-none-any.whl", "2")]},
+        {"name": "pytest", "version": "8.0.0", "files": [_whl("pytest-8.0.0-py3-none-any.whl", "3")]},
+        {
+            "name": "helper",
+            "version": "1.0.0",
+            "dependencies": ['opt-dep==1.0.0 ; extra == "opt"'],
+            "files": [_whl("helper-1.0.0-py3-none-any.whl", "4")],
+        },
+        {"name": "opt-dep", "version": "1.0.0", "files": [_whl("opt_dep-1.0.0-py3-none-any.whl", "5")]},
+    ])
+    model_a = struct(
+        projects = ["app-a"],
+        dependency_groups = ["default", "group:test"],
+        testonly_groups = ["group:test"],
+        non_testonly_groups = ["default"],
+        wildcard_testonly = False,
+    )
+    model_b = _lock_model(projects = ["app-b"])
+    model_all = _lock_model(projects = ["*"], dependency_groups = ["*"])
+
+    cases = [
+        ("app_a", [proj_a], model_a, True, True),
+        ("app_b", [proj_b], model_b, False, False),
+        ("ws__build", [proj_a, proj_b], model_all, True, False),
+    ]
+
+    ws_cache = {}
+    cached_raw = {}
+    member_entries = []
+    for repo_name, projects, model, inc_trans, trans_testonly in cases:
+        cached = translate_pdm(projects, lock, model, workspace_cache = ws_cache)
+        cached_raw[repo_name] = cached
+        member_entries.append(struct(
+            name = repo_name,
+            lock_model_data = cached,
+            include_transitive = inc_trans,
+            transitive_testonly = trans_testonly,
+        ))
+
+    env.expect.that_bool(ws_cache.get("shared_packages", False)).equals(True)
+
+    standalone_raw = {}
+    for repo_name, projects, model, _inc_trans, _trans_testonly in cases:
+        standalone = translate_pdm(projects, lock, model)
+        env.expect.that_str(json.encode(cached_raw[repo_name])).equals(json.encode(standalone))
+        standalone_raw[repo_name] = standalone
+
+    hoisted_resolved = resolve_workspace(member_entries, shared_packages = True)
+    for repo_name, _projects, _model, inc_trans, trans_testonly in cases:
+        standalone_res = resolve(
+            standalone_raw[repo_name],
+            include_transitive = inc_trans,
+            transitive_testonly = trans_testonly,
+        )
+        expected_dict = {
+            "packages": standalone_res.packages,
+            "pins": standalone_res.pins,
+            "remote_files": standalone_res.remote_files,
+            "cycle_groups": standalone_res.cycle_groups,
+            "variants": standalone_res.variants,
+            "resolution_marker_exprs": standalone_res.resolution_marker_exprs,
+            "testonly_pins": standalone_res.testonly_pins,
+        }
+        env.expect.that_str(json.encode(hoisted_resolved[repo_name])).equals(json.encode(expected_dict))
+
+def _test_pdm_workspace_cache_matches_standalone(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_workspace_cache_matches_standalone_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -646,5 +740,6 @@ def pdm_translator_test_suite(name):
             _test_pdm_forked_transitive_dep,
             _test_pdm_extra_package_entry_markers,
             _test_discover_pdm_all_members,
+            _test_pdm_workspace_cache_matches_standalone,
         ],
     )

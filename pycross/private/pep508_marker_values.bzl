@@ -3,8 +3,8 @@
 Platform and Python toolchain marker values are resolved once per Bazel
 configuration by the `//pycross/private/markers:env` target (`pep508_env`),
 which provides `Pep508EnvInfo`. Rules that evaluate PEP 508 markers (such as
-`_pycross_pep508_evaluator`, `_pycross_cycle_dep_needed`, and
-`_pycross_target_platform`) depend on that single target via
+`pycross_pep508_evaluator`, `pycross_cycle_dep_needed`, and
+`pycross_target_platform`) depend on that single target via
 `marker_value_attrs()` instead of resolving separate marker targets and the
 Python toolchain on every rule instance.
 """
@@ -162,7 +162,7 @@ def marker_value_attrs():
         "extra": attr.string(default = ""),
         "variants": attr.label_list(
             default = [],
-            providers = [[VariantStateInfo], [config_common.FeatureFlagInfo]],
+            providers = [VariantStateInfo],
         ),
         "_pep508_env": attr.label(
             default = Label("//pycross/private/markers:env"),
@@ -218,14 +218,9 @@ def with_extra(markers_env, extra):
 def _resolve_extra(ctx):
     active = {}
     for v in getattr(ctx.attr, "variants", []):
-        if VariantStateInfo in v:
-            for item in v[VariantStateInfo].active_items.keys():
-                if item:
-                    active[item] = True
-        else:
-            val = flag_value(v)
-            if val:
-                active[val] = True
+        for item in v[VariantStateInfo].active_items.keys():
+            if item:
+                active[item] = True
     if not active:
         return ctx.attr.extra
     return [ctx.attr.extra] + ["__variant_" + item for item in sorted(active.keys())]

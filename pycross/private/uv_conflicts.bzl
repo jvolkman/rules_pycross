@@ -7,8 +7,9 @@ local-member expansion, and resolving surviving edges into conditional pins.
 """
 
 load(
-    ":translator_common.bzl",
+    ":translator_util.bzl",
     "canonicalize_name",
+    "record_edge_testonly",
     "record_root_marker",
 )
 load(
@@ -80,20 +81,19 @@ def rewrite_conflict_markers(marker, token_replacements):
             marker = marker.replace(old_quoted, new_quoted)
     return marker
 
-def parse_uv_conflicts(uv_conflicts, target_projects):
-    """Parse uv `conflicts` declarations into variant sets, lookups, and rewrite rules.
+def parse_uv_conflicts_base(uv_conflicts):
+    """Parse workspace-invariant UV `conflicts` structures once per lockfile.
 
     Args:
         uv_conflicts: List of conflict sets from `uv.lock["conflicts"]`.
-        target_projects: List of canonicalized target project names for this repo.
 
     Returns:
-        Struct with `variant_sets`, `variant_items_by_key`,
+        Struct with `base_variant_sets`, `base_items_by_key`,
         `extra_variant_values`, `group_variant_values`, `project_variant_values`,
         `token_replacements`, `set_qnames`, and `conflict_pairs`.
     """
-    variant_items_by_key = {}  # (package, kind, name) -> variant item dict
-    variant_sets = []
+    base_items_by_key = {}  # (package, kind, name) -> base variant item dict
+    base_variant_sets = []
     for variant_list in uv_conflicts:
         items = []
         for c in variant_list:
@@ -105,13 +105,13 @@ def parse_uv_conflicts(uv_conflicts, target_projects):
             else:
                 kind, vname = "project", ""
             key = (package, kind, vname)
-            if key not in variant_items_by_key:
+            if key not in base_items_by_key:
                 item = {"package": package, "kind": kind}
                 if vname:
                     item["name"] = vname
-                variant_items_by_key[key] = item
-            items.append(variant_items_by_key[key])
-        variant_sets.append({"items": items})
+                base_items_by_key[key] = item
+            items.append(base_items_by_key[key])
+        base_variant_sets.append({"items": items})
 
     # Build constraint lookups keyed by (package, name) so a conflict declared
     # on one project's extra/group doesn't apply to a same-named extra/group of
@@ -120,8 +120,7 @@ def parse_uv_conflicts(uv_conflicts, target_projects):
     group_variant_values = {}
     project_variant_values = {}
     token_replacements = []
-    target_projects_set = {p: True for p in target_projects}
-    for item in variant_items_by_key.values():
+    for item in base_items_by_key.values():
         kind = item["kind"]
         vname = item.get("name", "")
         qualified = variant_item_qname(item)
@@ -137,28 +136,11 @@ def parse_uv_conflicts(uv_conflicts, target_projects):
         token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
         token_replacements.append(('"{}"'.format(uv_tok), '"{}"'.format(var_tok)))
 
-        # User-facing `_variants` flags for this repo, for items declared by its
-        # own projects (other projects' items get none):
-        #   - `<kind>_<name>` (e.g. `group_test`) covers that extra/group in
-        #     every project of the repo, like `uv --group test`.
-        #   - `<kind>_<project>_<name>` covers one project, like
-        #     `uv --package app-a --group test`.
-        # Names are normalized (`-` only), so the two forms can't collide.
-        if item["package"] not in target_projects_set:
-            continue
-        if kind == "project":
-            item["flags"] = ["package_{}".format(item["package"])]
-        else:
-            item["flags"] = [
-                "{}_{}".format(kind, vname),
-                "{}_{}_{}".format(kind, item["package"], vname),
-            ]
-
-    set_qnames = [[variant_item_qname(item) for item in vs["items"]] for vs in variant_sets]
+    set_qnames = [[variant_item_qname(item) for item in vs["items"]] for vs in base_variant_sets]
     conflict_pairs = variant_conflict_pairs(set_qnames)
     return struct(
-        variant_sets = variant_sets,
-        variant_items_by_key = variant_items_by_key,
+        base_variant_sets = base_variant_sets,
+        base_items_by_key = base_items_by_key,
         extra_variant_values = extra_variant_values,
         group_variant_values = group_variant_values,
         project_variant_values = project_variant_values,
@@ -166,6 +148,80 @@ def parse_uv_conflicts(uv_conflicts, target_projects):
         set_qnames = set_qnames,
         conflict_pairs = conflict_pairs,
     )
+
+def instantiate_uv_conflicts(base_conflicts, target_projects):
+    """Create fresh per-repo variant sets and item flags from `base_conflicts`.
+
+    Each repo receives fresh `variant_sets` and `variant_items_by_key` dicts so
+    per-repo `flags`, `repo_requested`, `repo_pin`, and `repo_default` writes do
+    not leak across workspace members.
+
+    Args:
+        base_conflicts: Struct returned by `parse_uv_conflicts_base`.
+        target_projects: List of canonicalized target project names for this repo.
+
+    Returns:
+        Struct with `variant_sets`, `variant_items_by_key`,
+        `extra_variant_values`, `group_variant_values`, `project_variant_values`,
+        `token_replacements`, `set_qnames`, and `conflict_pairs`.
+    """
+    target_projects_set = {p: True for p in target_projects}
+    variant_items_by_key = {}
+    for key, base_item in base_conflicts.base_items_by_key.items():
+        item = dict(base_item)
+
+        # User-facing `_variants` flags for this repo, for items declared by its
+        # own projects (other projects' items get none):
+        #   - `<kind>_<name>` (e.g. `group_test`) covers that extra/group in
+        #     every project of the repo, like `uv --group test`.
+        #   - `<kind>_<project>_<name>` covers one project, like
+        #     `uv --package app-a --group test`.
+        # Names are normalized (`-` only), so the two forms can't collide.
+        if item["package"] in target_projects_set:
+            kind = item["kind"]
+            if kind == "project":
+                item["flags"] = ["package_{}".format(item["package"])]
+            else:
+                vname = item.get("name", "")
+                item["flags"] = [
+                    "{}_{}".format(kind, vname),
+                    "{}_{}_{}".format(kind, item["package"], vname),
+                ]
+        variant_items_by_key[key] = item
+
+    variant_sets = [
+        {
+            "items": [
+                variant_items_by_key[(item["package"], item["kind"], item.get("name", ""))]
+                for item in vs["items"]
+            ],
+        }
+        for vs in base_conflicts.base_variant_sets
+    ]
+    return struct(
+        variant_sets = variant_sets,
+        variant_items_by_key = variant_items_by_key,
+        extra_variant_values = base_conflicts.extra_variant_values,
+        group_variant_values = base_conflicts.group_variant_values,
+        project_variant_values = base_conflicts.project_variant_values,
+        token_replacements = base_conflicts.token_replacements,
+        set_qnames = base_conflicts.set_qnames,
+        conflict_pairs = base_conflicts.conflict_pairs,
+    )
+
+def parse_uv_conflicts(uv_conflicts, target_projects):
+    """Parse uv `conflicts` declarations into variant sets, lookups, and rewrite rules.
+
+    Args:
+        uv_conflicts: List of conflict sets from `uv.lock["conflicts"]`.
+        target_projects: List of canonicalized target project names for this repo.
+
+    Returns:
+        Struct with `variant_sets`, `variant_items_by_key`,
+        `extra_variant_values`, `group_variant_values`, `project_variant_values`,
+        `token_replacements`, `set_qnames`, and `conflict_pairs`.
+    """
+    return instantiate_uv_conflicts(parse_uv_conflicts_base(uv_conflicts), target_projects)
 
 def apply_repo_variant_pins_and_defaults(
         conflicts,
@@ -466,13 +522,7 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
                 record_root_marker(root_dependency_markers, pin_name, edge.avail_marker)
                 if pin_name != base_name:
                     record_root_marker(root_dependency_markers, base_name, edge.avail_marker)
-                if edge.is_testonly:
-                    if edge.from_local:
-                        expanded_testonly[base_name] = True
-                    else:
-                        direct_testonly[base_name] = True
-                else:
-                    non_testonly[base_name] = True
+                record_edge_testonly(edge, direct_testonly, expanded_testonly, non_testonly)
 
     testonly_pins = [name for name in direct_testonly if name not in non_testonly]
     expanded_testonly_pins = [

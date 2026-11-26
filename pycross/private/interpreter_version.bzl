@@ -13,8 +13,12 @@ def _rules_python_interpreter_version_impl(ctx):
     )
     return [config_common.FeatureFlagInfo(value = value)]
 
-_rules_python_interpreter_version = rule(
+rules_python_interpreter_version = rule(
     implementation = _rules_python_interpreter_version_impl,
+    doc = (
+        "Builds a target that returns the currently-selected rules_pycross toolchain version " +
+        "as a FeatureFlagInfo value for use in config_setting flag_values."
+    ),
     attrs = {
         "default_version": attr.string(mandatory = True),
         "_python_version_flag": attr.label(
@@ -22,21 +26,3 @@ _rules_python_interpreter_version = rule(
         ),
     },
 )
-
-def rules_python_interpreter_version(name, default_version, **kwargs):
-    """Builds a target that returns the currently-selected rules_pycross toolchain version.
-
-    This value can be used in a config_setting; e.g.,
-    config_setting(
-        name = "foo",
-        flag_values = {
-            "@rules_pycross//pycross/private:rules_python_interpreter_version": "3.12.0",
-        },
-    )
-    """
-
-    _rules_python_interpreter_version(
-        name = name,
-        default_version = default_version,
-        **kwargs
-    )

@@ -804,6 +804,41 @@ def _test_poetry_mixed_dev_group_order(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_mixed_dev_group_order_impl)
 
+# --- test_poetry_workspace_cache_matches_standalone ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_workspace_cache_matches_standalone_impl(env, target):
+    """Cached multi-repo Poetry translation matches standalone translation exactly."""
+    project = {
+        "project": {
+            "name": "my-app",
+            "dependencies": ['forked>=1.0 ; sys_platform == "linux"'],
+        },
+        "dependency-groups": {"test": ["pytest==8.0.0"]},
+    }
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("forked", "1.0.0", files = [_whl("forked-1.0.0-py3-none-any.whl", "1")], markers = 'python_version < "3.11"'),
+            _pkg("forked", "2.0.0", files = [_whl("forked-2.0.0-py3-none-any.whl", "2")], markers = 'python_version >= "3.11"'),
+            _pkg("pytest", "8.0.0", files = [_whl("pytest-8.0.0-py3-none-any.whl", "3")]),
+        ],
+    }
+    model_default = _lock_model(dependency_groups = ["default"])
+    model_all = _lock_model(dependency_groups = ["default", "group:test"])
+
+    ws_cache = {}
+    cached_default = translate_poetry(project, lock, model_default, workspace_cache = ws_cache)
+    cached_all = translate_poetry(project, lock, model_all, workspace_cache = ws_cache)
+
+    env.expect.that_bool(ws_cache.get("shared_packages", False)).equals(True)
+    env.expect.that_str(json.encode(cached_default)).equals(json.encode(translate_poetry(project, lock, model_default)))
+    env.expect.that_str(json.encode(cached_all)).equals(json.encode(translate_poetry(project, lock, model_all)))
+
+def _test_poetry_workspace_cache_matches_standalone(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_workspace_cache_matches_standalone_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -831,5 +866,6 @@ def poetry_translator_test_suite(name):
             _test_poetry_url_decoded_filename_and_unnormalized_version,
             _test_poetry_forked_transitive_dep,
             _test_poetry_mixed_dev_group_order,
+            _test_poetry_workspace_cache_matches_standalone,
         ],
     )

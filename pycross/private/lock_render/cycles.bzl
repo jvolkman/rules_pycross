@@ -46,18 +46,16 @@ def render_marker_cycle_member_deps(
         cycle_groups,
         packages,
         has_variants = False,
-        available_eval_matches = None,
         unique_markers = None,
         loads = None):
     """Plans and renders cycle member proxies and fallback reachability evaluators.
 
     For each cycle SCC, computes unconditional deps and grouped conditional deps
     at repo-rule time via `plan_cycle_member_deps`. Groups gated by a single
-    1-hop marker already present in `available_eval_matches` (or `unique_markers`)
-    reuse the pre-rendered `_marker_eval_*_match` config_setting. Fallback
-    `pycross_cycle_dep_needed` evaluators and `_{GROUP}_EDGES_JSON` are emitted
-    only when a group actually needs multi-hop (or unrendered) reachability
-    evaluation.
+    1-hop marker already present in `unique_markers` reuse the pre-rendered
+    `_marker_eval_*_match` config_setting. Fallback `pycross_cycle_dep_needed`
+    evaluators and `_{GROUP}_EDGES_JSON` are emitted only when a group actually
+    needs multi-hop (or unrendered) reachability evaluation.
 
     Only cycle group members that appear in ``packages`` are rendered; groups
     whose members are entirely outside the resolved set are silently skipped.
@@ -67,21 +65,14 @@ def render_marker_cycle_member_deps(
         cycle_groups: Dict mapping cycle group name -> list of member package keys.
         packages: Lock packages dict.
         has_variants: Whether the workspace defines a `:_variant_state` target.
-        available_eval_matches: Optional dict/set of pre-rendered `<eval_name>_match`
-            target names. When `None`, derived from `unique_markers` if provided,
-            otherwise `{}`.
-        unique_markers: Optional iterable of `(marker_str, extra)` tuples used to
-            derive `available_eval_matches` when `available_eval_matches` is `None`.
+        unique_markers: Optional iterable of `(marker_str, extra)` tuples whose
+            pre-rendered `_marker_eval_*_match` config_settings can be reused.
         loads: Optional dict tracking emitted helper loads (`"cycle_dep_needed"`).
     """
-    if available_eval_matches == None:
-        if unique_markers:
-            available_eval_matches = {
-                marker_match_target_name(marker_evaluator_name(m, e)): True
-                for m, e in unique_markers
-            }
-        else:
-            available_eval_matches = {}
+    available_eval_matches = {
+        marker_match_target_name(marker_evaluator_name(m, e)): True
+        for m, e in (unique_markers or [])
+    }
 
     emitted_pairs = {}
 

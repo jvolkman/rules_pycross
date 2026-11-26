@@ -266,36 +266,60 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     ldflags_args = {repr(ldflags_args)}
     toolchain_id = {repr(_toolchain_id)}
 
-    def _parse_target(argv):
-        for idx, token in enumerate(argv):
-            if token == "--target" and idx + 1 < len(argv):
-                return argv[idx + 1]
-            if token.startswith("--target="):
-                return token.split("=", 1)[1]
-        return None
+    has_sysroot = False
+    has_print = False
+    has_probe_flag = False
+    explicit_target = None
+    crate_name = None
+    crate_types = []
+    cfg_flags = []
+    edition = ""
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--sysroot" or arg.startswith("--sysroot="):
+            has_sysroot = True
+        elif arg == "--print" or arg.startswith("--print="):
+            has_print = True
+        elif arg in ("-V", "-vV", "-Vv", "--version", "-h", "--help", "--explain") or arg.startswith("--explain="):
+            has_probe_flag = True
+        elif arg == "--target" and i + 1 < len(args):
+            if explicit_target is None:
+                explicit_target = args[i + 1]
+            i += 2
+            continue
+        elif arg.startswith("--target="):
+            if explicit_target is None:
+                explicit_target = arg.split("=", 1)[1]
+        # rustc rejects duplicate --crate-name flags, so last-wins preserves single-occurrence behavior.
+        elif arg == "--crate-name" and i + 1 < len(args):
+            crate_name = args[i + 1]
+            i += 2
+            continue
+        elif arg.startswith("--crate-name="):
+            crate_name = arg.split("=", 1)[1]
+        elif arg == "--crate-type" and i + 1 < len(args):
+            crate_types.append(args[i + 1])
+            i += 2
+            continue
+        elif arg.startswith("--crate-type="):
+            crate_types.append(arg.split("=", 1)[1])
+        elif arg == "--cfg" and i + 1 < len(args):
+            cfg_flags.append(args[i + 1])
+            i += 2
+            continue
+        elif arg.startswith("--cfg="):
+            cfg_flags.append(arg.split("=", 1)[1])
+        elif arg == "--edition" and i + 1 < len(args):
+            edition = args[i + 1]
+            i += 2
+            continue
+        elif arg.startswith("--edition="):
+            edition = arg.split("=", 1)[1]
+        i += 1
 
-    def _parse_crate_name(argv):
-        for idx, token in enumerate(argv):
-            if token == "--crate-name" and idx + 1 < len(argv):
-                return argv[idx + 1]
-            if token.startswith("--crate-name="):
-                return token.split("=", 1)[1]
-        return None
-
-    has_sysroot = any(arg == "--sysroot" or arg.startswith("--sysroot=") for arg in args)
-    explicit_target = _parse_target(args)
-    explicit_crate_name = _parse_crate_name(args)
     is_target = (explicit_target == target_triple) or (explicit_target is None and is_native)
-    has_print = any(arg == "--print" or arg.startswith("--print=") for arg in args)
-    is_probe = (
-        not args
-        or any(
-            arg in ("-V", "-vV", "-Vv", "--version", "-h", "--help", "--explain")
-            or arg.startswith("--explain=")
-            for arg in args
-        )
-        or (has_print and explicit_crate_name in (None, "___"))
-    )
+    is_probe = not args or has_probe_flag or (has_print and crate_name in (None, "___"))
 
     final_args = []
     if not has_sysroot and os.path.isdir(sysroot_dir):
@@ -327,39 +351,6 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
         # so multi-version crate graphs do not collide while staying identical
         # across build hosts. We leave -C extra-filename alone so Cargo can still
         # find its files.
-        crate_name = None
-        crate_types = []
-        cfg_flags = []
-        edition = ""
-        i = 0
-        while i < len(final_args):
-            arg = final_args[i]
-            if arg == "--crate-name" and i + 1 < len(final_args):
-                crate_name = final_args[i + 1]
-                i += 2
-                continue
-            if arg.startswith("--crate-name="):
-                crate_name = arg.split("=", 1)[1]
-            elif arg == "--crate-type" and i + 1 < len(final_args):
-                crate_types.append(final_args[i + 1])
-                i += 2
-                continue
-            elif arg.startswith("--crate-type="):
-                crate_types.append(arg.split("=", 1)[1])
-            elif arg == "--cfg" and i + 1 < len(final_args):
-                cfg_flags.append(final_args[i + 1])
-                i += 2
-                continue
-            elif arg.startswith("--cfg="):
-                cfg_flags.append(arg.split("=", 1)[1])
-            elif arg == "--edition" and i + 1 < len(final_args):
-                edition = final_args[i + 1]
-                i += 2
-                continue
-            elif arg.startswith("--edition="):
-                edition = arg.split("=", 1)[1]
-            i += 1
-
         if crate_name:
             cfg_flags.sort()
             crate_types.sort()

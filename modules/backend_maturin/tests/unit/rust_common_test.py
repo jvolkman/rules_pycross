@@ -53,7 +53,6 @@ class RustCommonTest(unittest.TestCase):
                 {
                     "rustc": str(self.fake_rustc.relative_to(self.root)),
                     "cargo": str(self.fake_rustc.relative_to(self.root)),
-                    "sysroot": "custom_target_tc",
                     "host_triple": "x86_64-unknown-linux-gnu",
                     "target_triple": target_triple,
                     "host_rustlib_dir": str(self.host_rustlib.relative_to(self.root)),

@@ -1,7 +1,6 @@
 """Meson build backend for rules_pycross."""
 
-load("//pycross:backend.bzl", "make_override_extension")
-load("//pycross/private:lock_attrs.bzl", "CC_OVERRIDE_ATTRS")
+load("//pycross:backend.bzl", "CC_OVERRIDE_ATTRS", "make_override_extension")
 load("//pycross/private/build/rules:meson_build.bzl", _meson_build = "meson_build")
 
 meson_build = _meson_build

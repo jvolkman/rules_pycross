@@ -12,17 +12,25 @@ Supports pins from:
 
 load("@pypackaging.bzl", "pypackaging")
 load(
-    ":translator_common.bzl",
-    "canonicalize_name",
+    ":translator_graph.bzl",
+    "apply_package_marker_forks",
+    "build_lock_graph",
+    "find_package_marker_forks",
+    "resolve_lock_graph",
+)
+load(
+    ":translator_project.bzl",
     "collect_pep621_requirements",
-    "combine_markers",
     "compute_requested_groups_for_model",
-    "detect_package_marker_forks",
+    "read_project_and_lock",
+)
+load(
+    ":translator_util.bzl",
+    "canonicalize_name",
+    "combine_markers",
     "make_file_entry",
     "make_git_file_entry",
-    "read_project_and_lock",
     "record_root_marker",
-    "resolve_lock_graph",
     "strip_sha256_prefix",
 )
 load(":util.bzl", "url_decode_filename")
@@ -243,19 +251,8 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_onl
             entry.get("extras", []),
         )
 
-def translate_poetry(project_dict, lock_dict, lock_model):
-    """Translates Poetry project and lock data to raw_lock_data dict.
-
-    This is a pure function with no I/O, suitable for direct testing.
-
-    Args:
-        project_dict: Parsed pyproject.toml as a dict.
-        lock_dict: Parsed poetry.lock as a dict.
-        lock_model: A struct containing the lock model attributes.
-
-    Returns:
-        A dict in raw_lock.json format.
-    """
+def _build_poetry_workspace_base(lock_dict):
+    """Parse workspace-invariant Poetry lock packages, marker forks, and lock graph once."""
     lock_version = lock_dict.get("metadata", {}).get("lock-version", "")
     if not lock_version:
         fail("Poetry lock file has no lock-version in [metadata]")
@@ -271,6 +268,118 @@ def translate_poetry(project_dict, lock_dict, lock_model):
              "rules_pycross requires Poetry 2.1+ (lock-version >= 2.1). " +
              "Please regenerate your lock file with: poetry lock --regenerate").format(lock_version),
         )
+
+    packages = []
+    for lock_pkg in lock_dict.get("package", []):
+        package_name = canonicalize_name(lock_pkg["name"])
+        package_version = lock_pkg["version"]
+
+        deps = []
+        for dep_name, dep_list in lock_pkg.get("dependencies", {}).items():
+            if type(dep_list) != "list":
+                dep_list = [dep_list]
+            for dep in dep_list:
+                if type(dep) == "string":
+                    marker = ""
+                    spec = dep
+                    extras = []
+                else:
+                    marker = dep.get("markers", "")
+                    spec = dep.get("version", "*")
+                    extras = dep.get("extras", [])
+
+                # In Poetry 2.0 lock files, specs are mostly PEP 440, but may contain ||.
+                deps.append({
+                    "name": canonicalize_name(dep_name),
+                    "specifier": _poetry_constraint_to_pep440(spec),
+                    "marker": marker,
+                    "extras": extras if extras else [None],
+                })
+
+        source = lock_pkg.get("source", {})
+        source_type = source.get("type", "")
+
+        # Treat git as remote.
+        is_local = source_type == "directory"
+        registry = source.get("url") if source_type == "legacy" else None
+
+        source_urls = []
+        git_url = ""
+        commit = ""
+        if source_type == "url" and source.get("url"):
+            source_urls = [source["url"]]
+        elif source_type == "git":
+            git_url = source.get("url", "")
+            commit = source.get("resolved_reference", "") or source.get("reference", "")
+            if git_url and commit:
+                source_urls = ["git+{}#{}".format(git_url, commit)]
+
+        files = [
+            make_file_entry(
+                url_decode_filename(f["file"]),
+                strip_sha256_prefix(f["hash"]),
+                package_name,
+                package_version,
+                urls = source_urls,
+                index = registry,
+            )
+            for f in lock_pkg.get("files", [])
+        ]
+
+        if source_type == "git" and not files and git_url and commit:
+            files = [make_git_file_entry(package_name, package_version, git_url, commit)]
+
+        package_markers = lock_pkg.get("markers", "")
+
+        pkg = {
+            "name": package_name,
+            "version": package_version,
+            "dependencies": deps,
+            "files": files,
+            "is_local": is_local,
+            "extras": [canonicalize_name(e) for e in lock_pkg.get("extras", {}).keys()],
+            "markers": package_markers,
+        }
+        if source_type in ("url", "git") and source.get("subdirectory"):
+            pkg["source_dir"] = source["subdirectory"]
+        packages.append(pkg)
+
+    resolution_marker_exprs, forks_by_name = find_package_marker_forks(packages)
+    graph = build_lock_graph(
+        packages,
+        resolution_marker_exprs = resolution_marker_exprs,
+        strict_dependencies = True,
+    )
+    return struct(
+        packages = packages,
+        resolution_marker_exprs = resolution_marker_exprs,
+        forks_by_name = forks_by_name,
+        graph = graph,
+    )
+
+def translate_poetry(project_dict, lock_dict, lock_model, workspace_cache = None):
+    """Translates Poetry project and lock data to raw_lock_data dict.
+
+    This is a pure function with no I/O, suitable for direct testing.
+
+    Args:
+        project_dict: Parsed pyproject.toml as a dict.
+        lock_dict: Parsed poetry.lock as a dict.
+        lock_model: A struct containing the lock model attributes.
+        workspace_cache: Optional dict shared across repos in the same workspace
+            to reuse parsed lock packages, marker forks, and the lock graph.
+
+    Returns:
+        A dict in raw_lock.json format.
+    """
+    if workspace_cache != None:
+        base = workspace_cache.get("poetry_base")
+        if base == None:
+            base = _build_poetry_workspace_base(lock_dict)
+            workspace_cache["poetry_base"] = base
+            workspace_cache["shared_packages"] = True
+    else:
+        base = _build_poetry_workspace_base(lock_dict)
 
     # Collect pinned package specs from the project file
     pinned_package_specs = {}
@@ -401,102 +510,19 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             )
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
-
-    # Build package list
-    packages = []
-    for lock_pkg in lock_dict.get("package", []):
-        package_name = canonicalize_name(lock_pkg["name"])
-        package_version = lock_pkg["version"]
-
-        # Parse dependencies
-        deps = []
-        for dep_name, dep_list in lock_pkg.get("dependencies", {}).items():
-            # Coerce single entry to list
-            if type(dep_list) != "list":
-                dep_list = [dep_list]
-            for dep in dep_list:
-                if type(dep) == "string":
-                    marker = ""
-                    spec = dep
-                    extras = []
-                else:
-                    marker = dep.get("markers", "")
-                    spec = dep.get("version", "*")
-                    extras = dep.get("extras", [])
-
-                # In Poetry 2.0 lock files, specs are mostly PEP 440, but may contain ||
-                deps.append({
-                    "name": canonicalize_name(dep_name),
-                    "specifier": _poetry_constraint_to_pep440(spec),
-                    "marker": marker,
-                    "extras": extras if extras else [None],
-                })
-
-        # Source type check for local packages
-        source = lock_pkg.get("source", {})
-        source_type = source.get("type", "")
-
-        # Treat git as remote
-        is_local = source_type == "directory"
-        registry = source.get("url") if source_type == "legacy" else None
-
-        # Determine download URLs for URL or Git sources
-        source_urls = []
-        git_url = ""
-        commit = ""
-        if source_type == "url" and source.get("url"):
-            source_urls = [source["url"]]
-        elif source_type == "git":
-            git_url = source.get("url", "")
-            commit = source.get("resolved_reference", "") or source.get("reference", "")
-            if git_url and commit:
-                source_urls = ["git+{}#{}".format(git_url, commit)]
-
-        # Parse files (inline in Poetry 2.0+)
-        files = [
-            make_file_entry(
-                url_decode_filename(f["file"]),
-                strip_sha256_prefix(f["hash"]),
-                package_name,
-                package_version,
-                urls = source_urls,
-                index = registry,
-            )
-            for f in lock_pkg.get("files", [])
-        ]
-
-        # Handle git synthetic file if no files found
-        if source_type == "git" and not files and git_url and commit:
-            files = [make_git_file_entry(package_name, package_version, git_url, commit)]
-
-        # Read package-level markers (Poetry 2.1+)
-        package_markers = lock_pkg.get("markers", "")
-
-        pkg = {
-            "name": package_name,
-            "version": package_version,
-            "dependencies": deps,
-            "files": files,
-            "is_local": is_local,
-            "extras": [canonicalize_name(e) for e in lock_pkg.get("extras", {}).keys()],
-            "markers": package_markers,
-        }
-        if source_type in ("url", "git") and source.get("subdirectory"):
-            pkg["source_dir"] = source["subdirectory"]
-        packages.append(pkg)
-
-    resolution_marker_exprs = detect_package_marker_forks(packages, pinned_package_specs)
+    apply_package_marker_forks(pinned_package_specs, base.forks_by_name)
 
     return resolve_lock_graph(
-        packages = packages,
+        packages = base.packages,
         pinned_package_specs = pinned_package_specs,
         strict_dependencies = True,
-        resolution_marker_exprs = resolution_marker_exprs,
+        resolution_marker_exprs = base.resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
         root_dependency_markers = root_dependency_markers,
+        graph = base.graph,
     )
 
-def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
+def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None, workspace_cache = None):
     """Run the Poetry translator in pure Starlark."""
     project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "poetry.lock", toml_cache)
-    return translate_poetry(project_dict, lock_dict, lock_model)
+    return translate_poetry(project_dict, lock_dict, lock_model, workspace_cache = workspace_cache)

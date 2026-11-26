@@ -6,19 +6,22 @@ lock_resolver.bzl.
 """
 
 load("@pypackaging.bzl", "pypackaging")
+load(":translator_graph.bzl", "detect_package_marker_forks")
 load(
-    ":translator_common.bzl",
-    "canonicalize_name",
+    ":translator_project.bzl",
     "collect_pep621_requirements",
-    "combine_markers",
     "compute_requested_groups_for_model",
-    "detect_package_marker_forks",
+    "read_project_and_lock",
+)
+load(
+    ":translator_util.bzl",
+    "canonicalize_name",
+    "combine_markers",
     "format_raw_lock",
     "make_archive_file_entry",
     "make_file_entry",
     "make_git_file_entry",
     "parse_pep508_requirement",
-    "read_project_and_lock",
     "record_root_marker",
     "strip_sha256_prefix",
 )
@@ -565,7 +568,8 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         root_dependency_markers = root_dependency_markers,
     )
 
-def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
+# buildifier: disable=unused-variable
+def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None, workspace_cache = None):
     """Run the pylock translator in pure Starlark."""
     project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "the pylock file", toml_cache)
     return translate_pylock(lock_dict, project_dict, lock_model)

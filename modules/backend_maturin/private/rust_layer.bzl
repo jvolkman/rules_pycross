@@ -79,6 +79,16 @@ def _resolve_vendored_crates_dir(vendored_target, vendored_files):
     parts = [p for p in [ws_root, pkg, "vendor"] if p]
     return "/".join(parts)
 
+def _triple_to_str(triple):
+    """Normalize a rules_rust triple value to a string."""
+    if not triple:
+        return ""
+    if type(triple) == "string":
+        return triple
+    if hasattr(triple, "str"):
+        return triple.str
+    return str(triple)
+
 def extract_rust_layer(ctx):
     """Extracts Rust toolchain info into a JSON file.
 
@@ -91,8 +101,10 @@ def extract_rust_layer(ctx):
 
     Returns:
         struct(
-            config_json = File,      # the serialized Rust config
+            config_json = File,        # the serialized Rust config
             transitive_files = depset, # all files needed at build time
+            rustc = File | None,       # rustc executable file
+            cargo = File | None,       # cargo executable file
         )
     """
     rust_toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
@@ -103,33 +115,8 @@ def extract_rust_layer(ctx):
     cargo_file = get_executable_file(rust_toolchain.cargo)
     cargo_path = cargo_file.path if cargo_file else None
 
-    sysroot_path = None
-    if hasattr(rust_toolchain, "sysroot"):
-        sysroot_val = rust_toolchain.sysroot
-        if type(sysroot_val) == "string":
-            sysroot_path = sysroot_val
-        elif hasattr(sysroot_val, "path"):
-            sysroot_path = sysroot_val.path
-
-    target_triple = getattr(rust_toolchain, "target_triple", None)
-    target_triple_str = ""
-    if target_triple:
-        if type(target_triple) == "string":
-            target_triple_str = target_triple
-        elif hasattr(target_triple, "str"):
-            target_triple_str = target_triple.str
-        else:
-            target_triple_str = str(target_triple)
-
-    exec_triple = getattr(rust_toolchain, "exec_triple", None)
-    host_triple_str = ""
-    if exec_triple:
-        if type(exec_triple) == "string":
-            host_triple_str = exec_triple
-        elif hasattr(exec_triple, "str"):
-            host_triple_str = exec_triple.str
-        else:
-            host_triple_str = str(exec_triple)
+    target_triple_str = _triple_to_str(getattr(rust_toolchain, "target_triple", None))
+    host_triple_str = _triple_to_str(getattr(rust_toolchain, "exec_triple", None))
 
     transitive_files = []
     if hasattr(rust_toolchain, "all_files"):
@@ -146,7 +133,6 @@ def extract_rust_layer(ctx):
     rust_config = {
         "rustc": rustc_path,
         "cargo": cargo_path,
-        "sysroot": sysroot_path,
         "host_triple": host_triple_str,
         "target_triple": target_triple_str,
         "host_rustlib_dir": host_rustlib_dir,
@@ -165,6 +151,8 @@ def extract_rust_layer(ctx):
     return struct(
         config_json = config_json,
         transitive_files = depset(env_direct_files, transitive = transitive_files),
+        rustc = rustc_file,
+        cargo = cargo_file,
     )
 
 RUST_BUILD_COMMON_ATTRS = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | {
@@ -206,14 +194,6 @@ def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
     Returns:
         List of providers for the build rule.
     """
-    rust_toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
-    rustc_exe = get_executable_file(rust_toolchain.rustc)
-    if rustc_exe:
-        tool_executables.append(struct(name = "rustc", file = rustc_exe))
-    cargo_exe = get_executable_file(rust_toolchain.cargo)
-    if cargo_exe:
-        tool_executables.append(struct(name = "cargo", file = cargo_exe))
-
     cc_layer = extract_cc_layer(
         ctx,
         native_deps = ctx.attr.native_deps,
@@ -221,6 +201,10 @@ def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
         linkopts = ctx.attr.linkopts,
     )
     rust_layer = extract_rust_layer(ctx)
+    if rust_layer.rustc:
+        tool_executables.append(struct(name = "rustc", file = rust_layer.rustc))
+    if rust_layer.cargo:
+        tool_executables.append(struct(name = "cargo", file = rust_layer.cargo))
 
     additional_build_deps = []
     for pkg_name in tool_pkg_names:

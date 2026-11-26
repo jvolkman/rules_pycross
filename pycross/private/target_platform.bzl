@@ -136,8 +136,9 @@ def _pycross_target_platform_impl(ctx):
         DefaultInfo(files = depset([out_json])),
     ]
 
-_pycross_target_platform = rule(
+pycross_target_platform = rule(
     implementation = _pycross_target_platform_impl,
+    doc = "Compute PEP 425 compatibility tags and PEP 508 markers for the active target platform.",
     attrs = {
         "platforms": attr.string_list(
             doc = "Explicit list of PEP 425 platform tags. If set, libc and freethreaded are ignored for platform derivation.",
@@ -156,6 +157,3 @@ _pycross_target_platform = rule(
     } | marker_value_attrs(),
     provides = [PycrossTargetPlatformInfo],
 )
-
-def pycross_target_platform(name, **kwargs):
-    _pycross_target_platform(name = name, **kwargs)

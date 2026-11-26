@@ -113,11 +113,6 @@ COMMON_BUILD_ATTRS = {
               "Each hook receives PYCROSS_WHEEL_FILE pointing to the built wheel.",
         cfg = pycross_exec_platform_transition,
     ),
-    "_dummy_bin_file": attr.label(
-        default = Label("//pycross/private:dummy_bin_file"),
-        allow_single_file = True,
-        cfg = pycross_exec_platform_transition,
-    ),
 } | RESOURCE_SET_ATTRS
 
 CC_BUILD_ATTRS = {

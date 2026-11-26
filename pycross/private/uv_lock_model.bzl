@@ -10,26 +10,33 @@ resolution markers, git sources, and editable packages.
 
 load(":lock_common.bzl", "read_toml_cached")
 load(
-    ":translator_common.bzl",
+    ":translator_graph.bzl",
     "build_lock_graph",
-    "canonicalize_name",
-    "compute_requested_groups_for_model",
     "expand_root_edges",
     "finalize_lock_graph",
+)
+load(
+    ":translator_project.bzl",
+    "compute_requested_groups_for_model",
+    "read_project_and_lock",
+    "validate_multi_project_groups",
+)
+load(
+    ":translator_util.bzl",
+    "canonicalize_name",
     "make_archive_file_entry",
     "make_file_entry",
     "make_git_file_entry",
-    "read_project_and_lock",
     "strip_sha256_prefix",
-    "validate_multi_project_groups",
 )
 load(":util.bzl", "resolution_marker_constraint_name", "url_decode_filename", "url_filename")
 load(
     ":uv_conflicts.bzl",
     "apply_repo_variant_pins_and_defaults",
     "canonicalize_group_key",
+    "instantiate_uv_conflicts",
     "make_pin_marker_folder",
-    "parse_uv_conflicts",
+    "parse_uv_conflicts_base",
     "resolve_uv_pins",
     "rewrite_conflict_markers",
 )
@@ -263,22 +270,59 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags, pkg_ide
 
     return packages, fork_constraints, resolution_marker_exprs
 
-def _find_target_projects(packages_list, project_dict, projects_list):
-    """Discover workspace members in `uv.lock` and resolve `projects_list`."""
-    workspace_members = {}
-    for pkg in packages_list:
-        if "virtual" in pkg.get("source", {}) or pkg.get("source", {}).get("editable"):
-            workspace_members[canonicalize_name(pkg["name"])] = pkg
+def _build_uv_workspace_base(lock_dict):
+    """Parse workspace-invariant UV lock structures and build the lock graph once."""
+    lock_version = lock_dict.get("version", 0)
+    if lock_version != 1:
+        fail("UV lock file version {} is not supported (expected 1)".format(lock_version))
 
-    if not workspace_members and packages_list:
+    # backwards-compat for https://github.com/astral-sh/uv/pull/5861
+    distributions_list = lock_dict.get("distribution", [])
+    packages_list = lock_dict.get("package", distributions_list)
+    uv_conflicts = lock_dict.get("conflicts", [])
+
+    base_conflicts = parse_uv_conflicts_base(uv_conflicts)
+    source_tags, pkg_identities = _compute_source_tags(packages_list)
+    packages, fork_constraints, base_resolution_marker_exprs = _parse_lock_packages(
+        packages_list,
+        base_conflicts.token_replacements,
+        source_tags,
+        pkg_identities,
+    )
+    graph = build_lock_graph(
+        packages,
+        resolution_marker_exprs = base_resolution_marker_exprs,
+        strict_dependencies = True,
+    )
+
+    base_workspace_members = {}
+    packages_by_canon_name = {}
+    for lock_pkg, (canon_name, _) in zip(packages_list, pkg_identities):
+        if canon_name not in packages_by_canon_name:
+            packages_by_canon_name[canon_name] = lock_pkg
+        source = lock_pkg.get("source", {})
+        if "virtual" in source or source.get("editable"):
+            base_workspace_members[canon_name] = lock_pkg
+
+    return struct(
+        base_conflicts = base_conflicts,
+        fork_constraints = fork_constraints,
+        resolution_marker_exprs = base_resolution_marker_exprs,
+        graph = graph,
+        base_workspace_members = base_workspace_members,
+        packages_by_canon_name = packages_by_canon_name,
+    )
+
+def _find_target_projects(base_workspace_members, packages_by_canon_name, project_dict, projects_list):
+    """Resolve `projects_list` against workspace members without mutating cached dicts."""
+    workspace_members = dict(base_workspace_members)
+    if not workspace_members and packages_by_canon_name:
         # Fallback for older uv.lock (< 0.2.35) or standalone single-project locks.
         pname = project_dict.get("project", {}).get("name")
         if pname:
             pname = canonicalize_name(pname)
-            for pkg in packages_list:
-                if canonicalize_name(pkg["name"]) == pname:
-                    workspace_members[pname] = pkg
-                    break
+            if pname in packages_by_canon_name:
+                workspace_members[pname] = packages_by_canon_name[pname]
 
     if "*" in projects_list:
         target_projects = list(workspace_members.keys())
@@ -288,16 +332,13 @@ def _find_target_projects(packages_list, project_dict, projects_list):
     for p in target_projects:
         if p in workspace_members:
             continue
-        for pkg in packages_list:
-            if canonicalize_name(pkg["name"]) == p:
-                workspace_members[p] = pkg
-                break
-        if p not in workspace_members:
+        if p not in packages_by_canon_name:
             fail("Project '{}' not found in uv.lock workspace members.".format(p))
+        workspace_members[p] = packages_by_canon_name[p]
 
     return workspace_members, target_projects
 
-def translate_uv(project_dict, lock_dict, lock_model):
+def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
     """Translates UV project and lock data to raw_lock_data dict.
 
     This is a pure function with no I/O, suitable for direct testing.
@@ -306,33 +347,37 @@ def translate_uv(project_dict, lock_dict, lock_model):
         project_dict: Parsed pyproject.toml as a dict.
         lock_dict: Parsed uv.lock as a dict.
         lock_model: A struct containing the lock model attributes.
+        workspace_cache: Optional dict shared across repos in the same workspace
+            to reuse parsed lock packages, conflict metadata, and the lock graph.
 
     Returns:
         A dict in raw_lock.json format.
     """
-    lock_version = lock_dict.get("version", 0)
-    if lock_version != 1:
-        fail("UV lock file version {} is not supported (expected 1)".format(lock_version))
+    if workspace_cache != None:
+        base = workspace_cache.get("uv_base")
+        if base == None:
+            base = _build_uv_workspace_base(lock_dict)
+            workspace_cache["uv_base"] = base
+            workspace_cache["shared_packages"] = True
+    else:
+        base = _build_uv_workspace_base(lock_dict)
 
-    # backwards-compat for https://github.com/astral-sh/uv/pull/5861
-    distributions_list = lock_dict.get("distribution", [])
-    packages_list = lock_dict.get("package", distributions_list)
-    uv_conflicts = lock_dict.get("conflicts", [])
     uv_default_groups = project_dict.get("tool", {}).get("uv", {}).get("default-groups", [])
 
     projects_list = getattr(lock_model, "projects", [])
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
     is_build_tools_repo = getattr(lock_model, "is_build_tools_repo", False)
 
-    workspace_members, target_projects = _find_target_projects(packages_list, project_dict, projects_list)
-    conflicts = parse_uv_conflicts(uv_conflicts, target_projects)
-    source_tags, pkg_identities = _compute_source_tags(packages_list)
-    packages, fork_constraints, resolution_marker_exprs = _parse_lock_packages(
-        packages_list,
-        conflicts.token_replacements,
-        source_tags,
-        pkg_identities,
+    workspace_members, target_projects = _find_target_projects(
+        base.base_workspace_members,
+        base.packages_by_canon_name,
+        project_dict,
+        projects_list,
     )
+    conflicts = instantiate_uv_conflicts(base.base_conflicts, target_projects)
+
+    # Copy per member because resolve_uv_pins adds edge constraints in place.
+    resolution_marker_exprs = dict(base.resolution_marker_exprs)
 
     # In a repo spanning several projects, a requested extra/group applies to the
     # projects that declare it (like `uv --all-packages --group test`); it only
@@ -425,13 +470,8 @@ def translate_uv(project_dict, lock_dict, lock_model):
         is_build_tools_repo = is_build_tools_repo,
     )
 
-    graph = build_lock_graph(
-        packages,
-        resolution_marker_exprs = resolution_marker_exprs,
-        strict_dependencies = True,
-    )
     expanded_edges = expand_root_edges(
-        graph,
+        base.graph,
         root_edges,
         strict_dependencies = True,
         fold_pin_marker = make_pin_marker_folder(conflicts, repo_pins),
@@ -440,12 +480,12 @@ def translate_uv(project_dict, lock_dict, lock_model):
         expanded_edges,
         conflicts = conflicts,
         repo_pins = repo_pins,
-        fork_constraints = fork_constraints,
+        fork_constraints = base.fork_constraints,
         resolution_marker_exprs = resolution_marker_exprs,
     )
 
     return finalize_lock_graph(
-        graph,
+        base.graph,
         resolved_pins.pinned_keys,
         variants = conflicts.variant_sets,
         resolution_marker_exprs = resolution_marker_exprs,
@@ -498,7 +538,7 @@ def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
 
     return members
 
-def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
+def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None, workspace_cache = None):
     """Run the UV translator in pure Starlark."""
     project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "uv.lock", toml_cache)
-    return translate_uv(project_dict, lock_dict, lock_model)
+    return translate_uv(project_dict, lock_dict, lock_model, workspace_cache = workspace_cache)

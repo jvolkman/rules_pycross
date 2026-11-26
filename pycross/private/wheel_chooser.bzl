@@ -73,8 +73,13 @@ def _pycross_wheel_chooser_impl(ctx):
 
     return [config_common.FeatureFlagInfo(value = value)]
 
-_pycross_wheel_chooser = rule(
+pycross_wheel_chooser = rule(
     implementation = _pycross_wheel_chooser_impl,
+    doc = (
+        "Select the best-matching wheel from a list of candidates. Takes a list of " +
+        "candidate wheel filenames and a target platform providing ordered compatibility " +
+        "tags, and produces a FeatureFlagInfo whose value is the best matching filename."
+    ),
     provides = [config_common.FeatureFlagInfo],
     attrs = {
         "candidates": attr.string_list(
@@ -89,26 +94,13 @@ _pycross_wheel_chooser = rule(
     },
 )
 
-def pycross_wheel_chooser(name, **kwargs):
-    """Select the best-matching wheel from a list of candidates.
-
-    This macro wraps the private _pycross_wheel_chooser rule. It takes a
-    list of candidate wheel filenames and a target platform (which provides
-    ordered compatibility tags), and produces a config_common.FeatureFlagInfo
-    whose value is the filename of the best matching wheel.
-
-    Args:
-        name: The target name.
-        **kwargs: Forwarded to _pycross_wheel_chooser.
-    """
-    _pycross_wheel_chooser(name = name, **kwargs)
-
 def _pycross_wheel_matched_impl(ctx):
     matched = ctx.attr.chooser[config_common.FeatureFlagInfo].value != "__no_matching_wheel__"
     return [config_common.FeatureFlagInfo(value = "true" if matched else "false")]
 
-_pycross_wheel_matched = rule(
+pycross_wheel_matched = rule(
     implementation = _pycross_wheel_matched_impl,
+    doc = "Boolean FeatureFlagInfo (\"true\" or \"false\") reporting whether a wheel chooser matched.",
     provides = [config_common.FeatureFlagInfo],
     attrs = {
         "chooser": attr.label(
@@ -118,7 +110,3 @@ _pycross_wheel_matched = rule(
         ),
     },
 )
-
-def pycross_wheel_matched(name, **kwargs):
-    """Boolean FeatureFlagInfo ("true"/"false") reporting whether a wheel chooser matched."""
-    _pycross_wheel_matched(name = name, **kwargs)

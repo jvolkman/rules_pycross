@@ -17,7 +17,7 @@ load(
     "validate_transition_attrs",
 )
 load(":lock_repo_creation.bzl", "create_repos")
-load(":lock_resolver.bzl", "PASSTHROUGH_PACKAGE_ATTRS", "resolve")
+load(":lock_resolver.bzl", "PASSTHROUGH_PACKAGE_ATTRS", "resolve_workspace")
 load(":util.bzl", "canonicalize_package_key", "parse_flag_arg")
 
 # Shared attrs for workspace tags.
@@ -247,55 +247,55 @@ def _normalize_settings(settings, flags):
 
 canonicalize_package_tag_name_for_testing = _canonicalize_package_tag_name
 
-def _resolve_lock_inline(module_ctx, repo, annotations_data, repo_create_model_fn, toml_cache = None):
-    """Run translator + resolver inline within module_ctx.
+def _resolve_workspace_inline(module_ctx, ws, annotations_data, repo_create_model_fn, toml_cache = None):
+    """Translate all repos in a workspace with a shared cache, then resolve them together.
 
     Args:
         module_ctx: The module_ctx object.
-        repo: Structured repo descriptor from `process_workspaces()`.
+        ws: Structured workspace descriptor from `process_workspaces()`.
         annotations_data: Sparse annotation dicts for this workspace (`{pkg_key: dict}` or None).
         repo_create_model_fn: The format-specific translator function.
         toml_cache: Optional dict caching decoded TOML files by label.
 
     Returns:
-        A dict containing the resolved lock data (packages, pins, remote_files, etc.).
+        Dict mapping each repo name in `ws.repos` to its resolved lock dict.
     """
-    lock_model = repo.lock_model
-    raw_lock_data = repo_create_model_fn(
-        module_ctx,
-        lock_model.extra_project_files,
-        lock_model.lock_file,
-        lock_model,
-        toml_cache = toml_cache,
-    )
+    ws_cache = {}
+    member_entries = []
+    for repo in ws.repos:
+        lock_model = repo.lock_model
+        raw_lock_data = repo_create_model_fn(
+            module_ctx,
+            lock_model.extra_project_files,
+            lock_model.lock_file,
+            lock_model,
+            toml_cache = toml_cache,
+            workspace_cache = ws_cache,
+        )
+        member_entries.append(struct(
+            name = repo.name,
+            lock_model_data = raw_lock_data,
+            include_transitive = lock_model.include_transitive,
+            transitive_testonly = lock_model.transitive_testonly,
+            # The workspace's build tools repo serves sdist builds from every repo, so
+            # its variant-only pins get an unconditional fallback. Repos named in
+            # `build_tools_repo` annotations are left alone: they're user repos that
+            # may also serve runtime targets, where an unselected variant must fail.
+            ungated_fallback = repo.is_build_tools_repo,
+        ))
 
+    # process_workspaces() copies the workspace's local_wheels uniformly onto every repo in ws.repos.
     local_wheels = {
         module_ctx.path(w).basename: str(w)
-        for w in repo.local_wheels
+        for w in (ws.repos[0].local_wheels if ws.repos else [])
     }
 
-    resolved_lock = resolve(
-        lock_model_data = raw_lock_data,
+    return resolve_workspace(
+        member_entries,
         local_wheels = local_wheels,
         annotations_data = annotations_data,
-        include_transitive = lock_model.include_transitive,
-        transitive_testonly = lock_model.transitive_testonly,
-        # The workspace's build tools repo serves sdist builds from every repo, so
-        # its variant-only pins get an unconditional fallback. Repos named in
-        # `build_tools_repo` annotations are left alone: they're user repos that
-        # may also serve runtime targets, where an unselected variant must fail.
-        ungated_fallback = repo.is_build_tools_repo,
+        shared_packages = bool(ws_cache.get("shared_packages")),
     )
-
-    return {
-        "packages": resolved_lock.packages,
-        "pins": resolved_lock.pins,
-        "remote_files": resolved_lock.remote_files,
-        "cycle_groups": resolved_lock.cycle_groups,
-        "variants": resolved_lock.variants,
-        "resolution_marker_exprs": resolved_lock.resolution_marker_exprs,
-        "testonly_pins": resolved_lock.testonly_pins,
-    }
 
 def make_format_extension(
         model_type,
@@ -307,7 +307,7 @@ def make_format_extension(
         model_type: The lock model type string (e.g. "uv", "pdm", "poetry", "pylock").
         discover_members_fn: Required function(module_ctx, lock_file_label, toml_cache) -> [struct(name, path)]
             that auto-discovers workspace members from the project configuration.
-        repo_create_model_fn: Required function(module_ctx, extra_project_files, lock_file, lock_model, toml_cache = ...) -> dict
+        repo_create_model_fn: Required function(module_ctx, extra_project_files, lock_file, lock_model, toml_cache = ..., workspace_cache = ...) -> dict
             that runs the format-specific translator to produce raw lock data.
 
     Returns:
@@ -398,19 +398,18 @@ def make_format_extension(
                 return module_ctx.extension_metadata(reproducible = True)
             return module_ctx.extension_metadata()
 
-        # Run translators + resolver inline for each lock repo.
+        # Run translators + resolver inline once per workspace.
         resolved_locks = {}
 
         for ws_name, ws in workspaces.items():
             ws_annotations = workspace_packages.get(ws_name)
-            for repo in ws.repos:
-                resolved_locks[repo.name] = _resolve_lock_inline(
-                    module_ctx,
-                    repo,
-                    ws_annotations,
-                    repo_create_model_fn,
-                    toml_cache = toml_cache,
-                )
+            resolved_locks.update(_resolve_workspace_inline(
+                module_ctx,
+                ws,
+                ws_annotations,
+                repo_create_model_fn,
+                toml_cache = toml_cache,
+            ))
 
         create_repos(
             module_ctx = module_ctx,

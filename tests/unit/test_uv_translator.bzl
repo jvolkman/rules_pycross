@@ -5,13 +5,13 @@ load("@rules_testing//lib:util.bzl", "util")
 load("@toml.bzl//toml:toml.bzl", "decode")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:lock_resolver.bzl", "resolve")
+load("//pycross/private:lock_resolver.bzl", "resolve", "resolve_workspace")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:translator_common.bzl", "read_project_dict_for_testing")
+load("//pycross/private:translator_project.bzl", "read_project_dict_for_testing")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "parse_package_key")
@@ -2604,6 +2604,129 @@ def _test_discover_uv_all_members(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_discover_uv_all_members_impl)
 
+# buildifier: disable=unused-variable
+def _test_uv_workspace_cache_and_resolve_workspace_parity_impl(env, target):
+    """Hoisted UV workspace translation and resolve_workspace match standalone per-member runs byte-for-byte."""
+    pypi = {"registry": "https://pypi.org/simple"}
+    lock = _lock(
+        packages = [
+            {
+                "name": "app-a",
+                "version": "0.1.0",
+                "source": {"editable": "apps/a"},
+                "dependencies": [
+                    _dep("shared-lib", "0.1.0", source = {"editable": "libs/shared"}),
+                    _dep("linux-only", "1.0.0", marker = "sys_platform == 'linux'"),
+                ],
+                "dev-dependencies": {
+                    "cpu": [_dep("accel", "1.0.0", marker = "extra == 'group-5-app-a-cpu'")],
+                    "cuda": [_dep("accel", "2.0.0", marker = "extra == 'group-5-app-a-cuda'")],
+                },
+            },
+            {
+                "name": "app-b",
+                "version": "0.1.0",
+                "source": {"editable": "apps/b"},
+                "dependencies": [
+                    _dep("linux-only", "1.0.0"),
+                    _dep("extra-pkg", "1.0.0", extra = ["opt"]),
+                ],
+                "dev-dependencies": {"test": [_dep("pytest", "8.0.0")]},
+            },
+            _pkg(
+                "shared-lib",
+                "0.1.0",
+                source = {"editable": "libs/shared"},
+                deps = [_dep("core", "1.0.0")],
+            ),
+            _pkg(
+                "accel",
+                "1.0.0",
+                source = pypi,
+                markers = ["extra == 'group-5-app-a-cpu'"],
+                wheels = [_whl("accel-1.0.0-py3-none-any.whl", "a1")],
+            ),
+            _pkg(
+                "accel",
+                "2.0.0",
+                source = pypi,
+                markers = ["extra == 'group-5-app-a-cuda'"],
+                wheels = [_whl("accel-2.0.0-py3-none-any.whl", "a2")],
+            ),
+            _pkg("linux-only", "1.0.0", source = pypi, wheels = [_whl("linux_only-1.0.0-py3-none-any.whl", "l1")]),
+            _pkg("core", "1.0.0", source = pypi, wheels = [_whl("core-1.0.0-py3-none-any.whl", "c1")]),
+            _pkg("extra-pkg", "1.0.0", source = pypi, wheels = [_whl("extra_pkg-1.0.0-py3-none-any.whl", "e1")]),
+            _pkg("pytest", "8.0.0", source = pypi, wheels = [_whl("pytest-8.0.0-py3-none-any.whl", "p1")]),
+        ],
+        conflicts = [[
+            {"package": "app-a", "group": "cpu"},
+            {"package": "app-a", "group": "cuda"},
+        ]],
+    )
+    proj_a = _project(name = "app-a", uv_default_groups = ["cpu"])
+    proj_b = _project(name = "app-b")
+    proj_root = _project(name = "ws-root")
+
+    cases = [
+        ("app_a_both", proj_a, _lock_model(projects = ["app-a"], dependency_groups = ["default", "group:cpu", "group:cuda"]), False, False, False),
+        ("app_a_cpu", proj_a, _lock_model(projects = ["app-a"], dependency_groups = ["default", "group:cpu"]), False, False, False),
+        ("app_b", proj_b, _lock_model(projects = ["app-b"], dependency_groups = ["default", "group:test"], testonly_groups = ["group:test"], non_testonly_groups = ["default"]), True, True, False),
+        ("ws__build", proj_root, _lock_model(projects = ["*"], dependency_groups = ["*"], is_build_tools_repo = True), True, False, True),
+    ]
+
+    ws_cache = {}
+    cached_raw = {}
+    member_entries = []
+    for repo_name, proj, model, inc_trans, trans_testonly, ungated in cases:
+        cached = translate_uv(proj, lock, model, workspace_cache = ws_cache)
+        cached_raw[repo_name] = cached
+        member_entries.append(struct(
+            name = repo_name,
+            lock_model_data = cached,
+            include_transitive = inc_trans,
+            transitive_testonly = trans_testonly,
+            ungated_fallback = ungated,
+        ))
+
+    env.expect.that_bool(ws_cache.get("shared_packages", False)).equals(True)
+
+    # Compare only after all cached translations finish so any cross-repo mutation
+    # of an earlier repo's returned dicts or lists is caught.
+    standalone_raw = {}
+    for repo_name, proj, model, _inc_trans, _trans_testonly, _ungated in cases:
+        standalone = translate_uv(proj, lock, model)
+        env.expect.that_str(json.encode(cached_raw[repo_name])).equals(json.encode(standalone))
+        standalone_raw[repo_name] = standalone
+
+    annotations = {"core": {"wheel_library_tags": ["my-tag"]}}
+    hoisted_resolved = resolve_workspace(
+        member_entries,
+        annotations_data = annotations,
+        shared_packages = True,
+    )
+    for repo_name, _proj, _model, inc_trans, trans_testonly, ungated in cases:
+        standalone_res = resolve(
+            standalone_raw[repo_name],
+            annotations_data = annotations,
+            include_transitive = inc_trans,
+            transitive_testonly = trans_testonly,
+            ungated_fallback = ungated,
+        )
+        expected_dict = {
+            "packages": standalone_res.packages,
+            "pins": standalone_res.pins,
+            "remote_files": standalone_res.remote_files,
+            "cycle_groups": standalone_res.cycle_groups,
+            "variants": standalone_res.variants,
+            "resolution_marker_exprs": standalone_res.resolution_marker_exprs,
+            "testonly_pins": standalone_res.testonly_pins,
+        }
+        env.expect.that_str(json.encode(hoisted_resolved[repo_name])).equals(json.encode(expected_dict))
+
+def _test_uv_workspace_cache_and_resolve_workspace_parity(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_workspace_cache_and_resolve_workspace_parity_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -2662,5 +2785,6 @@ def uv_translator_test_suite(name):
             _test_uv_local_member_edge_cases,
             _test_uv_multi_source_same_version,
             _test_discover_uv_all_members,
+            _test_uv_workspace_cache_and_resolve_workspace_parity,
         ],
     )

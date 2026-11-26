@@ -7,19 +7,27 @@ structure consumed by lock_resolver.bzl.
 
 load(":lock_common.bzl", "read_toml_cached")
 load(
-    ":translator_common.bzl",
-    "canonicalize_name",
+    ":translator_graph.bzl",
+    "apply_package_marker_forks",
+    "build_lock_graph",
+    "find_package_marker_forks",
+    "resolve_lock_graph",
+)
+load(
+    ":translator_project.bzl",
     "collect_pep621_requirements",
     "compute_requested_groups_for_model",
-    "detect_package_marker_forks",
+    "read_projects_and_lock",
+    "validate_multi_project_groups",
+)
+load(
+    ":translator_util.bzl",
+    "canonicalize_name",
     "make_file_entry",
     "make_git_file_entry",
     "parse_pep508_requirement",
-    "read_projects_and_lock",
     "record_root_marker",
-    "resolve_lock_graph",
     "strip_sha256_prefix",
-    "validate_multi_project_groups",
 )
 load(":util.bzl", "url_filename")
 
@@ -57,20 +65,8 @@ def _merge_pin_spec(existing_spec, new_spec, existing_marked, new_marked):
         return new_spec
     return existing_spec + "," + new_spec
 
-def translate_pdm(project_dict, lock_dict, lock_model):
-    """Translates PDM project and lock data to raw_lock_data dict.
-
-    This is a pure function with no I/O, suitable for direct testing.
-
-    Args:
-        project_dict: Parsed pyproject.toml dict, or list of parsed pyproject.toml dicts
-            when translating multiple workspace projects.
-        lock_dict: Parsed pdm.lock as a dict.
-        lock_model: A struct containing the lock model attributes.
-
-    Returns:
-        A dict in raw_lock.json format.
-    """
+def _build_pdm_workspace_base(lock_dict):
+    """Parse workspace-invariant PDM lock packages, marker forks, and lock graph once."""
 
     # Version check
     lock_version = lock_dict.get("metadata", {}).get("lock_version", "")
@@ -81,6 +77,104 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     v_parts = lock_version.split(".")
     if len(v_parts) < 1 or v_parts[0] != "4":
         fail("PDM lock file version {} not in supported range ~=4.0".format(lock_version))
+
+    packages = []
+    for lock_pkg in lock_dict.get("package", []):
+        name = canonicalize_name(lock_pkg["name"])
+        version = lock_pkg["version"]
+        pkg_extras = lock_pkg.get("extras", [])
+
+        # Read package-level markers (PDM multi-target lock files)
+        package_markers = lock_pkg.get("marker", "")
+
+        # Parse dependencies as PEP 508 requirement strings.
+        # PDM models extra combinations as separate [[package]] entries with
+        # `extras = [...]` whose dependencies omit `; extra == "..."` markers
+        # and include a self-edge to the base package. Synthesize the extra
+        # marker (when not already present) and drop the base self-edge so
+        # merging into the base package keeps bare `pkg` free of extra deps.
+        norm_extras = list({canonicalize_name(e): True for e in pkg_extras}.keys())
+        extra_marker = " or ".join(['extra == "{}"'.format(e) for e in norm_extras])
+        deps = []
+        for dep_str in lock_pkg.get("dependencies", []):
+            parsed = parse_pep508_requirement(dep_str)
+            if norm_extras and parsed.name == name and not parsed.extras:
+                continue
+            dep_marker = parsed.marker
+            if extra_marker and "extra" not in dep_marker:
+                if dep_marker:
+                    wrapped_extra = "({})".format(extra_marker) if len(norm_extras) > 1 else extra_marker
+                    dep_marker = "({}) and {}".format(dep_marker, wrapped_extra)
+                else:
+                    dep_marker = extra_marker
+            deps.append({
+                "name": parsed.name,
+                "specifier": parsed.specifier,
+                "marker": dep_marker,
+                "extras": parsed.extras if parsed.extras else [None],
+            })
+
+        files = [_parse_file_info(f, name, version) for f in lock_pkg.get("files", [])]
+
+        # Git dependencies have no files; fetch the pinned revision instead.
+        if "git" in lock_pkg and not files:
+            revision = lock_pkg.get("revision")
+            if not revision:
+                fail("PDM git package {}=={} has no revision".format(name, version))
+            files.append(make_git_file_entry(name, version, lock_pkg["git"], revision))
+
+        is_local = "path" in lock_pkg and "files" not in lock_pkg
+
+        pkg = {
+            "name": name,
+            "version": version,
+            "dependencies": deps,
+            "files": files,
+            "is_local": is_local,
+            "extras": norm_extras,
+            "markers": package_markers,
+        }
+        if lock_pkg.get("subdirectory"):
+            pkg["source_dir"] = lock_pkg["subdirectory"]
+        packages.append(pkg)
+
+    resolution_marker_exprs, forks_by_name = find_package_marker_forks(packages)
+    graph = build_lock_graph(
+        packages,
+        resolution_marker_exprs = resolution_marker_exprs,
+        strict_dependencies = False,
+    )
+    return struct(
+        packages = packages,
+        resolution_marker_exprs = resolution_marker_exprs,
+        forks_by_name = forks_by_name,
+        graph = graph,
+    )
+
+def translate_pdm(project_dict, lock_dict, lock_model, workspace_cache = None):
+    """Translates PDM project and lock data to raw_lock_data dict.
+
+    This is a pure function with no I/O, suitable for direct testing.
+
+    Args:
+        project_dict: Parsed pyproject.toml dict, or list of parsed pyproject.toml dicts
+            when translating multiple workspace projects.
+        lock_dict: Parsed pdm.lock as a dict.
+        lock_model: A struct containing the lock model attributes.
+        workspace_cache: Optional dict shared across repos in the same workspace
+            to reuse parsed lock packages, marker forks, and the lock graph.
+
+    Returns:
+        A dict in raw_lock.json format.
+    """
+    if workspace_cache != None:
+        base = workspace_cache.get("pdm_base")
+        if base == None:
+            base = _build_pdm_workspace_base(lock_dict)
+            workspace_cache["pdm_base"] = base
+            workspace_cache["shared_packages"] = True
+    else:
+        base = _build_pdm_workspace_base(lock_dict)
 
     project_dicts = project_dict if type(project_dict) == "list" else [project_dict]
     multi_project = len(project_dicts) > 1
@@ -162,78 +256,16 @@ def translate_pdm(project_dict, lock_dict, lock_model):
                 non_testonly_reqs[pin_name] = True
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
-
-    # Parse lock packages
-    packages = []
-    for lock_pkg in lock_dict.get("package", []):
-        name = canonicalize_name(lock_pkg["name"])
-        version = lock_pkg["version"]
-        pkg_extras = lock_pkg.get("extras", [])
-
-        # Read package-level markers (PDM multi-target lock files)
-        package_markers = lock_pkg.get("marker", "")
-
-        # Parse dependencies as PEP 508 requirement strings.
-        # PDM models extra combinations as separate [[package]] entries with
-        # `extras = [...]` whose dependencies omit `; extra == "..."` markers
-        # and include a self-edge to the base package. Synthesize the extra
-        # marker (when not already present) and drop the base self-edge so
-        # merging into the base package keeps bare `pkg` free of extra deps.
-        norm_extras = list({canonicalize_name(e): True for e in pkg_extras}.keys())
-        extra_marker = " or ".join(['extra == "{}"'.format(e) for e in norm_extras])
-        deps = []
-        for dep_str in lock_pkg.get("dependencies", []):
-            parsed = parse_pep508_requirement(dep_str)
-            if norm_extras and parsed.name == name and not parsed.extras:
-                continue
-            dep_marker = parsed.marker
-            if extra_marker and "extra" not in dep_marker:
-                if dep_marker:
-                    wrapped_extra = "({})".format(extra_marker) if len(norm_extras) > 1 else extra_marker
-                    dep_marker = "({}) and {}".format(dep_marker, wrapped_extra)
-                else:
-                    dep_marker = extra_marker
-            deps.append({
-                "name": parsed.name,
-                "specifier": parsed.specifier,
-                "marker": dep_marker,
-                "extras": parsed.extras if parsed.extras else [None],
-            })
-
-        # Parse files
-        files = [_parse_file_info(f, name, version) for f in lock_pkg.get("files", [])]
-
-        # Git dependencies have no files; fetch the pinned revision instead.
-        if "git" in lock_pkg and not files:
-            revision = lock_pkg.get("revision")
-            if not revision:
-                fail("PDM git package {}=={} has no revision".format(name, version))
-            files.append(make_git_file_entry(name, version, lock_pkg["git"], revision))
-
-        is_local = "path" in lock_pkg and "files" not in lock_pkg
-
-        pkg = {
-            "name": name,
-            "version": version,
-            "dependencies": deps,
-            "files": files,
-            "is_local": is_local,
-            "extras": norm_extras,
-            "markers": package_markers,
-        }
-        if lock_pkg.get("subdirectory"):
-            pkg["source_dir"] = lock_pkg["subdirectory"]
-        packages.append(pkg)
-
-    resolution_marker_exprs = detect_package_marker_forks(packages, pinned_package_specs)
+    apply_package_marker_forks(pinned_package_specs, base.forks_by_name)
 
     return resolve_lock_graph(
-        packages = packages,
+        packages = base.packages,
         pinned_package_specs = pinned_package_specs,
         strict_dependencies = False,
-        resolution_marker_exprs = resolution_marker_exprs,
+        resolution_marker_exprs = base.resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
         root_dependency_markers = root_dependency_markers,
+        graph = base.graph,
     )
 
 def discover_pdm_all_members(mctx, lock_file_label, toml_cache = None):
@@ -262,7 +294,7 @@ def discover_pdm_all_members(mctx, lock_file_label, toml_cache = None):
 
     return members
 
-def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
+def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None, workspace_cache = None):
     """Run the PDM translator in pure Starlark."""
     project_dicts, lock_dict = read_projects_and_lock(rctx, extra_project_files, lock_file, lock_model, "pdm.lock", toml_cache)
-    return translate_pdm(project_dicts, lock_dict, lock_model)
+    return translate_pdm(project_dicts, lock_dict, lock_model, workspace_cache = workspace_cache)

@@ -1,5 +1,4 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
 load(":target_platform.bzl", "pycross_target_platform")
 load(":wheel_library.bzl", "pycross_unsupported_wheel")
@@ -59,21 +58,13 @@ bzl_library(
 )
 
 bzl_library(
-    name = "translator_common",
-    srcs = ["translator_common.bzl"],
-    deps = [
-        ":lock_common",
-        ":util",
-        "@pypackaging.bzl//:pypackaging",
-    ],
-)
-
-bzl_library(
     name = "pdm_lock_model",
     srcs = ["pdm_lock_model.bzl"],
     deps = [
         ":lock_common",
-        ":translator_common",
+        ":translator_graph",
+        ":translator_project",
+        ":translator_util",
         ":util",
     ],
 )
@@ -82,7 +73,7 @@ bzl_library(
     name = "uv_conflicts",
     srcs = ["uv_conflicts.bzl"],
     deps = [
-        ":translator_common",
+        ":translator_util",
         ":util",
         ":variant_util",
     ],
@@ -93,7 +84,9 @@ bzl_library(
     srcs = ["uv_lock_model.bzl"],
     deps = [
         ":lock_common",
-        ":translator_common",
+        ":translator_graph",
+        ":translator_project",
+        ":translator_util",
         ":util",
         ":uv_conflicts",
     ],
@@ -103,7 +96,9 @@ bzl_library(
     name = "poetry_lock_model",
     srcs = ["poetry_lock_model.bzl"],
     deps = [
-        ":translator_common",
+        ":translator_graph",
+        ":translator_project",
+        ":translator_util",
         ":util",
         "@pypackaging.bzl//:pypackaging",
     ],
@@ -188,17 +183,13 @@ bzl_library(
     ],
 )
 
-write_file(
-    name = "dummy_bin_file",
-    out = "dummy.txt",
-    content = [""],
-)
-
 bzl_library(
     name = "pylock_lock_model",
     srcs = ["pylock_lock_model.bzl"],
     deps = [
-        ":translator_common",
+        ":translator_graph",
+        ":translator_project",
+        ":translator_util",
         ":util",
         "@pypackaging.bzl//:pypackaging",
     ],
@@ -503,6 +494,31 @@ bzl_library(
     name = "git_file",
     srcs = ["git_file.bzl"],
     deps = [":internal_repo"],
+)
+
+bzl_library(
+    name = "translator_graph",
+    srcs = ["translator_graph.bzl"],
+    deps = [
+        ":translator_util",
+        ":util",
+        "@pypackaging.bzl//:pypackaging",
+    ],
+)
+
+bzl_library(
+    name = "translator_project",
+    srcs = ["translator_project.bzl"],
+    deps = [
+        ":lock_common",
+        ":translator_util",
+    ],
+)
+
+bzl_library(
+    name = "translator_util",
+    srcs = ["translator_util.bzl"],
+    deps = ["@pypackaging.bzl//:pypackaging"],
 )
 
 bzl_library(

@@ -375,7 +375,7 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
         fail("Package {} has build_mode = \"always\" but no sdist to build from.".format(pkg_key))
 
     # Markers under which the root projects request this exact pin; see
-    # record_root_marker in translator_common.bzl for the semantics.
+    # record_root_marker in translator_util.bzl for the semantics.
     root_pin_name = pkg_name
     if pkg_extra:
         root_pin_name = "{}[{}]".format(pkg_name, pkg_extra)
@@ -433,16 +433,12 @@ def _synthesize_extra_package(next_package_key, lock_model_packages, synthesized
     synthesized_packages[next_package_key] = raw_pkg
     return raw_pkg
 
-def _resolve_packages(
+def _resolve_base_packages(
         lock_model_packages,
-        pins,
         context,
         annotations,
         wildcard_only_keys):
     work_set = {k: True for k in lock_model_packages.keys()}
-    for pin_dict in pins.values():
-        for pkg_key in pin_dict.values():
-            work_set[pkg_key] = True
     enqueued = dict(work_set)
     work = work_set.keys()
 
@@ -499,9 +495,6 @@ def _resolve_packages(
         fail("Annotations specified for packages that are not part of the locked set: {}".format(
             ", ".join(sorted(annotations.keys())),
         ))
-
-    for k, v in synthesized_packages.items():
-        lock_model_packages[k] = v
 
     return packages_by_package_key
 
@@ -663,28 +656,8 @@ def _add_ungated_fallbacks(pins, lock_model_data):
         new_pin[""] = fallback
         pins[pin_name] = new_pin
 
-def resolve(
-        lock_model_data,
-        local_wheels = None,
-        annotations_data = None,
-        include_transitive = False,
-        transitive_testonly = False,
-        ungated_fallback = False):
-    """Resolves dependencies from lock model data.
-
-    Args:
-        lock_model_data: The lock model data.
-        local_wheels: Dictionary of local wheels.
-        annotations_data: Annotations data.
-        include_transitive: Whether to include transitive dependencies.
-        transitive_testonly: Whether to perform reachability analysis to assign testonly status.
-        ungated_fallback: Give every pin that only has uv conflict-variant branches an
-            unconditional fallback (for the workspace's `<ws>__build` repo: sdist builds
-            need their tools whichever variant, if any, is selected).
-
-    Returns:
-        Dictionary of resolved packages.
-    """
+def _parse_local_wheels(local_wheels):
+    """Parse a `{filename: label}` dict into `{name@version: {filename: label}}`."""
     local_wheels = local_wheels or {}
     if type(local_wheels) != "dict":
         fail("local_wheels must be a dict (filename -> label), got {}".format(type(local_wheels)))
@@ -697,17 +670,17 @@ def resolve(
         if pkg_key not in local_wheels_by_pkg:
             local_wheels_by_pkg[pkg_key] = {}
         local_wheels_by_pkg[pkg_key][filename] = label
+    return local_wheels_by_pkg
 
-    context = struct(
-        local_wheels = local_wheels_by_pkg,
-        root_dependency_markers = lock_model_data.get("root_dependency_markers", {}),
-    )
+def _prepare_workspace_base(lock_model_packages, local_wheels_by_pkg, annotations_data):
+    """Resolve base packages, remote files, annotations, and cycles once per workspace.
 
-    lock_model_packages = lock_model_data.get("packages", {})
+    Leaves `lock_model_packages` unmodified so it can be shared across members.
+    """
     pkg_index = _build_pkg_index(lock_model_packages)
     locked_versions_by_simple_name = pkg_index.locked_versions_by_simple_name
 
-    # Warn about local wheels that don't match locked packages
+    # Warn about local wheels that don't match locked packages.
     for pkg_key, filenames in local_wheels_by_pkg.items():
         parts = parse_package_key(pkg_key)
         name = parts.name
@@ -735,44 +708,151 @@ def resolve(
             pkg_index,
         )
 
+    base_context = struct(
+        local_wheels = local_wheels_by_pkg,
+        root_dependency_markers = {},
+    )
+    packages_by_key = _resolve_base_packages(
+        lock_model_packages,
+        base_context,
+        annotations,
+        wildcard_only_keys,
+    )
+
+    resolved_keys = sorted(packages_by_key.keys())
+    repos = {}
+    for k in resolved_keys:
+        entry = packages_by_key[k]
+        repos.update(entry.wheel_candidate_files)
+        if entry.resolved_package["sdist_file"] and entry.sdist_file_obj:
+            repos[entry.resolved_package["sdist_file"]["key"]] = entry.sdist_file_obj
+    base_remote_files = {k: repos[k] for k in sorted(repos.keys())}
+
+    base_resolved_packages = {k: packages_by_key[k].resolved_package for k in resolved_keys}
+    base_cycle_groups = _compute_cycle_groups(base_resolved_packages)
+    for group_name, scc in base_cycle_groups.items():
+        for pkg_key in scc:
+            if pkg_key in base_resolved_packages:
+                base_resolved_packages[pkg_key]["cycle_group"] = group_name
+
+    pin_name_to_keys = {}
+    for pkg_key in resolved_keys:
+        parts = parse_package_key(pkg_key)
+        root_pin_name = "{}[{}]".format(parts.name, parts.extra) if parts.extra else parts.name
+        pin_name_to_keys.setdefault(root_pin_name, []).append(pkg_key)
+
+    return struct(
+        lock_model_packages = lock_model_packages,
+        local_wheels_by_pkg = local_wheels_by_pkg,
+        packages_by_key = packages_by_key,
+        resolved_packages = base_resolved_packages,
+        remote_files = base_remote_files,
+        cycle_groups = base_cycle_groups,
+        pin_name_to_keys = pin_name_to_keys,
+    )
+
+def _resolve_member(
+        lock_model_data,
+        base,
+        include_transitive = False,
+        transitive_testonly = False,
+        ungated_fallback = False):
+    """Resolve one member repo on top of a precomputed workspace base without mutating `base`."""
     raw_pins = lock_model_data.get("pins", {})
     pins = {}
     for k, v in raw_pins.items():
         parts = parse_package_key(k)
-
-        if parts.extra:
-            name = "{}[{}]".format(parts.name, parts.extra)
-        else:
-            name = parts.name
+        name = "{}[{}]".format(parts.name, parts.extra) if parts.extra else parts.name
         if type(v) == "string":
             pins[name] = {"": v}
         else:
             pins[name] = v
 
-    packages_by_package_key = _resolve_packages(
-        lock_model_packages,
-        pins,
-        context,
-        annotations,
-        wildcard_only_keys,
-    )
+    root_dependency_markers = lock_model_data.get("root_dependency_markers", {})
 
-    resolved_keys = sorted(packages_by_package_key.keys())
-    resolved_packages = [packages_by_package_key[k] for k in resolved_keys]
+    # Synthesize member-only extra packages referenced by pins and absent from base.
+    # Synthesized extras have no remote files and in-degree 0, so they cannot
+    # affect `base.remote_files` or `base.cycle_groups`.
+    member_work = []
+    member_enqueued = {}
+    for pin_dict in pins.values():
+        for pkg_key in pin_dict.values():
+            if pkg_key not in base.packages_by_key and pkg_key not in member_enqueued:
+                member_enqueued[pkg_key] = True
+                member_work.append(pkg_key)
 
-    repos = {}
-    for entry in resolved_packages:
-        repos.update(entry.wheel_candidate_files)
-        if entry.resolved_package["sdist_file"] and entry.sdist_file_obj:
-            repos[entry.resolved_package["sdist_file"]["key"]] = entry.sdist_file_obj
+    member_extra_entries = {}
+    if member_work:
+        member_context = struct(
+            local_wheels = base.local_wheels_by_pkg,
+            root_dependency_markers = root_dependency_markers,
+        )
+        member_synthesized = {}
+        max_iters = max(1000, len(member_work) + len(base.packages_by_key) + 1)
+        for _ in range(max_iters):
+            if not member_work:
+                break
+            next_key = member_work.pop()
+            if next_key in base.packages_by_key or next_key in member_extra_entries:
+                continue
+            raw_pkg = _synthesize_extra_package(
+                next_key,
+                base.lock_model_packages,
+                member_synthesized,
+            )
+            entry = _create_package_resolver(
+                next_key,
+                raw_pkg,
+                None,
+                member_context,
+            )
+            member_extra_entries[next_key] = entry
+            for dep_key in entry.all_dependency_keys:
+                if dep_key not in base.packages_by_key and dep_key not in member_enqueued:
+                    member_enqueued[dep_key] = True
+                    member_work.append(dep_key)
+        if member_work:
+            fail("Package resolution exceeded max iterations. Remaining work: {}".format(member_work))
 
-    sorted_repo_keys = sorted(repos.keys())
-    repos = {k: repos[k] for k in sorted_repo_keys}
+    # Overlay per-member availability_markers via shallow copies of affected packages only.
+    affected_base_markers = {}
+    for root_pin_name, markers in root_dependency_markers.items():
+        if not markers:
+            continue
+        for pkg_key in base.pin_name_to_keys.get(root_pin_name, []):
+            affected_base_markers[pkg_key] = markers
+
+    if not member_extra_entries and not affected_base_markers:
+        resolved_packages_dict = base.resolved_packages
+    elif not member_extra_entries:
+        resolved_packages_dict = dict(base.resolved_packages)
+        for pkg_key, markers in affected_base_markers.items():
+            pkg_copy = dict(base.resolved_packages[pkg_key])
+            pkg_copy["availability_markers"] = markers
+            resolved_packages_dict[pkg_key] = pkg_copy
+    else:
+        all_keys = sorted(list(base.resolved_packages.keys()) + list(member_extra_entries.keys()))
+        resolved_packages_dict = {}
+        for k in all_keys:
+            if k in member_extra_entries:
+                resolved_packages_dict[k] = member_extra_entries[k].resolved_package
+            elif k in affected_base_markers:
+                pkg_copy = dict(base.resolved_packages[k])
+                pkg_copy["availability_markers"] = affected_base_markers[k]
+                resolved_packages_dict[k] = pkg_copy
+            else:
+                resolved_packages_dict[k] = base.resolved_packages[k]
 
     testonly_pin_names = lock_model_data.get("testonly_pins", [])
     testonly_pins_set = {p: True for p in testonly_pin_names}
 
     if include_transitive:
+        if member_extra_entries:
+            packages_by_package_key = dict(base.packages_by_key)
+            packages_by_package_key.update(member_extra_entries)
+        else:
+            packages_by_package_key = base.packages_by_key
+
         reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
 
         # With transitive_testonly, a transitive pin is testonly only if it is
@@ -784,11 +864,11 @@ def resolve(
                 packages_by_package_key,
             )
         resolved_keys_by_name = {}
-        for entry in resolved_packages:
-            if entry.key not in reachable_keys:
+        for pkg_key, resolved_pkg in resolved_packages_dict.items():
+            if pkg_key not in reachable_keys:
                 continue
-            pkg_name = entry.resolved_package["name"]
-            base_key = base_package_key(entry.key)
+            pkg_name = resolved_pkg["name"]
+            base_key = base_package_key(pkg_key)
             if base_key in packages_by_package_key:
                 resolved_keys_by_name.setdefault(pkg_name, {})[base_key] = True
 
@@ -830,19 +910,107 @@ def resolve(
 
     testonly_pin_names = sorted(testonly_pins_set.keys())
 
-    resolved_packages_dict = {pkg.key: pkg.resolved_package for pkg in resolved_packages}
-    cycle_groups = _compute_cycle_groups(resolved_packages_dict)
-    for group_name, scc in cycle_groups.items():
-        for pkg_key in scc:
-            if pkg_key in resolved_packages_dict:
-                resolved_packages_dict[pkg_key]["cycle_group"] = group_name
-
     return struct(
         packages = resolved_packages_dict,
         pins = pins,
-        remote_files = repos,
-        cycle_groups = cycle_groups,
+        remote_files = base.remote_files,
+        cycle_groups = base.cycle_groups,
         variants = lock_model_data.get("variants", []),
         resolution_marker_exprs = lock_model_data.get("resolution_marker_exprs", {}),
         testonly_pins = testonly_pin_names,
     )
+
+def resolve(
+        lock_model_data,
+        local_wheels = None,
+        annotations_data = None,
+        include_transitive = False,
+        transitive_testonly = False,
+        ungated_fallback = False):
+    """Resolves dependencies from lock model data.
+
+    Args:
+        lock_model_data: The lock model data.
+        local_wheels: Dictionary of local wheels.
+        annotations_data: Annotations data.
+        include_transitive: Whether to include transitive dependencies.
+        transitive_testonly: Whether to perform reachability analysis to assign testonly status.
+        ungated_fallback: Give every pin that only has uv conflict-variant branches an
+            unconditional fallback (for the workspace's `<ws>__build` repo: sdist builds
+            need their tools whichever variant, if any, is selected).
+
+    Returns:
+        Struct of resolved lock data.
+    """
+    local_wheels_by_pkg = _parse_local_wheels(local_wheels)
+    base = _prepare_workspace_base(
+        lock_model_data.get("packages", {}),
+        local_wheels_by_pkg,
+        annotations_data,
+    )
+    return _resolve_member(
+        lock_model_data = lock_model_data,
+        base = base,
+        include_transitive = include_transitive,
+        transitive_testonly = transitive_testonly,
+        ungated_fallback = ungated_fallback,
+    )
+
+def resolve_workspace(
+        member_entries,
+        local_wheels = None,
+        annotations_data = None,
+        shared_packages = False):
+    """Resolve all member lock models for a workspace, hoisting base work when packages are shared.
+
+    Args:
+        member_entries: List of structs with `name`, `lock_model_data`, and
+            optional `include_transitive`, `transitive_testonly`, and
+            `ungated_fallback` booleans.
+        local_wheels: Optional dict mapping wheel filename -> label string.
+        annotations_data: Optional workspace annotations dict.
+        shared_packages: If True, all members share the same base packages dict
+            (`lock_model_data["packages"]`), so package indexing, annotation
+            collection, base resolution, and cycle detection run once.
+
+    Returns:
+        Dict mapping each member's `name` to its resolved lock dict.
+    """
+    if not member_entries:
+        return {}
+
+    local_wheels_by_pkg = _parse_local_wheels(local_wheels)
+    shared_base = None
+    if shared_packages:
+        shared_base = _prepare_workspace_base(
+            member_entries[0].lock_model_data.get("packages", {}),
+            local_wheels_by_pkg,
+            annotations_data,
+        )
+
+    results = {}
+    for entry in member_entries:
+        base = shared_base
+        if base == None:
+            base = _prepare_workspace_base(
+                entry.lock_model_data.get("packages", {}),
+                local_wheels_by_pkg,
+                annotations_data,
+            )
+        resolved = _resolve_member(
+            lock_model_data = entry.lock_model_data,
+            base = base,
+            include_transitive = getattr(entry, "include_transitive", False),
+            transitive_testonly = getattr(entry, "transitive_testonly", False),
+            ungated_fallback = getattr(entry, "ungated_fallback", False),
+        )
+        results[entry.name] = {
+            "packages": resolved.packages,
+            "pins": resolved.pins,
+            "remote_files": resolved.remote_files,
+            "cycle_groups": resolved.cycle_groups,
+            "variants": resolved.variants,
+            "resolution_marker_exprs": resolved.resolution_marker_exprs,
+            "testonly_pins": resolved.testonly_pins,
+        }
+    return results
