@@ -7,7 +7,6 @@ from typing import Any
 from typing import Dict
 
 from pycross.private.build.tools.utils.context import BuildContext
-from pycross.private.build.tools.utils.context import replace_placeholder
 
 
 def _clear_stale_runfiles_env(env: Dict[str, str]) -> None:
@@ -39,10 +38,6 @@ def run_pre_build_hook(ctx: BuildContext, hook_config: Dict[str, Any]) -> None:
     hook_env["PYCROSS_BAZEL_ROOT"] = str(ctx.prefix)
     hook_env["PYCROSS_CONFIG_SETTINGS_FILE"] = str(config_settings_file)
     hook_env["PYCROSS_ENV_VARS_FILE"] = str(env_file)
-
-    # Merge hook-specific env vars
-    for key, value in hook_config.get("env", {}).items():
-        hook_env[key] = replace_placeholder(ctx.prefix, value)
 
     _clear_stale_runfiles_env(hook_env)
 

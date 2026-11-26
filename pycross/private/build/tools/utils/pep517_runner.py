@@ -16,7 +16,7 @@ def run_pep517_build(ctx: BuildContext) -> str:
     as pre_build_hooks rather than added here.
     """
     python_executable = venv_python_path(ctx.env_dir).absolute()
-    path_dirs = [ctx.tools_dir.absolute(), python_executable.parent, ctx.bin_dir.absolute()]
+    path_dirs = [ctx.tools_dir.absolute(), python_executable.parent]
     path_entries = [str(pd) for pd in path_dirs]
     existing_path = ctx.build_env.get("PATH")
     if existing_path:

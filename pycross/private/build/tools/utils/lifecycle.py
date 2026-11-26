@@ -37,11 +37,9 @@ def _inject_extra_files(ctx: BuildContext) -> None:
 
 @dataclass
 class BackendStrategy:
-    setup_toolchains: Callable[[BuildContext], None] = lambda ctx: None
     setup_venv: Callable[[BuildContext], None] = build_standard_venv
     pre_build: Callable[[BuildContext], None] = lambda ctx: None
     prepare_env: Callable[[BuildContext], None] = lambda ctx: None
-    post_build: Callable[["BuildContext", Path], Path] = lambda ctx, whl: whl
 
 
 def setup_pkg_config(ctx: BuildContext) -> Path:
@@ -93,8 +91,6 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
     ctx.sysconfig_vars = load_target_sysconfig(ctx)
     setup_path_tools(ctx)
 
-    strategy.setup_toolchains(ctx)
-
     cc_config = None
     cc_layer_count = 0
     for layer_config in load_layers(ctx):
@@ -127,6 +123,5 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
     strategy.prepare_env(ctx)
 
     wheel_file = run_pep517_build(ctx)
-    wheel_file = strategy.post_build(ctx, wheel_file)
     wheel_file = run_post_build_hooks(ctx, wheel_file)
     print(f"Successfully built wheel: {wheel_file}")

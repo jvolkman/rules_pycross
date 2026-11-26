@@ -210,30 +210,6 @@ Extracts the site_packages TreeArtifact from a target.
 File (TreeArtifact): the installed site-packages directory.
 
 
-<a id="get_wheel"></a>
-
-## get_wheel
-
-<pre>
-load("@rules_pycross//pycross:backend.bzl", "get_wheel")
-
-get_wheel(<a href="#get_wheel-target">target</a>)
-</pre>
-
-Extracts the wheel output from a target.
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="get_wheel-target"></a>target |  Target, a wheel build target.   |  none |
-
-**RETURNS**
-
-File: the wheel file or TreeArtifact directory containing a .whl file.
-
-
 <a id="group_tool_deps"></a>
 
 ## group_tool_deps

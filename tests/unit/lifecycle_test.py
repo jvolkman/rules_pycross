@@ -54,9 +54,6 @@ class LifecycleTest(unittest.TestCase):
     ):
         call_order = []
 
-        def setup_toolchains(ctx):
-            call_order.append("setup_toolchains")
-
         def setup_venv(ctx):
             call_order.append("setup_venv")
 
@@ -66,13 +63,11 @@ class LifecycleTest(unittest.TestCase):
         def prepare_env(ctx):
             call_order.append("prepare_env")
 
-        strategy = BackendStrategy(
-            setup_toolchains=setup_toolchains, setup_venv=setup_venv, pre_build=pre_build, prepare_env=prepare_env
-        )
+        strategy = BackendStrategy(setup_venv=setup_venv, pre_build=pre_build, prepare_env=prepare_env)
 
         run_standard_build_lifecycle(str(self.config_path), strategy)
 
-        self.assertEqual(call_order, ["setup_toolchains", "setup_venv", "pre_build", "prepare_env"])
+        self.assertEqual(call_order, ["setup_venv", "pre_build", "prepare_env"])
 
 
 class PreBuildPatchesTest(unittest.TestCase):
@@ -184,8 +179,6 @@ class Pep517RunnerTest(unittest.TestCase):
         self.wheel_dir = self.root / "wheel"
         self.tools_dir = self.root / "tools"
         self.tools_dir.mkdir()
-        self.bin_dir = self.root / "bin"
-        self.bin_dir.mkdir()
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -198,7 +191,6 @@ class Pep517RunnerTest(unittest.TestCase):
             env_dir=self.env_dir,
             wheel_dir=self.wheel_dir,
             tools_dir=self.tools_dir,
-            bin_dir=self.bin_dir,
             exec_python=Path(sys.executable),
             target_python=Path(sys.executable),
             sysconfig_vars={},

@@ -14,7 +14,7 @@ def _mock_sdist_impl(ctx):
 
 _mock_sdist = rule(implementation = _mock_sdist_impl)
 
-def _test_setuptools_build_no_repair(name):
+def _test_setuptools_build_without_native_deps(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")
     util.helper_target(
         setuptools_build,
@@ -22,13 +22,17 @@ def _test_setuptools_build_no_repair(name):
         sdist = name + "_sdist",
         native_deps = [],
     )
-    analysis_test(name = name, target = name + "_subject", impl = _test_setuptools_build_no_repair_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_setuptools_build_without_native_deps_impl)
 
-# buildifier: disable=unused-variable
-def _test_setuptools_build_no_repair_impl(env, target):
+def _test_setuptools_build_without_native_deps_impl(env, target):
+    # setuptools_build always runs wheel repair (for tag validation and
+    # canonicalization) even without native_deps; raw_wheel holds the
+    # unrepaired PycrossPep517Build output.
     wheel_dir = target[DefaultInfo].files.to_list()[0]
-    env.expect.that_target(target).action_generating(wheel_dir.short_path)
-    # The action that generates the wheel should be the main build action, meaning no repair action
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossRepairWheel")
+    raw_wheel = target[OutputGroupInfo].raw_wheel.to_list()[0]
+    env.expect.that_target(target).action_generating(raw_wheel.short_path).mnemonic().equals("PycrossPep517Build")
 
 def _test_setuptools_build_with_repair(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")
@@ -88,7 +92,7 @@ def setuptools_build_test_suite(name):
     test_suite(
         name = name,
         tests = [
-            _test_setuptools_build_no_repair,
+            _test_setuptools_build_without_native_deps,
             _test_setuptools_build_with_repair,
             _test_setuptools_build_resources,
             _test_setuptools_build_with_repair_exclude_globs,

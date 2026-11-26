@@ -21,9 +21,6 @@ class TemplateContext:
     def update(self, other):
         self.locals.update(other)
 
-    def update_globals(self, other):
-        self.globals.update(other)
-
     def expand(self, template):
         return re.sub(r"\{\{(.*?)\}\}", self._replace, template)
 

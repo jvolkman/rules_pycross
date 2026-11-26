@@ -58,7 +58,6 @@ load(
     _TOOL_EXTRACT_ATTRS = "TOOL_EXTRACT_ATTRS",
     _defer_build_error = "defer_build_error",
     _get_unzipped_wheel = "get_unzipped_wheel",
-    _get_wheel = "get_wheel",
     _group_tool_deps = "group_tool_deps",
     _resolve_path_tools = "resolve_path_tools",
 )
@@ -89,7 +88,6 @@ TOOL_EXTRACT_ATTRS = _TOOL_EXTRACT_ATTRS
 defer_build_error = _defer_build_error
 get_resource_set = _get_resource_set
 get_unzipped_wheel = _get_unzipped_wheel
-get_wheel = _get_wheel
 group_tool_deps = _group_tool_deps
 resolve_path_tools = _resolve_path_tools
 

@@ -2,31 +2,8 @@
 
 load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
-load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-
-CxxToolsInfo = provider(
-    doc = "Paths to the C/C++ tools, taken from the toolchain",
-    fields = dict(
-        cc = "C compiler",
-        cxx = "C++ compiler",
-        cxx_linker_static = "C++ linker to link static library",
-        cxx_linker_executable = "C++ linker to link executable",
-    ),
-)
-
-CxxFlagsInfo = provider(
-    doc = "Flags for the C/C++ tools, taken from the toolchain",
-    fields = dict(
-        cc = "C compiler flags",
-        cxx = "C++ compiler flags",
-        cxx_linker_shared = "C++ linker flags when linking shared library",
-        cxx_linker_static = "C++ linker flags when linking static library",
-        cxx_linker_executable = "C++ linker flags when linking executable",
-        needs_pic_for_dynamic_libraries = "True if PIC should be enabled for shared libraries",
-    ),
-)
 
 # Since we're calling an external build system we can't support some
 # features that may be enabled on the toolchain - so we disable
@@ -63,30 +40,19 @@ def configure_features(ctx, cc_toolchain):
         unsupported_features = disabled_features,
     )
 
-def _defines_from_deps(ctx, native_deps = None):
-    deps = native_deps if native_deps != None else getattr(ctx.attr, "native_deps", [])
-    return depset(transitive = [dep[CcInfo].compilation_context.defines for dep in deps if CcInfo in dep])
+def _defines_from_deps(native_deps):
+    return depset(transitive = [dep[CcInfo].compilation_context.defines for dep in native_deps if CcInfo in dep])
 
-def get_tools_info(ctx, cc_toolchain = None, feature_configuration = None):
-    """Takes information about tools paths from cc_toolchain, returns CxxToolsInfo
+def get_tools_info(feature_configuration):
+    """Takes information about tool paths from a configured C++ toolchain.
 
     Args:
-        ctx: rule context
-        cc_toolchain: optional pre-resolved C++ toolchain info
-        feature_configuration: optional pre-configured FeatureConfiguration
+        feature_configuration: Pre-configured FeatureConfiguration.
 
     Returns:
-        CxxToolsInfo: A provider containing C/C++ tool paths.
+        struct: C/C++ tool paths (cc, cxx, cxx_linker_static).
     """
-    if cc_toolchain == None:
-        cc_toolchain = find_cpp_toolchain(ctx)
-    if feature_configuration == None:
-        feature_configuration = configure_features(
-            ctx = ctx,
-            cc_toolchain = cc_toolchain,
-        )
-
-    return CxxToolsInfo(
+    return struct(
         cc = cc_common.get_tool_for_action(
             feature_configuration = feature_configuration,
             action_name = ACTION_NAMES.c_compile,
@@ -98,10 +64,6 @@ def get_tools_info(ctx, cc_toolchain = None, feature_configuration = None):
         cxx_linker_static = cc_common.get_tool_for_action(
             feature_configuration = feature_configuration,
             action_name = ACTION_NAMES.cpp_link_static_library,
-        ),
-        cxx_linker_executable = cc_common.get_tool_for_action(
-            feature_configuration = feature_configuration,
-            action_name = ACTION_NAMES.cpp_link_executable,
         ),
     )
 
@@ -124,121 +86,103 @@ def _strip_archiver_output_sentinel(flags):
 
 def get_flags_info(
         ctx,
+        cc_toolchain,
+        feature_configuration,
         copts = [],
         linkopts = [],
-        link_output_file = None,
-        native_deps = None,
-        cc_toolchain = None,
-        feature_configuration = None):
-    """Takes information about flags from cc_toolchain, returns CxxFlagsInfo
+        native_deps = []):
+    """Takes information about flags from cc_toolchain.
 
     Args:
         ctx: rule context
+        cc_toolchain: pre-resolved C++ toolchain info
+        feature_configuration: pre-configured FeatureConfiguration
         copts: compiler options
         linkopts: linker options
-        link_output_file: output file to be specified in the link command line
-            flags
-        native_deps: optional list of native dependency targets providing CcInfo
-        cc_toolchain: optional pre-resolved C++ toolchain info
-        feature_configuration: optional pre-configured FeatureConfiguration
+        native_deps: list of native dependency targets providing CcInfo
 
     Returns:
-        CxxFlagsInfo: A provider containing Cxx flags
+        struct: C/C++ compiler and linker flags.
     """
-    cc_toolchain_ = cc_toolchain if cc_toolchain != None else find_cpp_toolchain(ctx)
-    if feature_configuration == None:
-        feature_configuration = configure_features(
-            ctx = ctx,
-            cc_toolchain = cc_toolchain_,
-        )
-
     c_opts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + copts) or []
     cxx_opts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + copts) or []
     link_opts = (ctx.fragments.cpp.linkopts + linkopts) or []
-    defines = _defines_from_deps(ctx, native_deps)
+    defines = _defines_from_deps(native_deps)
 
-    flags = CxxFlagsInfo(
-        cc = cc_common.get_memory_inefficient_command_line(
+    cc_flags = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = ACTION_NAMES.c_compile,
+        variables = cc_common.create_compile_variables(
             feature_configuration = feature_configuration,
-            action_name = ACTION_NAMES.c_compile,
-            variables = cc_common.create_compile_variables(
-                feature_configuration = feature_configuration,
-                cc_toolchain = cc_toolchain_,
-                preprocessor_defines = defines,
-            ),
+            cc_toolchain = cc_toolchain,
+            preprocessor_defines = defines,
         ),
-        cxx = cc_common.get_memory_inefficient_command_line(
+    )
+    cxx_flags = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = ACTION_NAMES.cpp_compile,
+        variables = cc_common.create_compile_variables(
             feature_configuration = feature_configuration,
-            action_name = ACTION_NAMES.cpp_compile,
-            variables = cc_common.create_compile_variables(
-                feature_configuration = feature_configuration,
-                cc_toolchain = cc_toolchain_,
-                preprocessor_defines = defines,
-                add_legacy_cxx_options = True,
-            ),
+            cc_toolchain = cc_toolchain,
+            preprocessor_defines = defines,
+            add_legacy_cxx_options = True,
         ),
-        cxx_linker_shared = cc_common.get_memory_inefficient_command_line(
+    )
+    cxx_linker_shared = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = ACTION_NAMES.cpp_link_dynamic_library,
+        variables = cc_common.create_link_variables(
+            cc_toolchain = cc_toolchain,
             feature_configuration = feature_configuration,
-            action_name = ACTION_NAMES.cpp_link_dynamic_library,
-            variables = cc_common.create_link_variables(
-                cc_toolchain = cc_toolchain_,
-                feature_configuration = feature_configuration,
-                is_using_linker = True,
-                is_linking_dynamic_library = True,
-                must_keep_debug = False,
-            ),
+            is_using_linker = True,
+            is_linking_dynamic_library = True,
+            must_keep_debug = False,
         ),
-        cxx_linker_static = cc_common.get_memory_inefficient_command_line(
+    )
+    cxx_linker_static = _strip_archiver_output_sentinel(
+        cc_common.get_memory_inefficient_command_line(
             feature_configuration = feature_configuration,
             action_name = ACTION_NAMES.cpp_link_static_library,
             variables = cc_common.create_link_variables(
-                cc_toolchain = cc_toolchain_,
+                cc_toolchain = cc_toolchain,
                 feature_configuration = feature_configuration,
                 is_using_linker = False,
                 is_linking_dynamic_library = False,
                 must_keep_debug = False,
                 # rules_cc gates archiver_flags (`rcsD` / `-static -o`) on output_execpath.
-                output_file = link_output_file or _ARCHIVER_OUTPUT_SENTINEL,
-            ),
-        ),
-        cxx_linker_executable = cc_common.get_memory_inefficient_command_line(
-            feature_configuration = feature_configuration,
-            action_name = ACTION_NAMES.cpp_link_executable,
-            variables = cc_common.create_link_variables(
-                cc_toolchain = cc_toolchain_,
-                feature_configuration = feature_configuration,
-                is_using_linker = True,
-                is_linking_dynamic_library = False,
-                must_keep_debug = False,
+                output_file = _ARCHIVER_OUTPUT_SENTINEL,
             ),
         ),
     )
-
-    cxx_linker_static = flags.cxx_linker_static
-    if not link_output_file:
-        cxx_linker_static = _strip_archiver_output_sentinel(cxx_linker_static)
+    cxx_linker_executable = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = ACTION_NAMES.cpp_link_executable,
+        variables = cc_common.create_link_variables(
+            cc_toolchain = cc_toolchain,
+            feature_configuration = feature_configuration,
+            is_using_linker = True,
+            is_linking_dynamic_library = False,
+            must_keep_debug = False,
+        ),
+    )
 
     # User flags are appended verbatim (no dedup against toolchain tokens:
     # that would split pairs like `-isystem DIR`).
-    return CxxFlagsInfo(
-        cc = _convert_flags(cc_toolchain_.compiler, flags.cc + c_opts),
-        cxx = _convert_flags(cc_toolchain_.compiler, flags.cxx + cxx_opts),
-        cxx_linker_shared = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_shared + link_opts),
-        cxx_linker_static = _convert_flags(cc_toolchain_.compiler, cxx_linker_static),
-        cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_executable + link_opts),
-        needs_pic_for_dynamic_libraries = cc_toolchain_.needs_pic_for_dynamic_libraries(
-            feature_configuration = feature_configuration,
-        ),
+    return struct(
+        cc = _convert_flags(cc_toolchain.compiler, cc_flags + c_opts),
+        cxx = _convert_flags(cc_toolchain.compiler, cxx_flags + cxx_opts),
+        cxx_linker_shared = _convert_flags(cc_toolchain.compiler, cxx_linker_shared + link_opts),
+        cxx_linker_static = _convert_flags(cc_toolchain.compiler, cxx_linker_static),
+        cxx_linker_executable = _convert_flags(cc_toolchain.compiler, cxx_linker_executable + link_opts),
     )
 
-def create_msvc_environment(ctx, cc_toolchain, feature_configuration):
+def create_msvc_environment(cc_toolchain, feature_configuration):
     """Create a new dictionary of MSVC toolchain paths without inheriting the process environment.
 
     Reads PATH and INCLUDE from the compile action and LIB from the shared-link
     action for the build setup to merge into its environment.
 
     Args:
-        ctx: The rule context.
         cc_toolchain: The selected C++ toolchain.
         feature_configuration: The configured external-build features.
 
@@ -251,7 +195,6 @@ def create_msvc_environment(ctx, cc_toolchain, feature_configuration):
         variables = cc_common.create_compile_variables(
             feature_configuration = feature_configuration,
             cc_toolchain = cc_toolchain,
-            preprocessor_defines = _defines_from_deps(ctx),
             add_legacy_cxx_options = True,
         ),
     )
@@ -336,14 +279,14 @@ def _prefix(text, from_str, prefix):
         return text
     return before + prefix + middle + after
 
-def get_headers(ccinfo):
-    """Returns a struct containing headers depset and include_dirs for the given CcInfo.
+def get_include_dirs(ccinfo):
+    """Returns unique include directories for the given CcInfo.
 
     Args:
         ccinfo: The CcInfo provider
 
     Returns:
-        struct: A struct containing headers (depset) and include_dirs (list[str]).
+        list[str]: Unique system and regular include directories.
     """
     compilation_info = ccinfo.compilation_context
     include_dirs = compilation_info.system_includes.to_list() + \
@@ -351,11 +294,7 @@ def get_headers(ccinfo):
 
     # do not use quote includes, currently they do not contain
     # library-specific information
-    include_dirs = collections.uniq(include_dirs)
-    return struct(
-        headers = compilation_info.headers,
-        include_dirs = include_dirs,
-    )
+    return collections.uniq(include_dirs)
 
 def get_libraries(ccinfo):
     """Returns a list of libraries for the given CcInfo.
