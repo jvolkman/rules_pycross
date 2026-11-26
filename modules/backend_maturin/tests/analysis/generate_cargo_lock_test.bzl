@@ -77,6 +77,24 @@ def _test_cargo_lock_hook_overrides_impl(env, target):
     env.expect.that_str(build).contains('output = "cargo/jiter_06.Cargo.lock",')
     env.expect.that_bool("wheel-only" in build).equals(False)
 
+    # Multi-source sdists use their tagged package_key for target name and //_sdist label.
+    tagged_entries = cargo_lock_package_repo_hook(
+        {
+            "jiter": {
+                "versions": [
+                    struct(version = "0.5.0", package_key = "jiter@0.5.0~11111111", has_sdist = True),
+                    struct(version = "0.5.0", package_key = "jiter@0.5.0~22222222", has_sdist = True),
+                ],
+            },
+        },
+        {"jiter@0.5.0": {"cargo_lock": json.encode("//:jiter.Cargo.lock")}},
+    )
+    tagged_build = tagged_entries[0].files["BUILD.bazel"]
+    env.expect.that_str(tagged_build).contains('name = "jiter@0.5.0~11111111",')
+    env.expect.that_str(tagged_build).contains('sdist = "//_sdist:jiter@0.5.0~11111111",')
+    env.expect.that_str(tagged_build).contains('name = "jiter@0.5.0~22222222",')
+    env.expect.that_str(tagged_build).contains('sdist = "//_sdist:jiter@0.5.0~22222222",')
+
 def _test_cargo_lock_hook_overrides(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_cargo_lock_hook_overrides_impl)

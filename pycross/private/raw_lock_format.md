@@ -17,9 +17,9 @@ The raw lock model is a JSON object containing information about packages, pins 
 
 ## Package Key
 
-Package keys are strings in the format `name@version`, where `name` is the canonicalized package name (normalized per PEP 503).
+Package keys are strings in the format `name@version` (or `name@version~tag` when multiple locked entries share the same `(name, version)` from distinct sources), where `name` is the canonicalized package name (normalized per PEP 503).
 
-Example: `requests@2.31.0`, `urllib3[socks]@2.2.3`
+Example: `requests@2.31.0`, `urllib3[socks]@2.2.3`, `torch@2.9.1~a1b2c3d4`
 
 ---
 
@@ -35,6 +35,7 @@ A Package object represents a specific version of a Python package and its depen
 - `dependencies`: (Array of Dependency Objects) List of dependencies required by this package.
 - `files`: (Array of File Objects) List of files (wheels, sdists) available for this package.
 - `source_dir`: (String, Optional) Subdirectory within the source (e.g., for git dependencies).
+- `source`: (String, Optional) Human-readable source identifier (e.g., index or git URL) present on source-disambiguated (`~tag`) packages.
 
 ---
 
@@ -47,6 +48,7 @@ Represents a dependency of a package.
 - `name`: (String) The canonicalized name of the dependent package. May include extras.
 - `version`: (String) The version or specifier of the dependency (e.g., `2.31.0` or `==2.31.0`).
 - `marker`: (String) PEP 508 environment marker string (e.g., `python_version >= '3.10'`, `sys_platform == 'linux'`). May be empty.
+- `key`: (String, Optional) Full target package key (including `~tag`) when referencing a source-disambiguated package.
 - `specifier`: (String) PEP 440 specifier string.
 
 ---
