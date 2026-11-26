@@ -397,8 +397,9 @@ def create_repos(
             parts = parse_package_key(pkg_key)
             pkg_name_part = parts.name
             pkg_version = parts.version
+            ver_with_tag = "{}~{}".format(pkg_version, parts.tag) if parts.tag else pkg_version
             whldir_norm_name = sanitize_name(pkg_name_part)
-            whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
+            whldir_name = "{}-{}.whldir".format(whldir_norm_name, ver_with_tag)
 
             if pkg.get("build_tools_repo") and pkg["build_tools_repo"] not in known_packages_by_repo:
                 fail("Package '{}' sets build_tools_repo = '{}', which is not a repo created by this extension. Known repos: {}".format(

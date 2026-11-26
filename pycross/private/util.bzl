@@ -97,12 +97,34 @@ def key_name(key):
     """
     return key.split("@", 1)[0]
 
+def format_package_key(name, version = "", extra = "", tag = ""):
+    """Format a package key from its components.
+
+    Args:
+        name: Canonicalized package name.
+        version: Optional version string.
+        extra: Optional extra name.
+        tag: Optional disambiguating source tag (omitted when empty).
+
+    Returns:
+        Formatted key string such as `name@version`, `name[extra]@version`,
+        or `name@version~tag`.
+    """
+    base = "{}[{}]".format(name, extra) if extra else name
+    if not version:
+        return base
+    if tag:
+        return "{}@{}~{}".format(base, version, tag)
+    return "{}@{}".format(base, version)
+
 def parse_package_key(key):
-    """Parses a package key or pin name into (name, extra, version).
+    """Parses a package key or pin name into `(name, extra, version, tag)`.
 
     Supports formats:
       - name@version
+      - name@version~tag
       - name[extra]@version
+      - name[extra]@version~tag
       - name
       - name[extra]
 
@@ -110,15 +132,20 @@ def parse_package_key(key):
         key: The package key or pin name string.
 
     Returns:
-        A tuple of (name, extra, version). name is always present.
-        extra and version are strings, and will be empty if not present.
+        A struct of `(name, extra, version, tag)`. `name` is always present;
+        `extra`, `version`, and `tag` are strings and empty when absent.
     """
     name_and_extra = key
     version = ""
+    tag = ""
     if "@" in key:
         parts = key.split("@", 1)
         name_and_extra = parts[0]
         version = parts[1]
+        if "~" in version:
+            ver_parts = version.split("~", 1)
+            version = ver_parts[0]
+            tag = ver_parts[1]
 
     name = name_and_extra
     extra = ""
@@ -133,35 +160,36 @@ def parse_package_key(key):
         name = name,
         extra = extra,
         version = version,
+        tag = tag,
     )
 
 def base_package_key(pkg_key):
-    """Return the base `name@version` key for a package key (stripping any `[extra]`).
+    """Return the base `name@version[~tag]` key for a package key (stripping any `[extra]`).
 
     Args:
-        pkg_key: Package key string (e.g. `foo[bar]@1.0` or `foo@1.0`).
+        pkg_key: Package key string (e.g. `foo[bar]@1.0`, `foo[bar]@1.0~abcd1234`).
 
     Returns:
-        Base package key string `name@version`.
+        Base package key string `name@version` or `name@version~tag`.
     """
     parts = parse_package_key(pkg_key)
-    return "{}@{}".format(parts.name, parts.version)
+    return format_package_key(parts.name, parts.version, tag = parts.tag)
 
 def base_packages_with_extras(packages):
-    """Group extra package keys in `packages` by their base `name@version` key.
+    """Group extra package keys in `packages` by their base `name@version[~tag]` key.
 
     Args:
         packages: Lock packages dict keyed by package key.
 
     Returns:
-        Dict mapping base package key (`name@version`) -> list of extra package keys.
+        Dict mapping base package key -> list of extra package keys.
     """
     result = {}
     for pkg_key in packages.keys():
         parts = parse_package_key(pkg_key)
         if not parts.extra:
             continue
-        result.setdefault("{}@{}".format(parts.name, parts.version), []).append(pkg_key)
+        result.setdefault(base_package_key(pkg_key), []).append(pkg_key)
     return result
 
 def sdist_builds_disallowed(pkg):

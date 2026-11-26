@@ -13,7 +13,7 @@ pylock.repo(<a href="#pylock.repo-name">name</a>, <a href="#pylock.repo-constrai
 pylock.package(<a href="#pylock.package-name">name</a>, <a href="#pylock.package-bin_paths">bin_paths</a>, <a href="#pylock.package-build_backend">build_backend</a>, <a href="#pylock.package-build_mode">build_mode</a>, <a href="#pylock.package-build_target">build_target</a>, <a href="#pylock.package-build_tools_repo">build_tools_repo</a>,
                <a href="#pylock.package-data_paths">data_paths</a>, <a href="#pylock.package-extra_build_tools">extra_build_tools</a>, <a href="#pylock.package-extra_dependencies">extra_dependencies</a>, <a href="#pylock.package-ignore_dependencies">ignore_dependencies</a>, <a href="#pylock.package-include_paths">include_paths</a>,
                <a href="#pylock.package-install_exclude_globs">install_exclude_globs</a>, <a href="#pylock.package-post_install_patches">post_install_patches</a>, <a href="#pylock.package-pre_build_patches">pre_build_patches</a>, <a href="#pylock.package-precompile">precompile</a>, <a href="#pylock.package-site_hooks">site_hooks</a>,
-               <a href="#pylock.package-site_paths">site_paths</a>, <a href="#pylock.package-wheel_library_tags">wheel_library_tags</a>, <a href="#pylock.package-workspace">workspace</a>)
+               <a href="#pylock.package-site_paths">site_paths</a>, <a href="#pylock.package-source">source</a>, <a href="#pylock.package-wheel_library_tags">wheel_library_tags</a>, <a href="#pylock.package-workspace">workspace</a>)
 pylock.workspace(<a href="#pylock.workspace-name">name</a>, <a href="#pylock.workspace-extra_project_files">extra_project_files</a>, <a href="#pylock.workspace-local_wheels">local_wheels</a>, <a href="#pylock.workspace-lock_file">lock_file</a>, <a href="#pylock.workspace-pypi_indexes">pypi_indexes</a>)
 </pre>
 
@@ -66,6 +66,7 @@ Specify package-specific settings.
 | <a id="pylock.package-precompile"></a>precompile |  Whether to precompile `.pyc` files when installing this package's wheel (`"auto"`, `"enabled"`, or `"disabled"`). `"auto"` follows the `--@rules_python//python/config_settings:precompile` flag. Defaults to inheriting from `*` if set, or `"auto"`.   | String | optional |  `""`  |
 | <a id="pylock.package-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
 | <a id="pylock.package-site_paths"></a>site_paths |  Override the auto-detected top-level importable paths.   | List of strings | optional |  `[]`  |
+| <a id="pylock.package-source"></a>source |  Optional lockfile source value (e.g. index or git URL) to disambiguate when multiple packages share the same name@version. Use '*' to apply to all sources of that name@version.   | String | optional |  `""`  |
 | <a id="pylock.package-wheel_library_tags"></a>wheel_library_tags |  Optional tags to apply to the generated pycross_wheel_library target.   | List of strings | optional |  `[]`  |
 | <a id="pylock.package-workspace"></a>workspace |  The workspace name (optional if inferable).   | String | optional |  `""`  |
 
