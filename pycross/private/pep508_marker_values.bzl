@@ -1,12 +1,12 @@
-"""Constants mapping @platforms constraint values to PEP 508 marker values.
+"""PEP 508 marker constants, environment rule, and collection helpers.
 
-These dicts are intended for use in select() expressions at call sites for
-rules that evaluate PEP 508 environment markers (e.g. _pycross_pep508_evaluator,
-_pycross_wheel_chooser).
-
-Python version markers (python_version, python_full_version, implementation_name)
-are automatically derived from the rules_python toolchain configuration when
-not explicitly provided.
+Platform and Python toolchain marker values are resolved once per Bazel
+configuration by the `//pycross/private/markers:env` target (`pep508_env`),
+which provides `Pep508EnvInfo`. Rules that evaluate PEP 508 markers (such as
+`_pycross_pep508_evaluator`, `_pycross_cycle_dep_needed`, and
+`_pycross_target_platform`) depend on that single target via
+`marker_value_attrs()` instead of resolving separate marker targets and the
+Python toolchain on every rule instance.
 """
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
@@ -105,6 +105,17 @@ DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION = "CPython"
 DEFAULT_PEP508_PLATFORM_RELEASE = ""
 DEFAULT_PEP508_PLATFORM_VERSION = ""
 
+Pep508EnvInfo = provider(
+    doc = "Resolved baseline PEP 508 environment markers for a Bazel configuration.",
+    fields = {
+        "markers": "Dict of baseline PEP 508 marker values (with extra = '') for this configuration.",
+        "flag_platform_python_implementation": (
+            "Raw value of //pycross/settings:pep508_platform_python_implementation, " +
+            "used to preserve derivation precedence when implementation_name is overridden."
+        ),
+    },
+)
+
 def flag_value(target):
     """Read a flag value from either FeatureFlagInfo or BuildSettingInfo.
 
@@ -121,17 +132,18 @@ def flag_value(target):
     return ""
 
 def marker_value_attrs():
-    """Returns default attr values for PEP 508 marker dimensions.
+    """Returns rule attrs for consuming the resolved PEP 508 marker environment.
 
-    Rules using these attrs should also declare:
-        toolchains = [PYTHON_TOOLCHAIN_TYPE]
+    Consumers depend on the single `//pycross/private/markers:env` target and do
+    not need to declare `toolchains = [PYTHON_TOOLCHAIN_TYPE]`. Optional string
+    attributes allow callers and unit tests to override individual marker
+    dimensions.
 
     Usage in a rule definition:
         _my_rule = rule(
             attrs = {
                 "expr": attr.string(),
             } | marker_value_attrs(),
-            toolchains = [PYTHON_TOOLCHAIN_TYPE],
         )
     """
     return {
@@ -151,19 +163,10 @@ def marker_value_attrs():
             default = [],
             providers = [config_common.FeatureFlagInfo],
         ),
-
-        # Hidden fallback targets pointing to standard marker definitions.
-        "_os_name_target": attr.label(default = "@rules_pycross//pycross/private/markers:os_name"),
-        "_sys_platform_target": attr.label(default = "@rules_pycross//pycross/private/markers:sys_platform"),
-        "_platform_machine_target": attr.label(default = "@rules_pycross//pycross/private/markers:platform_machine"),
-        "_platform_system_target": attr.label(default = "@rules_pycross//pycross/private/markers:platform_system"),
-        "_platform_release_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_platform_release"),
-        "_platform_version_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_platform_version"),
-        "_python_version_target": attr.label(default = "@rules_pycross//pycross/private/markers:python_version"),
-        "_python_full_version_target": attr.label(default = "@rules_pycross//pycross/private/markers:python_full_version"),
-        "_implementation_name_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_implementation_name"),
-        "_implementation_version_target": attr.label(default = "@rules_pycross//pycross/private/markers:implementation_version"),
-        "_platform_python_implementation_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_platform_python_implementation"),
+        "_pep508_env": attr.label(
+            default = Label("//pycross/private/markers:env"),
+            providers = [Pep508EnvInfo],
+        ),
     }
 
 def _toolchain_py3_runtime(ctx):
@@ -174,96 +177,132 @@ def _toolchain_py3_runtime(ctx):
         return None
     return tc.py3_runtime
 
-def collect_markers(ctx):
-    """Collects PEP 508 marker values from rule context attrs and toolchain.
+def _derive_platform_python_implementation(implementation_name, flag_ppi):
+    if flag_ppi and (flag_ppi != DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION or implementation_name == DEFAULT_PEP508_IMPLEMENTATION_NAME):
+        return flag_ppi
+    if implementation_name == DEFAULT_PEP508_IMPLEMENTATION_NAME:
+        return DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION
+    if implementation_name == "pypy":
+        return "PyPy"
+    return implementation_name
 
-    Resolution order for python version markers:
-      1. Explicit attr values (if non-empty)
-      2. PyRuntimeInfo from the Python toolchain (interpreter_version_info)
-      3. rules_python config flags (python_version, python_version_major_minor)
+def with_extra(markers_env, extra):
+    """Returns a markers dict with its base extra replaced, preserving active variants.
+
+    Active conflict variants are stored alongside the base extra as
+    `[base_extra, "__variant_...", ...]`. Replacing the base extra preserves the
+    trailing variant entries and returns `markers_env` unchanged when the extra
+    already matches.
 
     Args:
-        ctx: The rule context whose attrs include those from marker_value_attrs()
-             and whose rule declares toolchains = [PYTHON_TOOLCHAIN_TYPE].
+        markers_env: A PEP 508 markers dict.
+        extra: The new base extra string (for example, `""` or `"dev"`).
 
     Returns:
-        A dict mapping marker name to its string value.
+        `markers_env` if already matching, or a shallow copy with updated `"extra"`.
     """
+    base_extra = markers_env.get("extra", "")
+    if type(base_extra) == "list":
+        if base_extra and base_extra[0] == extra:
+            return markers_env
+        env = dict(markers_env)
+        env["extra"] = ([extra] + base_extra[1:]) if base_extra else extra
+        return env
+    if base_extra == extra:
+        return markers_env
+    env = dict(markers_env)
+    env["extra"] = extra
+    return env
 
-    # 1. Platform markers (Direct attr or fallback target)
-    os_name = ctx.attr.os_name or flag_value(ctx.attr._os_name_target)
-    sys_platform = ctx.attr.sys_platform or flag_value(ctx.attr._sys_platform_target)
-    platform_machine = ctx.attr.platform_machine or flag_value(ctx.attr._platform_machine_target)
-    platform_system = ctx.attr.platform_system or flag_value(ctx.attr._platform_system_target)
-    platform_release = ctx.attr.platform_release or flag_value(ctx.attr._platform_release_target)
-    platform_version = ctx.attr.platform_version or flag_value(ctx.attr._platform_version_target)
-
-    # 2. Python version markers (Direct attr, Toolchain, or fallback target)
-    python_version = ctx.attr.python_version
-    python_full_version = ctx.attr.python_full_version
-    implementation_name = ctx.attr.implementation_name
-    implementation_version = ctx.attr.implementation_version
-    platform_python_implementation = ctx.attr.platform_python_implementation
-
-    # Keep explicit python_version / python_full_version consistent with each
-    # other instead of mixing an explicit attr with the host toolchain version.
-    has_explicit_py_version = bool(python_version or python_full_version)
-    if python_full_version and not python_version:
-        python_version = ".".join(python_full_version.split(".")[:2])
-    elif python_version and not python_full_version:
-        if python_version.count(".") >= 2:
-            python_full_version = python_version
-            python_version = ".".join(python_version.split(".")[:2])
-        else:
-            python_full_version = python_version + ".0"
-
-    # Try PyRuntimeInfo from the toolchain first (most accurate).
-    runtime = _toolchain_py3_runtime(ctx) if (not has_explicit_py_version or not implementation_name) else None
-    if runtime:
-        if not implementation_name and hasattr(runtime, "implementation_name") and runtime.implementation_name:
-            implementation_name = runtime.implementation_name
-
-        vi = runtime.interpreter_version_info if (not has_explicit_py_version and hasattr(runtime, "interpreter_version_info")) else None
-        if vi:
-            python_version = "{}.{}".format(vi.major, vi.minor)
-            full_ver = pypackaging.markers.format_full_version(vi)
-            python_full_version = full_ver
-            if not implementation_version:
-                implementation_version = full_ver
-
-    # Fall back to target flags.
-    if not python_version:
-        python_version = flag_value(ctx.attr._python_version_target)
-    if not python_full_version:
-        python_full_version = flag_value(ctx.attr._python_full_version_target)
-    if not implementation_name:
-        implementation_name = flag_value(ctx.attr._implementation_name_target)
-    if not implementation_version and not has_explicit_py_version:
-        implementation_version = flag_value(ctx.attr._implementation_version_target)
-    if not platform_python_implementation:
-        flag_ppi = flag_value(ctx.attr._platform_python_implementation_target)
-        if flag_ppi and (flag_ppi != DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION or implementation_name in ("", DEFAULT_PEP508_IMPLEMENTATION_NAME)):
-            platform_python_implementation = flag_ppi
-
-    # Defaults (matching rules_python's pep508_env.bzl behavior) if still empty.
-    if not implementation_name:
-        implementation_name = DEFAULT_PEP508_IMPLEMENTATION_NAME
-    if not implementation_version and python_full_version:
-        implementation_version = python_full_version
-    if not platform_python_implementation:
-        if implementation_name == DEFAULT_PEP508_IMPLEMENTATION_NAME:
-            platform_python_implementation = DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION
-        elif implementation_name == "pypy":
-            platform_python_implementation = "PyPy"
-        else:
-            platform_python_implementation = implementation_name
-
+def _resolve_extra(ctx):
     active_variants = []
     for v in getattr(ctx.attr, "variants", []):
         val = flag_value(v)
         if val:
             active_variants.append("__variant_" + val)
-    extra = ([ctx.attr.extra] + active_variants) if active_variants else ctx.attr.extra
+    return ([ctx.attr.extra] + active_variants) if active_variants else ctx.attr.extra
+
+def collect_markers(ctx):
+    """Collects PEP 508 marker values from `Pep508EnvInfo` and any rule overrides.
+
+    When no explicit marker override attributes are set, this returns the
+    pre-resolved baseline dict from `//pycross/private/markers:env` directly (or
+    a shallow copy when `extra` or `variants` are active). When explicit
+    override attributes are set, it applies the same precedence rules as the
+    baseline environment.
+
+    Args:
+        ctx: The rule context whose attrs include those from `marker_value_attrs()`.
+
+    Returns:
+        A dict mapping each PEP 508 marker name to its value.
+    """
+    env_info = ctx.attr._pep508_env[Pep508EnvInfo]
+    base = env_info.markers
+    extra = _resolve_extra(ctx)
+
+    has_overrides = bool(
+        ctx.attr.os_name or
+        ctx.attr.sys_platform or
+        ctx.attr.platform_machine or
+        ctx.attr.platform_system or
+        ctx.attr.platform_release or
+        ctx.attr.platform_version or
+        ctx.attr.python_version or
+        ctx.attr.python_full_version or
+        ctx.attr.implementation_name or
+        ctx.attr.implementation_version or
+        ctx.attr.platform_python_implementation,
+    )
+    if not has_overrides:
+        if extra == "":
+            return base
+        markers = dict(base)
+        markers["extra"] = extra
+        return markers
+
+    # 1. Platform markers (explicit attr or pre-resolved baseline)
+    os_name = ctx.attr.os_name or base["os_name"]
+    sys_platform = ctx.attr.sys_platform or base["sys_platform"]
+    platform_machine = ctx.attr.platform_machine or base["platform_machine"]
+    platform_system = ctx.attr.platform_system or base["platform_system"]
+    platform_release = ctx.attr.platform_release or base["platform_release"]
+    platform_version = ctx.attr.platform_version or base["platform_version"]
+
+    # 2. Python version markers (explicit attr or pre-resolved baseline)
+    python_version = ctx.attr.python_version
+    python_full_version = ctx.attr.python_full_version
+    implementation_version = ctx.attr.implementation_version
+
+    # Keep explicit python_version / python_full_version consistent with each
+    # other instead of mixing an explicit attr with the baseline toolchain version.
+    if python_version or python_full_version:
+        if python_full_version and not python_version:
+            python_version = ".".join(python_full_version.split(".")[:2])
+        elif python_version and not python_full_version:
+            if python_version.count(".") >= 2:
+                python_full_version = python_version
+                python_version = ".".join(python_version.split(".")[:2])
+            else:
+                python_full_version = python_version + ".0"
+        if not implementation_version and python_full_version:
+            implementation_version = python_full_version
+    else:
+        python_version = base["python_version"]
+        python_full_version = base["python_full_version"]
+        if not implementation_version:
+            implementation_version = base["implementation_version"]
+
+    implementation_name = ctx.attr.implementation_name or base["implementation_name"]
+    platform_python_implementation = ctx.attr.platform_python_implementation
+    if not platform_python_implementation:
+        if ctx.attr.implementation_name:
+            platform_python_implementation = _derive_platform_python_implementation(
+                implementation_name,
+                env_info.flag_platform_python_implementation,
+            )
+        else:
+            platform_python_implementation = base["platform_python_implementation"]
 
     return {
         "os_name": os_name,
@@ -280,15 +319,76 @@ def collect_markers(ctx):
         "extra": extra,
     }
 
-def _marker_value_impl(ctx):
+def _pep508_env_impl(ctx):
+    python_version = ""
+    python_full_version = ""
+    implementation_name = ""
+
+    # Try PyRuntimeInfo from the Python toolchain first (most accurate).
+    runtime = _toolchain_py3_runtime(ctx)
+    if runtime:
+        if hasattr(runtime, "implementation_name") and runtime.implementation_name:
+            implementation_name = runtime.implementation_name
+
+        vi = runtime.interpreter_version_info if hasattr(runtime, "interpreter_version_info") else None
+        if vi:
+            python_version = "{}.{}".format(vi.major, vi.minor)
+            python_full_version = pypackaging.markers.format_full_version(vi)
+
+    # Fall back to rules_python and pycross config flags.
+    if not python_version:
+        python_version = flag_value(ctx.attr._python_version)
+    if not python_full_version:
+        python_full_version = flag_value(ctx.attr._python_full_version)
+    if not implementation_name:
+        implementation_name = flag_value(ctx.attr._implementation_name)
+
+    if not implementation_name:
+        implementation_name = DEFAULT_PEP508_IMPLEMENTATION_NAME
+
+    flag_ppi = flag_value(ctx.attr._platform_python_implementation)
+    platform_python_implementation = _derive_platform_python_implementation(
+        implementation_name,
+        flag_ppi,
+    )
+
+    markers = {
+        "os_name": ctx.attr.os_name,
+        "sys_platform": ctx.attr.sys_platform,
+        "platform_machine": ctx.attr.platform_machine,
+        "platform_system": ctx.attr.platform_system,
+        "platform_release": flag_value(ctx.attr._platform_release),
+        "platform_version": flag_value(ctx.attr._platform_version),
+        "python_version": python_version,
+        "python_full_version": python_full_version,
+        "implementation_name": implementation_name,
+        "implementation_version": python_full_version,
+        "platform_python_implementation": platform_python_implementation,
+        "extra": "",
+    }
+
     return [
-        config_common.FeatureFlagInfo(value = ctx.attr.value),
+        Pep508EnvInfo(
+            markers = markers,
+            flag_platform_python_implementation = flag_ppi,
+        ),
     ]
 
-marker_value = rule(
-    implementation = _marker_value_impl,
+pep508_env = rule(
+    implementation = _pep508_env_impl,
     attrs = {
-        "value": attr.string(),
+        "os_name": attr.string(default = ""),
+        "sys_platform": attr.string(default = ""),
+        "platform_machine": attr.string(default = ""),
+        "platform_system": attr.string(default = ""),
+        "_platform_release": attr.label(default = Label("//pycross/settings:pep508_platform_release")),
+        "_platform_version": attr.label(default = Label("//pycross/settings:pep508_platform_version")),
+        "_python_version": attr.label(default = Label("@rules_python//python/config_settings:python_version_major_minor")),
+        "_python_full_version": attr.label(default = Label("@rules_python//python/config_settings:python_version")),
+        "_implementation_name": attr.label(default = Label("//pycross/settings:pep508_implementation_name")),
+        "_platform_python_implementation": attr.label(default = Label("//pycross/settings:pep508_platform_python_implementation")),
     },
-    doc = """Converts a string (possibly configurable via select()) into a FeatureFlagInfo provider.""",
+    provides = [Pep508EnvInfo],
+    toolchains = [PYTHON_TOOLCHAIN_TYPE],
+    doc = "Resolves the baseline PEP 508 marker environment once per Bazel configuration.",
 )

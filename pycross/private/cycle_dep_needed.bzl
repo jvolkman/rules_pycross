@@ -21,24 +21,13 @@ Each edge is either unconditional (no marker) or conditional
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load("//pycross/private:pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
+load("//pycross/private:pep508_marker_values.bzl", "collect_markers", "marker_value_attrs", "with_extra")
 load("//pycross/private:util.bzl", "parse_package_key")
 
 # ---- BFS reachability -------------------------------------------------------
 
 def _node_env(markers_env, node_extra):
-    base_extra = markers_env.get("extra", "")
-    if type(base_extra) == "list":
-        if base_extra[0] == node_extra:
-            return markers_env
-        env = dict(markers_env)
-        env["extra"] = [node_extra] + base_extra[1:]
-        return env
-    if base_extra == node_extra:
-        return markers_env
-    env = dict(markers_env)
-    env["extra"] = node_extra
-    return env
+    return with_extra(markers_env, node_extra)
 
 def _active_neighbors(edges, node, markers_env):
     """Returns the list of neighbor nodes reachable from `node` given marker values.
@@ -126,7 +115,6 @@ _pycross_cycle_dep_needed = rule(
         ),
     } | marker_value_attrs(),
     provides = [config_common.FeatureFlagInfo],
-    toolchains = [PYTHON_TOOLCHAIN_TYPE],
 )
 
 def pycross_cycle_dep_needed(name, **kwargs):

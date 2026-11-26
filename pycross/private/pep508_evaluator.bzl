@@ -10,7 +10,7 @@ Parsing and evaluation are handled by the pypackaging markers library.
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
+load(":pep508_marker_values.bzl", "collect_markers", "marker_value_attrs")
 
 # ---- rule implementation ----------------------------------------------------
 
@@ -30,7 +30,6 @@ _pycross_pep508_evaluator = rule(
         ),
         **marker_value_attrs()
     ),
-    toolchains = [PYTHON_TOOLCHAIN_TYPE],
 )
 
 def pycross_pep508_evaluator(name, **kwargs):

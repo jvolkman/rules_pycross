@@ -6,6 +6,9 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:pep508_marker_values.bzl", "Pep508EnvInfo")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 
 _ObservedSettingsInfo = provider(
@@ -305,6 +308,124 @@ def _test_transitions_cross_matches_host_config_impl(env, target):
     )
     env.expect.that_bool("-ST-" in info.cross_subject.transitioned_settings.bin_dir).equals(False)
 
+_Pep508EnvPairInfo = provider(
+    doc = "Observed Pep508EnvInfo markers in target and exec-transitioned configs.",
+    fields = ["target_markers", "transitioned_markers"],
+)
+
+def _pep508_env_observer_impl(ctx):
+    transitioned_env = ctx.attr.transitioned_env[0] if type(ctx.attr.transitioned_env) == "list" else ctx.attr.transitioned_env
+    return [
+        DefaultInfo(),
+        _Pep508EnvPairInfo(
+            target_markers = ctx.attr.target_env[Pep508EnvInfo].markers,
+            transitioned_markers = transitioned_env[Pep508EnvInfo].markers,
+        ),
+    ]
+
+_pep508_env_observer = rule(
+    implementation = _pep508_env_observer_impl,
+    attrs = {
+        "target_env": attr.label(default = "//pycross/private/markers:env", providers = [Pep508EnvInfo]),
+        "transitioned_env": attr.label(
+            default = "//pycross/private/markers:env",
+            cfg = pycross_exec_platform_transition,
+            providers = [Pep508EnvInfo],
+        ),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
+    },
+)
+
+def _mock_cross_pep508_transition_impl(_settings, attr):
+    return {
+        "//command_line_option:platforms": [attr.cross_platform],
+        "//pycross/settings:pep508_implementation_name": "pypy",
+        "//pycross/settings:pep508_platform_python_implementation": "PyPy",
+        "//pycross/settings:pep508_platform_release": "5.15.0",
+        "//pycross/settings:pep508_platform_version": "#1 SMP",
+    }
+
+_mock_cross_pep508_transition = transition(
+    implementation = _mock_cross_pep508_transition_impl,
+    inputs = [],
+    outputs = [
+        "//command_line_option:platforms",
+        "//pycross/settings:pep508_implementation_name",
+        "//pycross/settings:pep508_platform_python_implementation",
+        "//pycross/settings:pep508_platform_release",
+        "//pycross/settings:pep508_platform_version",
+    ],
+)
+
+_Pep508RoundTripInfo = provider(
+    doc = "Native and cross-transitioned Pep508EnvInfo markers.",
+    fields = ["native_markers", "cross_pair"],
+)
+
+def _pep508_round_trip_impl(ctx):
+    cross_dep = ctx.attr.cross_dep[0] if type(ctx.attr.cross_dep) == "list" else ctx.attr.cross_dep
+    return [
+        DefaultInfo(),
+        _Pep508RoundTripInfo(
+            native_markers = ctx.attr.native_env[Pep508EnvInfo].markers,
+            cross_pair = cross_dep[_Pep508EnvPairInfo],
+        ),
+    ]
+
+_pep508_round_trip = rule(
+    implementation = _pep508_round_trip_impl,
+    attrs = {
+        "cross_dep": attr.label(cfg = _mock_cross_pep508_transition),
+        "cross_platform": attr.label(mandatory = True),
+        "native_env": attr.label(default = "//pycross/private/markers:env", providers = [Pep508EnvInfo]),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
+    },
+)
+
+def _test_transitions_resets_pep508_env(name):
+    native.platform(
+        name = name + "_osx_arm64",
+        constraint_values = [
+            "@platforms//os:osx",
+            "@platforms//cpu:aarch64",
+        ],
+    )
+    util.helper_target(_pep508_env_observer, name = name + "_observer")
+    util.helper_target(
+        _pep508_round_trip,
+        name = name + "_subject",
+        cross_dep = name + "_observer",
+        cross_platform = ":" + name + "_osx_arm64",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_transitions_resets_pep508_env_impl,
+    )
+
+def _test_transitions_resets_pep508_env_impl(env, target):
+    info = target[_Pep508RoundTripInfo]
+    cross_target = info.cross_pair.target_markers
+    cross_exec = info.cross_pair.transitioned_markers
+
+    # Under the cross config, //pycross/private/markers:env reflects the cross
+    # platform and overridden pep508_* settings.
+    env.expect.that_str(cross_target["sys_platform"]).equals("darwin")
+    env.expect.that_str(cross_target["os_name"]).equals("posix")
+    env.expect.that_str(cross_target["platform_system"]).equals("Darwin")
+    env.expect.that_str(cross_target["platform_machine"]).equals("arm64")
+    env.expect.that_str(cross_target["platform_release"]).equals("5.15.0")
+    env.expect.that_str(cross_target["platform_version"]).equals("#1 SMP")
+    env.expect.that_str(cross_target["platform_python_implementation"]).equals("PyPy")
+
+    # Under pycross_exec_platform_transition, //pycross/private/markers:env
+    # resets both --platforms and pep508_* settings to match the native host env.
+    env.expect.that_dict(cross_exec).contains_exactly(info.native_markers)
+
 def transitions_test_suite(name):
     test_suite(
         name = name,
@@ -313,5 +434,6 @@ def transitions_test_suite(name):
             _test_transitions_resets_target_settings,
             _test_transitions_cross_resets_cc_flags,
             _test_transitions_cross_matches_host_config,
+            _test_transitions_resets_pep508_env,
         ],
     )

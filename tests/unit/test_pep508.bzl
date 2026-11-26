@@ -10,6 +10,9 @@ load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:pep508_marker_values.bzl", "Pep508EnvInfo", "marker_value_attrs", "with_extra")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:target_platform.bzl", "PycrossTargetPlatformInfo", "pycross_target_platform")
 
 # buildifier: disable=bzl-visibility
@@ -535,6 +538,172 @@ def _test_marker_uses_extra(name):
         impl = _test_marker_uses_extra_impl,
     )
 
+# ── Test: single //pycross/private/markers:env dep & override precedence ─
+
+_LEGACY_MARKER_TARGET_ATTRS = [
+    "_os_name_target",
+    "_sys_platform_target",
+    "_platform_machine_target",
+    "_platform_system_target",
+    "_platform_release_target",
+    "_platform_version_target",
+    "_python_version_target",
+    "_python_full_version_target",
+    "_implementation_name_target",
+    "_implementation_version_target",
+    "_platform_python_implementation_target",
+]
+
+_MARKER_VALUE_PRIVATE_ATTRS = [k for k in marker_value_attrs().keys() if k.startswith("_")]
+
+_MarkerDepsInfo = provider(
+    doc = "Observed marker env dependencies on a rule under test.",
+    fields = ["attr_names", "private_target_attrs", "pep508_env_label", "has_pep508_env_provider"],
+)
+
+def _inspect_marker_deps_aspect_impl(_target, ctx):
+    attr_names = dir(ctx.rule.attr)
+    private_target_attrs = [
+        a
+        for a in attr_names
+        if a.startswith("_") and type(getattr(ctx.rule.attr, a)) == "Target"
+    ]
+    env_target = getattr(ctx.rule.attr, "_pep508_env", None)
+    return [
+        _MarkerDepsInfo(
+            attr_names = attr_names,
+            private_target_attrs = private_target_attrs,
+            pep508_env_label = env_target.label if env_target else None,
+            has_pep508_env_provider = bool(env_target and Pep508EnvInfo in env_target),
+        ),
+    ]
+
+_inspect_marker_deps_aspect = aspect(implementation = _inspect_marker_deps_aspect_impl)
+
+def _test_evaluator_single_env_dep_impl(env, target):
+    info = target[_MarkerDepsInfo]
+    env.expect.that_bool(info.has_pep508_env_provider).equals(True)
+    env.expect.that_str(str(info.pep508_env_label)).equals(str(Label("//pycross/private/markers:env")))
+    env.expect.that_collection(info.private_target_attrs).contains_exactly(["_pep508_env"])
+    for legacy_attr in _LEGACY_MARKER_TARGET_ATTRS:
+        env.expect.that_collection(info.attr_names).not_contains(legacy_attr)
+    env.expect.that_collection(_MARKER_VALUE_PRIVATE_ATTRS).contains_exactly(["_pep508_env"])
+    env.expect.that_str(target[config_common.FeatureFlagInfo].value).equals("true")
+
+def _test_evaluator_single_env_dep(name):
+    pycross_pep508_evaluator(
+        name = name + "_evaluator",
+        expr = "platform_release == '6.1.0' and platform_version == '#42 SMP'",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_evaluator",
+        extra_target_under_test_aspects = [_inspect_marker_deps_aspect],
+        config_settings = {
+            str(Label("//pycross/settings:pep508_platform_release")): "6.1.0",
+            str(Label("//pycross/settings:pep508_platform_version")): "#42 SMP",
+        },
+        impl = _test_evaluator_single_env_dep_impl,
+    )
+
+def _test_evaluator_override_precedence_impl(env, target):
+    env.expect.that_str(target[config_common.FeatureFlagInfo].value).equals("true")
+
+def _test_evaluator_override_python_version_derivation(name):
+    # Explicit python_version must derive python_full_version and implementation_version
+    # instead of picking up the host toolchain's full version.
+    pycross_pep508_evaluator(
+        name = name + "_evaluator",
+        expr = (
+            "python_version == '3.12' and " +
+            "python_full_version == '3.12.0' and " +
+            "implementation_version == '3.12.0'"
+        ),
+        python_version = "3.12",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_evaluator",
+        impl = _test_evaluator_override_precedence_impl,
+    )
+
+def _test_evaluator_override_three_part_python_version(name):
+    pycross_pep508_evaluator(
+        name = name + "_evaluator",
+        expr = (
+            "python_version == '3.12' and " +
+            "python_full_version == '3.12.7' and " +
+            "implementation_version == '3.12.7'"
+        ),
+        python_version = "3.12.7",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_evaluator",
+        impl = _test_evaluator_override_precedence_impl,
+    )
+
+def _test_evaluator_override_pypy_derivation(name):
+    # Explicit implementation_name='pypy' derives platform_python_implementation='PyPy'
+    # instead of picking up the default 'CPython' flag value.
+    pycross_pep508_evaluator(
+        name = name + "_evaluator",
+        expr = "implementation_name == 'pypy' and platform_python_implementation == 'PyPy'",
+        implementation_name = "pypy",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_evaluator",
+        impl = _test_evaluator_override_precedence_impl,
+    )
+
+def _test_evaluator_override_pypy_respects_custom_ppi_flag(name):
+    # A non-default //pycross/settings:pep508_platform_python_implementation flag
+    # still wins when platform_python_implementation attr is unset.
+    pycross_pep508_evaluator(
+        name = name + "_evaluator",
+        expr = "implementation_name == 'pypy' and platform_python_implementation == 'CustomPy'",
+        implementation_name = "pypy",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_evaluator",
+        config_settings = {
+            str(Label("//pycross/settings:pep508_platform_python_implementation")): "CustomPy",
+        },
+        impl = _test_evaluator_override_precedence_impl,
+    )
+
+def _test_with_extra_impl(env, _target):
+    base = {"sys_platform": "linux", "extra": ""}
+    env.expect.that_dict(with_extra(base, "")).contains_exactly(base)
+    updated = with_extra(base, "dev")
+    env.expect.that_str(updated["extra"]).equals("dev")
+    env.expect.that_str(base["extra"]).equals("")
+
+    no_extra_key = {"sys_platform": "linux"}
+    env.expect.that_dict(with_extra(no_extra_key, "")).contains_exactly(no_extra_key)
+    env.expect.that_str(with_extra(no_extra_key, "test")["extra"]).equals("test")
+
+    with_variants = {"sys_platform": "linux", "extra": ["", "__variant_cuda"]}
+    replaced = with_extra(with_variants, "dev")
+    env.expect.that_collection(replaced["extra"]).contains_exactly(["dev", "__variant_cuda"]).in_order()
+    env.expect.that_collection(with_extra(replaced, "dev")["extra"]).contains_exactly(["dev", "__variant_cuda"]).in_order()
+    env.expect.that_collection(with_variants["extra"]).contains_exactly(["", "__variant_cuda"]).in_order()
+
+def _test_with_extra(name):
+    util.helper_target(native.filegroup, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_with_extra_impl,
+    )
+
 # ============================================================================
 # Test suite
 # ============================================================================
@@ -558,6 +727,12 @@ def pep508_test_suite(name):
             _test_target_platform_win_x86_32,
             _test_target_platform_linux_x86_32_and_pypy,
             _test_marker_uses_extra,
+            _test_evaluator_single_env_dep,
+            _test_evaluator_override_python_version_derivation,
+            _test_evaluator_override_three_part_python_version,
+            _test_evaluator_override_pypy_derivation,
+            _test_evaluator_override_pypy_respects_custom_ppi_flag,
+            _test_with_extra,
             _test_cycle_reachable,
             _test_cycle_marker_gated,
             _test_cycle_self_reachable,

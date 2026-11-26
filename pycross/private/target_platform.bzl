@@ -2,7 +2,7 @@
 
 load("@pypackaging.bzl", "pypackaging")
 load(":lock_attrs.bzl", "DEFAULT_GLIBC_VERSION", "DEFAULT_MACOS_VERSION", "DEFAULT_MUSL_VERSION")
-load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "flag_value", "marker_value_attrs")
+load(":pep508_marker_values.bzl", "collect_markers", "flag_value", "marker_value_attrs")
 
 PycrossTargetPlatformInfo = provider(
     doc = "Provides information about the target platform.",
@@ -155,7 +155,6 @@ _pycross_target_platform = rule(
         "_musl_version": attr.label(default = "@rules_pycross//pycross/settings:musl_version"),
     } | marker_value_attrs(),
     provides = [PycrossTargetPlatformInfo],
-    toolchains = [PYTHON_TOOLCHAIN_TYPE],
 )
 
 def pycross_target_platform(name, **kwargs):
