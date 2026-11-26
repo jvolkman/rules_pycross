@@ -27,6 +27,8 @@ bzl_library(
     deps = [
         ":wheel_shared_libraries",
         "//pycross/private/build/actions:repair_action",
+        "//pycross/private/build/rules:common_attrs",
+        "@rules_cc//cc/common",
     ],
 )
 

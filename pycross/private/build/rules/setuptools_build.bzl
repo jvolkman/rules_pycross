@@ -1,11 +1,8 @@
 """Implementation of the setuptools_build rule."""
 
-load("//pycross/private/build:resource_sets.bzl", "get_resource_set")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
-load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
-load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "group_tool_deps", "resolve_path_tools")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "COMMON_TOOLCHAINS", "REPAIR_BUILD_ATTRS", "group_tool_deps", "resolve_path_tools", "run_wheel_build")
 
 def _setuptools_build_impl(ctx):
     cc_layer = extract_cc_layer(
@@ -16,7 +13,6 @@ def _setuptools_build_impl(ctx):
     )
 
     tool_executables = resolve_path_tools(ctx)
-
     tool_deps = group_tool_deps(ctx.attr.tool_deps)
 
     # setuptools and wheel are injected as build deps when present, but are not
@@ -28,38 +24,14 @@ def _setuptools_build_impl(ctx):
     if "wheel" in tool_deps:
         additional_build_deps.extend(tool_deps["wheel"])
 
-    resources = get_resource_set(ctx.attr)
-    env = {}
-    if resources.parallelism > 0:
-        env["MAKEFLAGS"] = "-j{}".format(resources.parallelism)
-
-    build_result = register_pep517_action(
+    return run_wheel_build(
         ctx,
         builder = ctx.attr._builder,
         additional_build_deps = additional_build_deps,
         tool_executables = tool_executables,
         layers = [cc_layer],
-        env = env,
-        resource_set = resources.resource_set,
-    )
-
-    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-    repair_result = register_repair_action(
-        ctx,
-        input_wheel_dir = build_result.wheel_dir,
-        native_deps = ctx.attr.native_deps,
-        repair_tool = ctx.executable._repair_tool,
-        target_environment = target_environment,
-        repair_exclude_globs = ctx.attr.repair_exclude_globs,
         repair_deps = tool_deps.get("repairwheel", []),
     )
-
-    return [
-        DefaultInfo(files = depset([repair_result.wheel_dir])),
-        OutputGroupInfo(
-            raw_wheel = depset([build_result.wheel_dir]),
-        ),
-    ]
 
 setuptools_build = rule(
     implementation = _setuptools_build_impl,
@@ -75,9 +47,6 @@ setuptools_build = rule(
             cfg = "exec",
         ),
     },
-    toolchains = [
-        "@rules_python//python:toolchain_type",
-        config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
-    ] + CC_TOOLCHAINS,
+    toolchains = COMMON_TOOLCHAINS + CC_TOOLCHAINS,
     fragments = CC_FRAGMENTS,
 )

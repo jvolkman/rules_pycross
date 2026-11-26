@@ -3,7 +3,7 @@
 The common logic is factored into _sdist_repo_common() so it can be called before hooks are invoked.
 """
 
-load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS")
+load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS", "SDIST_HOOK_FILES")
 load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name", "parse_package_key", "underscore_name")
@@ -288,6 +288,22 @@ def _compute_sdist_build_config(attr, metadata):
         non_matching_override_backends = non_matching_backends,
     )
 
+def _select_hook_extract_patterns(attr, hook_files_by_backend):
+    """Return sorted deduplicated sdist file patterns requested by applicable sdist hooks."""
+    if not hook_files_by_backend:
+        return []
+    if attr.build_backend:
+        raw_patterns = hook_files_by_backend.get(attr.build_backend, [])
+    else:
+        possible = {v: True for v in attr.backend_to_rule.values()}
+        if attr.default_backend:
+            possible[attr.default_backend] = True
+        raw_patterns = []
+        for backend_name, backend_patterns in hook_files_by_backend.items():
+            if backend_name in possible:
+                raw_patterns.extend(backend_patterns)
+    return sorted({pat: True for pat in raw_patterns}.keys())
+
 def _sdist_repo_common(rctx):
     """Shared sdist repo logic: inspect metadata, resolve backend, apply override configs.
 
@@ -299,6 +315,7 @@ def _sdist_repo_common(rctx):
             macro_attrs: Dict of macro attribute name -> Starlark literal string.
             backend_macro: The resolved backend macro name.
             applied_override_config: Dict of override config entries that matched the resolved backend.
+            hook_files_dir: Optional Path to temporary dir of sdist files extracted for hooks.
             render: A function(macro_attrs, backend_macro, extra_build_snippets) to write BUILD.bazel.
     """
     _validate_build_backend(rctx.attr)
@@ -326,6 +343,14 @@ def _sdist_repo_common(rctx):
         inspect_args.extend(["--source-dir", rctx.attr.source_dir])
     for patch_label in rctx.attr.pre_build_patches:
         inspect_args.extend(["--pre-build-patch", str(rctx.path(patch_label))])
+
+    extract_patterns = _select_hook_extract_patterns(rctx.attr, SDIST_HOOK_FILES)
+    hook_files_dir = None
+    if extract_patterns:
+        hook_files_dir = rctx.path("_sdist_hook_files")
+        inspect_args.extend(["--extract-files-dir", str(hook_files_dir)])
+        for pattern in extract_patterns:
+            inspect_args.extend(["--extract-file", pattern])
 
     exec_internal_tool(
         rctx,
@@ -368,6 +393,7 @@ def _sdist_repo_common(rctx):
         site_paths = site_paths,
         bin_paths = bin_paths,
         applied_override_config = config.applied_override_config,
+        hook_files_dir = hook_files_dir,
         render = lambda macro_attrs, backend_macro, extra_build_snippets = None: _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, extra_build_snippets),
     )
 
@@ -385,6 +411,9 @@ def _sdist_repo_impl(rctx):
         if hook_result:
             macro_attrs.update(hook_result.extra_attrs)
             extra_build_snippets = hook_result.extra_build_snippets
+
+    if result.hook_files_dir != None and result.hook_files_dir.exists:
+        rctx.delete(result.hook_files_dir)
 
     result.render(macro_attrs, backend_macro, extra_build_snippets)
 
@@ -435,3 +464,4 @@ pycross_sdist_repo = repository_rule(
 
 # Visible for testing
 compute_sdist_build_config_for_testing = _compute_sdist_build_config
+select_hook_extract_patterns_for_testing = _select_hook_extract_patterns

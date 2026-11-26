@@ -1,6 +1,7 @@
 import argparse
 import ast
 import configparser
+import fnmatch
 import json
 import os
 import sys
@@ -9,6 +10,7 @@ import tempfile
 import zipfile
 from collections.abc import Iterable
 from collections.abc import Iterator
+from collections.abc import Sequence
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Callable
@@ -431,16 +433,73 @@ def _find_site_paths_from_items(
     return sorted(pkgs)
 
 
+def _archive_rel_for_extract(clean_name: str) -> Optional[PurePosixPath]:
+    """Return a safe archive-root-relative path for hook file extraction, or None if unsafe."""
+    if clean_name.startswith("/"):
+        return None
+    p = PurePosixPath(clean_name)
+    if not p.parts or any(part == ".." for part in p.parts):
+        return None
+    if len(p.parts) == 1:
+        return p
+    return PurePosixPath(*p.parts[1:])
+
+
+def _matches_extract_pattern(rel: PurePosixPath, pattern: str) -> bool:
+    """Match an archive-root-relative POSIX path against an extract pattern.
+
+    Supports exact archive-root-relative paths (e.g. ``pyproject.toml``), any-depth
+    ``**/`` prefixes (e.g. ``**/Cargo.lock`` matching ``Cargo.lock`` or
+    ``sub/Cargo.lock``), and single-segment ``fnmatch`` wildcards.
+    """
+    pattern = pattern.lstrip("/")
+    if not pattern:
+        return False
+    if pattern.startswith("**/"):
+        tail = pattern[3:]
+        tail_parts = PurePosixPath(tail).parts
+        rel_parts = rel.parts
+        if len(rel_parts) < len(tail_parts):
+            return False
+        return all(fnmatch.fnmatchcase(r, p) for r, p in zip(rel_parts[-len(tail_parts) :], tail_parts))
+    pat_parts = PurePosixPath(pattern).parts
+    rel_parts = rel.parts
+    if len(rel_parts) != len(pat_parts):
+        return False
+    return all(fnmatch.fnmatchcase(r, p) for r, p in zip(rel_parts, pat_parts))
+
+
+def _write_extracted_file(extract_dir: Path, rel: PurePosixPath, content: bytes) -> None:
+    """Write a matched sdist file under ``extract_dir`` while preventing path escape."""
+    if not rel.parts or any(part in ("..", "") for part in rel.parts):
+        return
+    base = extract_dir.resolve()
+    dest = (base / Path(*rel.parts)).resolve()
+    if not dest.is_relative_to(base):
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(content)
+
+
 def _collect_sdist_entries(
     entries: Iterable[SdistEntry],
     source_dir: str = "",
+    extract_files_dir: Optional[Path] = None,
+    extract_file_patterns: Sequence[str] = (),
 ) -> tuple[str, list[str]]:
-    """Collect pyproject.toml, top_level.txt, and site_paths in a single pass over sdist entries."""
+    """Collect pyproject.toml, top_level.txt, and site_paths in a single pass over sdist entries.
+
+    When ``extract_files_dir`` and ``extract_file_patterns`` are provided, any file under
+    the archive root matching one of the patterns is also written to ``extract_files_dir``
+    preserving its archive-root-relative path (including parent workspace files above
+    ``source_dir``).
+    """
     source_dir_path = PurePosixPath(source_dir.strip("/")) if source_dir else None
     pyproject_content = ""
     top_level_names: list[str] | None = None
     items: list[tuple[str, bool, bool]] = []
     init_contents: dict[str, str] = {}
+    do_extract = extract_files_dir is not None and bool(extract_file_patterns)
 
     for name, is_dir, is_file, read_bytes in entries:
         items.append((name, is_dir, is_file))
@@ -448,15 +507,20 @@ def _collect_sdist_entries(
             continue
         clean_name = name.rstrip("/")
         rel = _rel_under_effective_root(clean_name, source_dir_path)
+        clean_posix = PurePosixPath(clean_name)
         is_pyproject = not pyproject_content and (
             rel == PurePosixPath("pyproject.toml")
-            or (not source_dir_path and PurePosixPath(clean_name) == PurePosixPath("pyproject.toml"))
+            or (not source_dir_path and clean_posix == PurePosixPath("pyproject.toml"))
         )
         is_top_level = (
             not source_dir_path and top_level_names is None and rel is not None and _is_top_level_txt_rel(rel)
         )
         is_init = rel is not None and rel.name == "__init__.py"
-        if not (is_pyproject or is_top_level or is_init):
+        archive_rel = _archive_rel_for_extract(clean_name) if do_extract else None
+        should_extract = archive_rel is not None and any(
+            _matches_extract_pattern(archive_rel, pat) for pat in extract_file_patterns
+        )
+        if not (is_pyproject or is_top_level or is_init or should_extract):
             continue
         raw = read_bytes()
         if raw is None:
@@ -469,6 +533,8 @@ def _collect_sdist_entries(
                 top_level_names = names
         elif is_init:
             init_contents[clean_name] = raw.decode("utf-8", "replace")
+        if should_extract and extract_files_dir is not None and archive_rel is not None:
+            _write_extracted_file(extract_files_dir, archive_rel, raw)
 
     site_paths = _find_site_paths_from_items(
         items,
@@ -514,15 +580,30 @@ def _iter_dir_entries(
         yield rel_posix, is_dir, is_file, p.read_bytes
 
 
-def _inspect_unpatched_sdist(sdist_path: Path, source_dir: str = "") -> tuple[str, list[str]]:
+def _inspect_unpatched_sdist(
+    sdist_path: Path,
+    source_dir: str = "",
+    extract_files_dir: Optional[Path] = None,
+    extract_file_patterns: Sequence[str] = (),
+) -> tuple[str, list[str]]:
     """Inspect an unpatched sdist archive in a single pass, returning (pyproject_content, site_paths)."""
     if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(sdist_path) as t:
-            return _collect_sdist_entries(_iter_tar_entries(t), source_dir=source_dir)
+            return _collect_sdist_entries(
+                _iter_tar_entries(t),
+                source_dir=source_dir,
+                extract_files_dir=extract_files_dir,
+                extract_file_patterns=extract_file_patterns,
+            )
 
     if sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
-            return _collect_sdist_entries(_iter_zip_entries(z), source_dir=source_dir)
+            return _collect_sdist_entries(
+                _iter_zip_entries(z),
+                source_dir=source_dir,
+                extract_files_dir=extract_files_dir,
+                extract_file_patterns=extract_file_patterns,
+            )
 
     return "", []
 
@@ -531,6 +612,8 @@ def _inspect_patched_sdist(
     sdist_path: Path,
     source_dir: str,
     pre_build_patches: list[Path],
+    extract_files_dir: Optional[Path] = None,
+    extract_file_patterns: Sequence[str] = (),
 ) -> tuple[str, list[str]]:
     """Extract an sdist, apply pre_build_patches, and return (pyproject_content, site_paths)."""
     from pycross_patch import apply_patch_or_exit
@@ -564,9 +647,14 @@ def _inspect_patched_sdist(
         for orig_patch_path, abs_patch_path in resolved_patches:
             apply_patch_or_exit(sdist_dir, abs_patch_path, display_name=str(orig_patch_path))
 
+        # Walk from sdist_root_dir so archive-root hook files (e.g. parent workspace
+        # Cargo.lock above source_dir) remain visible while inspection stays scoped
+        # to source_dir via _rel_under_effective_root.
         return _collect_sdist_entries(
-            _iter_dir_entries(sdist_dir, tmp_path, archive_dirs),
+            _iter_dir_entries(sdist_root_dir, tmp_path, archive_dirs),
             source_dir=source_dir,
+            extract_files_dir=extract_files_dir,
+            extract_file_patterns=extract_file_patterns,
         )
 
 
@@ -688,11 +776,24 @@ def inspect_sdist(
     sdist_path: Path,
     source_dir: str = "",
     pre_build_patches: list[Path] | None = None,
+    extract_files_dir: Optional[Path] = None,
+    extract_file_patterns: Sequence[str] = (),
 ) -> dict:
     if pre_build_patches:
-        content, site_paths = _inspect_patched_sdist(sdist_path, source_dir, pre_build_patches)
+        content, site_paths = _inspect_patched_sdist(
+            sdist_path,
+            source_dir,
+            pre_build_patches,
+            extract_files_dir=extract_files_dir,
+            extract_file_patterns=extract_file_patterns,
+        )
     else:
-        content, site_paths = _inspect_unpatched_sdist(sdist_path, source_dir=source_dir)
+        content, site_paths = _inspect_unpatched_sdist(
+            sdist_path,
+            source_dir=source_dir,
+            extract_files_dir=extract_files_dir,
+            extract_file_patterns=extract_file_patterns,
+        )
 
     warnings = []
     if content:
@@ -757,6 +858,19 @@ def main():
         default=[],
         help="Patch file to apply to the extracted sdist before inspection (may be specified multiple times).",
     )
+    parser.add_argument(
+        "--extract-files-dir",
+        type=Path,
+        default=None,
+        help="Directory to write sdist files matching --extract-file patterns.",
+    )
+    parser.add_argument(
+        "--extract-file",
+        dest="extract_files",
+        action="append",
+        default=[],
+        help="Pattern of sdist files (relative to archive root, supports **/ prefix) to extract into --extract-files-dir.",
+    )
     args = parser.parse_args()
 
     if args.sdist:
@@ -764,6 +878,8 @@ def main():
             args.sdist,
             source_dir=args.source_dir,
             pre_build_patches=args.pre_build_patches,
+            extract_files_dir=args.extract_files_dir,
+            extract_file_patterns=args.extract_files,
         )
     elif args.wheel:
         data = inspect_wheel(args.wheel)

@@ -1,6 +1,6 @@
 """Tests for meson_build"""
 
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "CcInfo", "cc_library")
 load("@rules_python//python:defs.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
@@ -114,6 +114,48 @@ def _test_meson_build_missing_tools_impl(env, target):
         ),
     })
 
+def _mock_template_var_impl(_ctx):
+    return [
+        CcInfo(),
+        platform_common.TemplateVariableInfo({"NUMPY_INC": "/opt/numpy/include"}),
+    ]
+
+_mock_template_var = rule(implementation = _mock_template_var_impl)
+
+def _test_meson_build_meson_layer(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(_mock_pkg, name = name + "_meson", package_name = "meson")
+    util.helper_target(_mock_pkg, name = name + "_ninja", package_name = "ninja")
+    util.helper_target(_mock_template_var, name = name + "_vars")
+    util.helper_target(
+        meson_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        tool_deps = [name + "_meson", name + "_ninja"],
+        native_deps = [name + "_vars"],
+        meson_properties = {"numpy-include-dir": "$(NUMPY_INC)"},
+        allow_native_exec = True,
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_meson_build_meson_layer_impl)
+
+def _test_meson_build_meson_layer_impl(env, target):
+    cc_action = [a for a in target.actions if any([o.basename.endswith("_cc_config.json") for o in a.outputs.to_list()])][0]
+    cc_cfg = json.decode(cc_action.content)
+    env.expect.that_bool("meson_properties" in cc_cfg).equals(False)
+
+    meson_action = [a for a in target.actions if any([o.basename.endswith("_meson_config.json") for o in a.outputs.to_list()])][0]
+    meson_cfg = json.decode(meson_action.content)
+    env.expect.that_dict(meson_cfg["meson_properties"]).contains_exactly({
+        "numpy-include-dir": "/opt/numpy/include",
+    })
+    env.expect.that_bool(meson_cfg["allow_native_exec"]).equals(True)
+
+    main_action = [a for a in target.actions if any([o.basename.endswith("_config.json") and not o.basename.endswith("_cc_config.json") and not o.basename.endswith("_meson_config.json") for o in a.outputs.to_list()])][0]
+    main_cfg = json.decode(main_action.content)
+    env.expect.that_int(len(main_cfg["layers"])).equals(2)
+    env.expect.that_bool(main_cfg["layers"][0].endswith("_cc_config.json")).equals(True)
+    env.expect.that_bool(main_cfg["layers"][1].endswith("_meson_config.json")).equals(True)
+
 def meson_build_test_suite(name):
     test_suite(
         name = name,
@@ -121,5 +163,6 @@ def meson_build_test_suite(name):
             _test_meson_build_basic,
             _test_meson_build_resources,
             _test_meson_build_missing_tools,
+            _test_meson_build_meson_layer,
         ],
     )

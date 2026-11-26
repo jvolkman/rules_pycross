@@ -91,31 +91,23 @@ class MesonUtilsTest(unittest.TestCase):
 
     def test_generate_cross_ini_allow_native_exec(self):
         # With allow_native_exec, native builds should get needs_exe_wrapper=false
-        cc_config = {
-            "target_os": "linux",
-            "target_cpu": "x86_64",
-            "meson_properties": {"_allow_native_exec": "true"},
-        }
-        generate_cross_ini(self.ctx, cc_config)
+        cc_config = {"target_os": "linux", "target_cpu": "x86_64"}
+        meson_config = {"meson_properties": {}, "allow_native_exec": True}
+        generate_cross_ini(self.ctx, cc_config, meson_config)
 
         cross_ini_path = self.temp_path / "cc_layer" / "cross.ini"
         content = cross_ini_path.read_text()
 
         self.assertIn("needs_exe_wrapper = false", content)
         self.assertIn("skip_sanity_check = false", content)
-        # Internal property should not appear in the cross.ini output
-        self.assertNotIn("_allow_native_exec", content)
 
     def test_generate_cross_ini_allow_native_exec_cross(self):
         # With allow_native_exec but cross-compiling, should still be true
         self.ctx.target_python = self.temp_path / "target_env" / "bin" / "python"
 
-        cc_config = {
-            "target_os": "linux",
-            "target_cpu": "aarch64",
-            "meson_properties": {"_allow_native_exec": "true"},
-        }
-        generate_cross_ini(self.ctx, cc_config)
+        cc_config = {"target_os": "linux", "target_cpu": "aarch64"}
+        meson_config = {"meson_properties": {}, "allow_native_exec": True}
+        generate_cross_ini(self.ctx, cc_config, meson_config)
 
         cross_ini_path = self.temp_path / "cc_layer" / "cross.ini"
         content = cross_ini_path.read_text()
@@ -209,14 +201,18 @@ class MesonUtilsTest(unittest.TestCase):
         cc_config = {
             "target_os": "linux",
             "target_cpu": "x86_64",
-            "meson_properties": {"custom_prop": "a'b\\c"},
         }
-        generate_cross_ini(self.ctx, cc_config)
+        meson_config = {
+            "meson_properties": {"custom_prop": "a'b\\c", "_internal": "ignored"},
+            "allow_native_exec": False,
+        }
+        generate_cross_ini(self.ctx, cc_config, meson_config)
 
         content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
         self.assertIn("'-I/path/with spaces/inc'", content)
         self.assertIn("'-DNAME=o\\'reilly\\\\x'", content)
         self.assertIn("custom_prop = 'a\\'b\\\\c'", content)
+        self.assertNotIn("_internal", content)
         self.assertEqual(self.ctx.config_settings["build-dir"], "custom_build")
         self.assertTrue((self.temp_path / "pkgconfig" / "demo.pc").exists())
         self.assertFalse((self.ctx.sdist_dir / "pkgconfig").exists())

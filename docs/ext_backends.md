@@ -10,7 +10,7 @@ The backends extension.
 backends = use_extension("@rules_pycross//pycross/extensions:backends.bzl", "backends")
 backends.register(<a href="#backends.register-name">name</a>, <a href="#backends.register-default">default</a>, <a href="#backends.register-override_json">override_json</a>, <a href="#backends.register-package_repo_hook_bzl">package_repo_hook_bzl</a>, <a href="#backends.register-package_repo_hook_fn">package_repo_hook_fn</a>,
                   <a href="#backends.register-package_repo_hook_subdir">package_repo_hook_subdir</a>, <a href="#backends.register-pyproject_backends">pyproject_backends</a>, <a href="#backends.register-rule_bzl">rule_bzl</a>, <a href="#backends.register-sdist_hook_bzl">sdist_hook_bzl</a>,
-                  <a href="#backends.register-sdist_hook_fn">sdist_hook_fn</a>, <a href="#backends.register-tool_packages">tool_packages</a>)
+                  <a href="#backends.register-sdist_hook_files">sdist_hook_files</a>, <a href="#backends.register-sdist_hook_fn">sdist_hook_fn</a>, <a href="#backends.register-tool_packages">tool_packages</a>)
 </pre>
 
 Register build backends for pycross sdist builds.
@@ -37,6 +37,7 @@ Register a build backend for pycross sdist builds.
 | <a id="backends.register-pyproject_backends"></a>pyproject_backends |  pyproject.toml build-system.build-backend values that map to this backend. Entries may include a bracketed list of required build-system.requires package names, e.g. 'setuptools.build_meta[setuptools-rust]'. When multiple backends match the same build-backend value, the one with the most satisfied build_requires wins.   | List of strings | optional |  `[]`  |
 | <a id="backends.register-rule_bzl"></a>rule_bzl |  Label of the .bzl file exporting the rule, e.g. '@rules_pycross//pycross/backends:meson.bzl'.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="backends.register-sdist_hook_bzl"></a>sdist_hook_bzl |  Optional label of a .bzl file providing a hook for sdist repo execution.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="backends.register-sdist_hook_files"></a>sdist_hook_files |  Optional file patterns (relative to the sdist archive root, supporting a leading '**/' wildcard) extracted during sdist inspection into result.hook_files_dir for the sdist hook to read without re-extracting the sdist archive.   | List of strings | optional |  `[]`  |
 | <a id="backends.register-sdist_hook_fn"></a>sdist_hook_fn |  Optional function name in sdist_hook_bzl. Defaults to '<name>_sdist_hook' (replacing '_build' suffix).   | String | optional |  `""`  |
 | <a id="backends.register-tool_packages"></a>tool_packages |  PEP 503 normalized PyPI package names of tools this backend needs at build time (e.g. ['meson', 'ninja', 'meson-python']).   | List of strings | optional |  `[]`  |
 

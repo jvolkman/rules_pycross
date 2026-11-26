@@ -6,8 +6,11 @@ Targets are versioned (e.g., _cargo:jiter@0.5.0) to handle multiple
 versions of the same package.
 """
 
+load("@rules_pycross//pycross:backend.bzl", "merge_backend_overrides")
+
 # Resolve at load time so str() gives the canonical label form.
 _GENERATE_CARGO_LOCK_BZL = str(Label("@rules_pycross_backend_maturin//rules:generate_cargo_lock.bzl"))
+_CARGO_OVERRIDE_KEY = "_cargo"
 
 def cargo_lock_package_repo_hook(packages_info, override_packages):
     """Generate _cargo/ directory with cargo lock generation targets.
@@ -25,6 +28,8 @@ def cargo_lock_package_repo_hook(packages_info, override_packages):
     if not override_packages:
         return []
 
+    scoped_overrides = {key: {_CARGO_OVERRIDE_KEY: attrs} for key, attrs in override_packages.items()}
+
     lines = [
         'load("{}", "pycross_generate_cargo_lock")'.format(_GENERATE_CARGO_LOCK_BZL),
         'package(default_visibility = ["//visibility:public"])',
@@ -40,14 +45,10 @@ def cargo_lock_package_repo_hook(packages_info, override_packages):
 
             versioned_name = "{}@{}".format(pkg_name, version_info.version)
             target_name = getattr(version_info, "package_key", "") or versioned_name
-            attrs = {}
-            matched = False
-            for key in ("*", pkg_name, versioned_name):
-                if key in override_packages:
-                    matched = True
-                    attrs.update(override_packages[key])
-            if not matched:
+            merged = merge_backend_overrides(scoped_overrides, pkg_name, version_info.version)
+            if _CARGO_OVERRIDE_KEY not in merged:
                 continue
+            attrs = merged[_CARGO_OVERRIDE_KEY]
 
             lines.append("pycross_generate_cargo_lock(")
             lines.append('    name = "%s",' % target_name)

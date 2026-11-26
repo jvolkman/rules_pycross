@@ -124,17 +124,8 @@ def load_build_context(config_path: str) -> BuildContext:
     else:
         sdist_dir = sdist_root_dir
 
-    # Resolve configuration settings from file or dictionary
-    config_settings_raw_path = bazel_config.get("config_settings_raw")
-    if config_settings_raw_path:
-        raw_path = (prefix / Path(config_settings_raw_path)).absolute()
-        if raw_path.exists():
-            with open(raw_path, "r") as f:
-                config_settings = replace_path_placeholders(json.load(f), prefix)
-        else:
-            config_settings = {}
-    else:
-        config_settings = bazel_config.get("config_settings", {})
+    # Resolve configuration settings directly from bazel_config.
+    config_settings = replace_path_placeholders(bazel_config.get("config_settings", {}), prefix)
 
     build_env = os.environ.copy()
 

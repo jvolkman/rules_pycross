@@ -34,13 +34,20 @@ def _strip_inner_quotes(flags: Sequence[str]) -> List[str]:
     return [tok.replace('"', "") for tok in flags]
 
 
-def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = None) -> None:
-    """Generates the Meson cross.ini file dynamically from BuildContext and env configuration."""
+def generate_cross_ini(
+    ctx: BuildContext,
+    cc_config: Optional[Dict[str, Any]] = None,
+    meson_config: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Generates the Meson cross.ini file dynamically from BuildContext and layer configs."""
     cc_layer = ctx.cc_layer
     if cc_layer is None or not cc_layer.cc_path or not cc_layer.cxx_path:
         raise ValueError(
             "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_layer is configured for this build."
         )
+
+    meson_cfg = meson_config or {}
+    meson_properties = meson_cfg.get("meson_properties", {})
 
     c_args = _strip_inner_quotes(cc_layer.cflags)
     cxx_args = _strip_inner_quotes(cc_layer.cxxflags)
@@ -95,7 +102,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     if target_system == "darwin" and target_cpu == "aarch64":
         has_mcpu = any(a.startswith("-mcpu=") or a == "-mcpu" for a in c_args)
         if not has_mcpu:
-            mcpu = cc_config.get("meson_properties", {}).get("_mcpu", "apple-m1")
+            mcpu = meson_properties.get("_mcpu", "apple-m1")
             c_args.append(f"-mcpu={mcpu}")
             cxx_args.append(f"-mcpu={mcpu}")
 
@@ -112,9 +119,9 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # capabilities) depend on the host rather than the hermetic toolchain.
     # This is critical for reproducible cross-host builds.
     #
-    # When allow_native_exec is set (via meson_properties), fall back to the
-    # old behavior of allowing native execution when exec == target platform.
-    allow_native_exec = cc_config.get("meson_properties", {}).get("_allow_native_exec") == "true"
+    # When allow_native_exec is True, fall back to allowing native execution
+    # when exec == target platform.
+    allow_native_exec = bool(meson_cfg.get("allow_native_exec", False))
 
     if allow_native_exec:
         needs_exe_wrapper = is_cross
@@ -175,7 +182,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # Filter out internal properties (prefixed with _) that are used for
     # framework configuration and should not appear in the cross.ini.
     extra_properties_lines = []
-    for key, value in cc_config.get("meson_properties", {}).items():
+    for key, value in meson_properties.items():
         if key.startswith("_"):
             continue
         if "$$EXT_BUILD_ROOT$$" in value:

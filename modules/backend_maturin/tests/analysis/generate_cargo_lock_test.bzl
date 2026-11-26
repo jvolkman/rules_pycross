@@ -77,6 +77,13 @@ def _test_cargo_lock_hook_overrides_impl(env, target):
     env.expect.that_str(build).contains('output = "cargo/jiter_06.Cargo.lock",')
     env.expect.that_bool("wheel-only" in build).equals(False)
 
+    # Empty override dict still generates a _cargo target (without output attr).
+    empty_override_entries = cargo_lock_package_repo_hook(packages_info, {"jiter": {}})
+    env.expect.that_int(len(empty_override_entries)).equals(1)
+    empty_build = empty_override_entries[0].files["BUILD.bazel"]
+    env.expect.that_str(empty_build).contains('name = "jiter@0.5.0",')
+    env.expect.that_bool("output =" in empty_build).equals(False)
+
     # Multi-source sdists use their tagged package_key for target name and //_sdist label.
     tagged_entries = cargo_lock_package_repo_hook(
         {

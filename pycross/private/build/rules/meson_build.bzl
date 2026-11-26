@@ -1,87 +1,58 @@
 """Implementation of the meson_build rule."""
 
-load("//pycross/private/build:resource_sets.bzl", "get_resource_set")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
-load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
-load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load("//pycross/private/build/actions:tool_extract.bzl", "PycrossExtractedToolInfo", "extract_wheel_tool_aspect")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "defer_build_error", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
+load("//pycross/private/build/actions:tool_extract.bzl", "extract_wheel_tool_aspect", "extract_wheel_tools")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "COMMON_TOOLCHAINS", "REPAIR_BUILD_ATTRS", "defer_build_error", "group_tool_deps", "resolve_path_tools", "run_wheel_build")
+
+def _extract_meson_layer(ctx, make_vars):
+    expanded_properties = {
+        key: ctx.expand_make_variables("meson_properties", value, make_vars)
+        for key, value in ctx.attr.meson_properties.items()
+    }
+    meson_config = {
+        "meson_properties": expanded_properties,
+        "allow_native_exec": ctx.attr.allow_native_exec,
+    }
+    config_json = ctx.actions.declare_file(ctx.label.name + "_meson_config.json")
+    ctx.actions.write(config_json, json.encode(meson_config))
+    return struct(
+        config_json = config_json,
+        transitive_files = depset(),
+    )
 
 def _meson_build_impl(ctx):
     # 1. Extract tools
     tool_deps = group_tool_deps(ctx.attr.tool_deps)
-
-    missing_tools = [t for t in ("meson", "ninja") if t not in tool_deps]
-    if missing_tools:
-        return defer_build_error(ctx, ["Missing '{}' in tool_deps".format(t) for t in missing_tools])
-
-    tool_executables = []
-    for tool_pkg in ("meson", "ninja"):
-        dep = tool_deps[tool_pkg][0]
-        if PycrossExtractedToolInfo in dep:
-            info = dep[PycrossExtractedToolInfo]
-            tool_executables.append(struct(name = info.name, file = info.file))
-        else:
-            # Validates PycrossExtractedWheelInfo and fails with a clear message if missing.
-            get_unzipped_wheel(dep)
-            fail("Expected PycrossExtractedToolInfo on '{}' tool target {}".format(tool_pkg, dep.label))
+    tool_executables, missing_errors = extract_wheel_tools(tool_deps, ("meson", "ninja"))
+    if missing_errors:
+        return defer_build_error(ctx, missing_errors)
 
     tool_executables.extend(resolve_path_tools(ctx))
 
-    # 2. Extract CC environment
-    meson_properties = dict(ctx.attr.meson_properties)
-    if ctx.attr.allow_native_exec:
-        meson_properties["_allow_native_exec"] = "true"
+    # 2. Extract CC and Meson environments
     cc_layer = extract_cc_layer(
         ctx,
         native_deps = ctx.attr.native_deps,
         copts = ctx.attr.copts,
         linkopts = ctx.attr.linkopts,
-        meson_properties = meson_properties,
     )
+    meson_layer = _extract_meson_layer(ctx, cc_layer.make_vars)
 
     additional_build_deps = []
     if "meson-python" in tool_deps:
         additional_build_deps.extend(tool_deps["meson-python"])
 
-    resources = get_resource_set(ctx.attr)
-    env = {}
-    if resources.parallelism > 0:
-        sc = str(resources.parallelism)
-        env["MESON_NUM_PROCESSES"] = sc
-        env["NINJA_JOBS"] = sc
-        env["MAKEFLAGS"] = "-j{}".format(sc)
-
-    # 3. Build wheel
-    build_result = register_pep517_action(
+    # 3. Build and repair wheel
+    return run_wheel_build(
         ctx,
         builder = ctx.attr._builder,
         additional_build_deps = additional_build_deps,
         tool_executables = tool_executables,
-        layers = [cc_layer],
-        env = env,
-        resource_set = resources.resource_set,
-    )
-
-    # 4. Repair wheel
-    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-    repair_result = register_repair_action(
-        ctx,
-        input_wheel_dir = build_result.wheel_dir,
-        native_deps = ctx.attr.native_deps,
-        repair_tool = ctx.executable._repair_tool,
-        target_environment = target_environment,
-        repair_exclude_globs = ctx.attr.repair_exclude_globs,
+        layers = [cc_layer, meson_layer],
+        parallelism_env_vars = ("MESON_NUM_PROCESSES", "NINJA_JOBS"),
         repair_deps = tool_deps.get("repairwheel", []),
     )
-
-    return [
-        DefaultInfo(files = depset([repair_result.wheel_dir])),
-        OutputGroupInfo(
-            raw_wheel = depset([build_result.wheel_dir]),
-        ),
-    ]
 
 meson_build = rule(
     implementation = _meson_build_impl,
@@ -109,9 +80,6 @@ meson_build = rule(
             cfg = "exec",
         ),
     },
-    toolchains = [
-        "@rules_python//python:toolchain_type",
-        config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
-    ] + CC_TOOLCHAINS,
+    toolchains = COMMON_TOOLCHAINS + CC_TOOLCHAINS,
     fragments = CC_FRAGMENTS,
 )

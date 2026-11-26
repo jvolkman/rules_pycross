@@ -87,7 +87,7 @@ def _get_target_os_and_cpu(ctx):
 
     return target_os, target_cpu
 
-def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
+def extract_cc_layer(ctx, native_deps, copts, linkopts):
     """Extracts CC toolchain info, headers, and libraries from native deps.
 
     Requires the calling rule to declare:
@@ -101,7 +101,6 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
         native_deps: list[Target], targets providing CcInfo.
         copts: list[str], extra compiler flags.
         linkopts: list[str], extra linker flags.
-        meson_properties: dict, meson cross-file properties.
 
     Returns:
         struct(
@@ -170,10 +169,6 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
             elif lib.basename.endswith((".dylib", ".tbd", ".so")) or ".so." in lib.basename:
                 shared_libs.append(lib_path)
 
-    expanded_meson_properties = {}
-    for key, value in meson_properties.items():
-        expanded_meson_properties[key] = ctx.expand_make_variables("meson_properties", value, make_vars)
-
     runtime_libs = []
     runtime_depset = cpp_toolchain.static_runtime_lib(
         feature_configuration = feature_configuration,
@@ -193,7 +188,6 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
         runtime_libs = runtime_libs,
         target_os = target_os,
         target_cpu = target_cpu,
-        meson_properties = expanded_meson_properties,
     )
     if target_os == "windows" and cpp_toolchain.compiler == "msvc-cl":
         cc_config["msvc_env"] = create_msvc_environment(cpp_toolchain, feature_configuration)

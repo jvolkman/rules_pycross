@@ -17,6 +17,7 @@ def _tag(
         override_json = None,
         sdist_hook_bzl = None,
         sdist_hook_fn = "",
+        sdist_hook_files = [],
         package_repo_hook_bzl = None,
         package_repo_hook_fn = "",
         package_repo_hook_subdir = ""):
@@ -29,6 +30,7 @@ def _tag(
         override_json = override_json,
         sdist_hook_bzl = sdist_hook_bzl,
         sdist_hook_fn = sdist_hook_fn,
+        sdist_hook_files = sdist_hook_files,
         package_repo_hook_bzl = package_repo_hook_bzl,
         package_repo_hook_fn = package_repo_hook_fn,
         package_repo_hook_subdir = package_repo_hook_subdir,
@@ -84,7 +86,7 @@ def _test_non_root_duplicates_warn(name):
 def _test_duplicate_registration_does_not_leak_override_json_impl(env, target):
     """Ignored duplicate registrations must not leak override_json; root re-registrations replace cleanly."""
     root = _module("my_project", [
-        _tag("meson_build", "//:first_meson.bzl", ["old_meson"], default = True, override_json = "//:first_overrides.json", sdist_hook_bzl = "//:first_hook.bzl", sdist_hook_fn = "first_fn"),
+        _tag("meson_build", "//:first_meson.bzl", ["old_meson"], default = True, override_json = "//:first_overrides.json", sdist_hook_bzl = "//:first_hook.bzl", sdist_hook_fn = "first_fn", sdist_hook_files = ["pyproject.toml"]),
         _tag("meson_build", "//:second_meson.bzl", ["new_meson"], default = False, override_json = None),
         _tag("extra_build", "//:extra.bzl", override_json = "@shared//:overrides.json"),
         _tag("extra2_build", "//:extra2.bzl", override_json = "@shared//:overrides.json"),
@@ -111,6 +113,7 @@ def _test_duplicate_registration_does_not_leak_override_json_impl(env, target):
     ]).in_order()
     env.expect.that_bool("meson_build" in res.sdist_hook_bzl).equals(False)
     env.expect.that_bool("meson_build" in res.sdist_hook_fn).equals(False)
+    env.expect.that_bool("meson_build" in res.sdist_hook_files).equals(False)
     env.expect.that_bool("old_meson" in res.backend_to_rule).equals(False)
     env.expect.that_str(res.backend_to_rule["new_meson"]).equals("meson_build")
     env.expect.that_str(res.default_backend).equals("pep517_build")
@@ -167,12 +170,16 @@ def _test_render_hook_dispatch_suffix_replacement_impl(env, target):
         },
         "_sdist_hook",
         ["maturin_build", "my_build_tool_build", "my_build_tool", "custom_backend", "explicit_build"],
+        hook_files_map = {
+            "maturin_build": ["pyproject.toml", "**/Cargo.lock"],
+        },
     )
     env.expect.that_str(rendered).contains('load("@m//:hook.bzl", _sdist_hook_maturin_build = "maturin_sdist_hook")')
     env.expect.that_str(rendered).contains('load("@t//:hook.bzl", _sdist_hook_my_build_tool_build = "my_build_tool_sdist_hook")')
     env.expect.that_str(rendered).contains('load("@t2//:hook.bzl", _sdist_hook_my_build_tool = "my_build_tool_sdist_hook")')
     env.expect.that_str(rendered).contains('load("@c//:hook.bzl", _sdist_hook_custom_backend = "custom_backend_sdist_hook")')
     env.expect.that_str(rendered).contains('load("@e//:hook.bzl", _sdist_hook_explicit_build = "custom_fn_name")')
+    env.expect.that_str(rendered).contains('SDIST_HOOK_FILES = {\n    "maturin_build": ["pyproject.toml","**/Cargo.lock"],\n}')
 
     # Package repo hook dispatch emits PACKAGE_REPO_HOOK_SUBDIRS for backends declaring a subdir.
     pkg_rendered = render_hook_dispatch_for_testing(

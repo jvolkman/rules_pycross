@@ -16,20 +16,30 @@ class BuildContextTest(unittest.TestCase):
         self.prefix = Path(self.tmp.name)
         self.config_path = self.prefix / "config.json"
 
-    def _load(self, platform, sdist_root, source_dir=None, build_env=None, launcher_pythonpath=None):
-        self.config_path.write_text(
-            json.dumps(
-                {
-                    "sdist": "pkg.tar.gz",
-                    "exec_python": "python",
-                    "target_python": "python",
-                    "wheel_dir": "wheels",
-                    "source_dir": source_dir,
-                    "build_env": build_env or {},
-                }
-            )
-        )
+    def _load(
+        self,
+        platform,
+        sdist_root,
+        source_dir=None,
+        build_env=None,
+        launcher_pythonpath=None,
+        config_settings=None,
+        extra_environ=None,
+    ):
+        cfg = {
+            "sdist": "pkg.tar.gz",
+            "exec_python": "python",
+            "target_python": "python",
+            "wheel_dir": "wheels",
+            "source_dir": source_dir,
+            "build_env": build_env or {},
+        }
+        if config_settings is not None:
+            cfg["config_settings"] = config_settings
+        self.config_path.write_text(json.dumps(cfg))
         env = {"PYCROSS_BUILD_ROOT": "scratch", "PYCROSS_SDIST_DIR": str(sdist_root)}
+        if extra_environ:
+            env.update(extra_environ)
         if launcher_pythonpath is not None:
             env["PYTHONPATH"] = launcher_pythonpath
         # Simulate the requested OS while keeping this host's Path type.
@@ -156,6 +166,33 @@ class BuildContextTest(unittest.TestCase):
                 self.assertEqual(ctx.build_env["PYCROSS_BUILD_ROOT"], "scratch")
                 self.assertEqual(ctx.build_env["PYTHONPATH"], pythonpath)
                 self.assertEqual(ctx.build_env["pythonpath"], "keep-case")
+
+    def test_inline_config_settings_replaces_placeholders(self):
+        ctx = self._load(
+            "posix",
+            "bazel-out/pkg/sdist",
+            config_settings={
+                "--flag": ["$$EXT_BUILD_ROOT$$/path/to/file", "plain"],
+                "--single": "$$EXT_BUILD_ROOT$$/other",
+            },
+        )
+        self.assertEqual(
+            ctx.config_settings,
+            {
+                "--flag": [f"{self.prefix}/path/to/file", "plain"],
+                "--single": f"{self.prefix}/other",
+            },
+        )
+
+    def test_user_build_env_overrides_inherited_programmatic_env(self):
+        ctx = self._load(
+            "posix",
+            "bazel-out/pkg/sdist",
+            extra_environ={"MAKEFLAGS": "-j6", "CARGO_VENDORED_SOURCES": "vendor"},
+            build_env={"MAKEFLAGS": "-j2"},
+        )
+        self.assertEqual(ctx.build_env["MAKEFLAGS"], "-j2")
+        self.assertEqual(ctx.build_env["CARGO_VENDORED_SOURCES"], "vendor")
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ load(
     _create_overrides_repo = "create_overrides_repo",
     _encode_build_system_attrs = "encode_build_system_attrs",
     _make_override_extension = "make_override_extension",
+    _merge_backend_overrides = "merge_backend_overrides",
 )
 load(
     "//pycross/private:providers.bzl",
@@ -45,6 +46,9 @@ load(
 )
 load(
     "//pycross/private/build/actions:tool_extract.bzl",
+    _PycrossExtractedToolInfo = "PycrossExtractedToolInfo",
+    _extract_wheel_tools = "extract_wheel_tools",
+    _make_wheel_tool_aspect = "make_wheel_tool_aspect",
     _register_bin_extract_action = "register_bin_extract_action",
 )
 load(
@@ -54,29 +58,36 @@ load(
     _CC_TOOLCHAINS = "CC_TOOLCHAINS",
     _CC_TOOLCHAIN_ATTRS = "CC_TOOLCHAIN_ATTRS",
     _COMMON_BUILD_ATTRS = "COMMON_BUILD_ATTRS",
+    _COMMON_TOOLCHAINS = "COMMON_TOOLCHAINS",
     _REPAIR_BUILD_ATTRS = "REPAIR_BUILD_ATTRS",
     _TOOL_EXTRACT_ATTRS = "TOOL_EXTRACT_ATTRS",
     _defer_build_error = "defer_build_error",
     _get_unzipped_wheel = "get_unzipped_wheel",
     _group_tool_deps = "group_tool_deps",
     _resolve_path_tools = "resolve_path_tools",
+    _run_wheel_build = "run_wheel_build",
 )
 
 # Providers
+PycrossExtractedToolInfo = _PycrossExtractedToolInfo
 PycrossExtractedWheelInfo = _PycrossExtractedWheelInfo
 PycrossPackageInfo = _PycrossPackageInfo
 
 # Transition
 pycross_exec_platform_transition = _pycross_exec_platform_transition
 
-# Actions
+# Actions & tool extraction
 extract_cc_layer = _extract_cc_layer
+extract_wheel_tools = _extract_wheel_tools
+make_wheel_tool_aspect = _make_wheel_tool_aspect
 register_pep517_action = _register_pep517_action
 register_repair_action = _register_repair_action
 register_bin_extract_action = _register_bin_extract_action
+run_wheel_build = _run_wheel_build
 
-# Attribute dictionaries
+# Attribute dictionaries & toolchains
 COMMON_BUILD_ATTRS = _COMMON_BUILD_ATTRS
+COMMON_TOOLCHAINS = _COMMON_TOOLCHAINS
 CC_BUILD_ATTRS = _CC_BUILD_ATTRS
 CC_TOOLCHAIN_ATTRS = _CC_TOOLCHAIN_ATTRS
 CC_TOOLCHAINS = _CC_TOOLCHAINS
@@ -93,6 +104,7 @@ resolve_path_tools = _resolve_path_tools
 
 # Override extension helpers
 make_override_extension = _make_override_extension
+merge_backend_overrides = _merge_backend_overrides
 create_overrides_repo = _create_overrides_repo
 encode_build_system_attrs = _encode_build_system_attrs
 BUILD_SYSTEM_ATTRS = _BUILD_SYSTEM_ATTRS

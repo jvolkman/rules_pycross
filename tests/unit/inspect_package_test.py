@@ -1294,6 +1294,125 @@ class InspectPackageTest(unittest.TestCase):
             self.assertEqual(result["build_backend"], "fallback.backend")
             self.assertEqual(result["build_requires"], ["x"])
 
+    # -- extract_files_dir / extract_file_patterns tests --
+
+    def test_sdist_extract_files_single_pass_tar_and_zip(self):
+        """Requested files are extracted in the single archive pass with exact vs **/ matching."""
+        files = {
+            "pkg-1.0/pyproject.toml": '[build-system]\nbuild-backend = "maturin"\n[tool.maturin]\nmanifest-path = "crates/py/Cargo.toml"\n',
+            "pkg-1.0/Cargo.lock": "root lock\n",
+            "pkg-1.0/crates/py/Cargo.lock": "nested lock\n",
+            "pkg-1.0/tests/fixtures/pyproject.toml": "# should not match exact pyproject.toml\n",
+            "pkg-1.0/pkg/__init__.py": "",
+        }
+        patterns = ("pyproject.toml", "**/Cargo.lock")
+
+        tar_sdist = self.create_tarball("pkg-1.0.tar.gz", files)
+        tar_out = self.temp_path / "tar_extracted"
+        with mock.patch("pycross.private.tools.inspect_package.tarfile.open", wraps=tarfile.open) as open_spy:
+            res = inspect_sdist(tar_sdist, extract_files_dir=tar_out, extract_file_patterns=patterns)
+        self.assertEqual(open_spy.call_count, 1)
+        self.assertEqual(res["build_backend"], "maturin")
+        self.assertEqual((tar_out / "pyproject.toml").read_text(), files["pkg-1.0/pyproject.toml"])
+        self.assertEqual((tar_out / "Cargo.lock").read_text(), "root lock\n")
+        self.assertEqual((tar_out / "crates" / "py" / "Cargo.lock").read_text(), "nested lock\n")
+        self.assertFalse((tar_out / "tests" / "fixtures" / "pyproject.toml").exists())
+
+        zip_sdist = self.create_zip("pkg-1.0.zip", files)
+        zip_out = self.temp_path / "zip_extracted"
+        with mock.patch("pycross.private.tools.inspect_package.zipfile.ZipFile", wraps=zipfile.ZipFile) as zip_spy:
+            res_zip = inspect_sdist(zip_sdist, extract_files_dir=zip_out, extract_file_patterns=patterns)
+        self.assertEqual(zip_spy.call_count, 1)
+        self.assertEqual(res_zip["build_backend"], "maturin")
+        self.assertEqual((zip_out / "Cargo.lock").read_text(), "root lock\n")
+        self.assertEqual((zip_out / "crates" / "py" / "Cargo.lock").read_text(), "nested lock\n")
+
+    def test_sdist_extract_files_respects_source_dir_and_pre_build_patches(self):
+        """Archive-root extraction preserves parent workspace Cargo.lock above source_dir and includes patches."""
+        # Parent Cargo workspace with Python package in source_dir="py".
+        ws_sdist = self.create_tarball(
+            "ws-1.0.tar.gz",
+            {
+                "ws-1.0/Cargo.toml": '[workspace]\nmembers = ["py"]\n',
+                "ws-1.0/Cargo.lock": "workspace root lock\n",
+                "ws-1.0/py/pyproject.toml": '[build-system]\nrequires = ["maturin"]\nbuild-backend = "maturin"\n',
+                "ws-1.0/py/Cargo.toml": '[package]\nname = "py"\nversion = "0.1.0"\n',
+                "ws-1.0/py/x/__init__.py": "",
+            },
+        )
+        ws_out = self.temp_path / "ws_out"
+        ws_res = inspect_sdist(
+            ws_sdist,
+            source_dir="py",
+            extract_files_dir=ws_out,
+            extract_file_patterns=("**/pyproject.toml", "**/Cargo.lock"),
+        )
+        self.assertEqual(ws_res["build_backend"], "maturin")
+        self.assertEqual(ws_res["site_paths"], ["x"])
+        self.assertEqual((ws_out / "Cargo.lock").read_text(), "workspace root lock\n")
+        self.assertIn('build-backend = "maturin"', (ws_out / "py" / "pyproject.toml").read_text())
+
+        # Patched sdist with source_dir applies patches in source_dir while retaining archive-root Cargo.lock.
+        sdist = self.create_tarball(
+            "mono-1.0.tar.gz",
+            {
+                "mono-1.0/pyproject.toml": '[build-system]\nbuild-backend = "setuptools.build_meta"\n',
+                "mono-1.0/Cargo.lock": "root lock\n",
+                "mono-1.0/bindings/py/pyproject.toml": (
+                    '[build-system]\nrequires = ["maturin"]\nbuild-backend = "maturin"\n'
+                    '[tool.maturin]\nmanifest-path = "rust/Cargo.toml"\n'
+                ),
+                "mono-1.0/bindings/py/rust/Cargo.lock": "old lock\n",
+            },
+        )
+        patch_file = self.temp_path / "update-lock.patch"
+        patch_file.write_text("--- a/rust/Cargo.lock\n+++ b/rust/Cargo.lock\n@@ -1 +1 @@\n-old lock\n+patched lock\n")
+
+        out_patched = self.temp_path / "out_patched"
+        patched_res = inspect_sdist(
+            sdist,
+            source_dir="bindings/py",
+            pre_build_patches=[patch_file],
+            extract_files_dir=out_patched,
+            extract_file_patterns=("**/pyproject.toml", "**/Cargo.lock"),
+        )
+        self.assertEqual(patched_res["build_backend"], "maturin")
+        self.assertEqual((out_patched / "Cargo.lock").read_text(), "root lock\n")
+        self.assertEqual((out_patched / "bindings" / "py" / "rust" / "Cargo.lock").read_text(), "patched lock\n")
+        self.assertIn(
+            'manifest-path = "rust/Cargo.toml"',
+            (out_patched / "bindings" / "py" / "pyproject.toml").read_text(),
+        )
+
+    def test_sdist_extract_files_rejects_traversal_and_absolute_paths(self):
+        """Archive entries with '..' traversal or leading '/' are never written."""
+        sdist = self.temp_path / "evil-1.0.tar.gz"
+        with tarfile.open(sdist, "w:gz") as tar:
+            for arcname, content in (
+                ("../evil/Cargo.lock", b"traversal"),
+                ("/abs/Cargo.lock", b"absolute"),
+                ("evil-1.0/../../escape/Cargo.lock", b"nested traversal"),
+                ("evil-1.0/Cargo.lock", b"safe lock"),
+            ):
+                info = tarfile.TarInfo(name=arcname)
+                info.size = len(content)
+                tar.addfile(info, io.BytesIO(content))
+
+        extract_root = self.temp_path / "sandbox" / "extracted"
+        inspect_sdist(
+            sdist,
+            extract_files_dir=extract_root,
+            extract_file_patterns=("**/Cargo.lock",),
+        )
+
+        written = sorted(p.relative_to(extract_root).as_posix() for p in extract_root.rglob("*") if p.is_file())
+        self.assertEqual(written, ["Cargo.lock"])
+        self.assertEqual((extract_root / "Cargo.lock").read_text(), "safe lock")
+        self.assertFalse((self.temp_path / "sandbox" / "evil").exists())
+        self.assertFalse((self.temp_path / "evil").exists())
+        self.assertFalse((self.temp_path / "escape").exists())
+        self.assertFalse((extract_root / "abs").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
