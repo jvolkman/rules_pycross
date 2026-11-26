@@ -9,6 +9,9 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl", "render_
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "marker_evaluator_name", "sanitize_name")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private/lock_render:cycles.bzl", "build_cycle_edges_dict")
+
 # buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
     """Verify basic rendering with wheel_candidates (wheel selection via pycross_wheel_chooser)."""
@@ -36,7 +39,7 @@ def _test_render_lock(name):
 
 # buildifier: disable=unused-variable
 def _test_cycle_group_rendering_impl(env, target):
-    """Verify cycle groups generate pycross_cycle_member_marker_deps targets."""
+    """Verify unconditional cycle groups render direct pycross_library_proxy targets."""
     lock = {
         "cycle_groups": {
             "cycle_group_abc123": ["alpha@1.0", "beta@2.0"],
@@ -74,17 +77,22 @@ def _test_cycle_group_rendering_impl(env, target):
     }
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # Should use pycross_cycle_member_marker_deps (not legacy pycross_cycle_member_deps)
-    env.expect.that_bool("pycross_cycle_member_marker_deps(" in res).equals(True)
-    env.expect.that_bool("pycross_cycle_member_deps(" not in res).equals(True)
+    # Pure unconditional cycle emits direct pycross_library_proxy with no evaluator or edges JSON.
+    env.expect.that_bool("cycle_member_marker_deps" in res).equals(False)
+    env.expect.that_bool("pycross_cycle_dep_needed" in res).equals(False)
+    env.expect.that_bool("_EDGES" in res).equals(False)
 
     # Should reference _raw_ targets for both cycle members
     env.expect.that_bool('"_raw_alpha@1.0"' in res).equals(True)
     env.expect.that_bool('"_raw_beta@2.0"' in res).equals(True)
 
-    # Both cycle members should have marker_deps macro calls
-    env.expect.that_bool('member = "alpha@1.0"' in res).equals(True)
-    env.expect.that_bool('member = "beta@2.0"' in res).equals(True)
+    # Both cycle members should have direct pycross_library_proxy wrappers
+    env.expect.that_str(res).contains(
+        'pycross_library_proxy(\n        name = "alpha@1.0",\n        actual = ":_raw_alpha@1.0",\n        deps = [\n            ":_raw_beta@2.0",\n        ],\n    )',
+    )
+    env.expect.that_str(res).contains(
+        'pycross_library_proxy(\n        name = "beta@2.0",\n        actual = ":_raw_beta@2.0",\n        deps = [\n            ":_raw_alpha@1.0",\n        ],\n    )',
+    )
 
     # Cycled package deps should exclude same-cycle members from _deps list
     alpha_deps_section = res.split("_alpha_1_0_deps = [")[1].split("]")[0] if "_alpha_1_0_deps = [" in res else ""
@@ -100,7 +108,7 @@ def _test_cycle_group_rendering(name):
 
 # buildifier: disable=unused-variable
 def _test_cycle_group_marker_specific_rendering_impl(env, target):
-    """Verify cycle groups with marker-gated deps generate correct edges JSON."""
+    """Verify 1-hop marker cycle reuses _marker_eval_*_match and multi-hop emits _EDGES_JSON + evaluator."""
     lock = {
         "cycle_groups": {
             "cycle_group_abc": ["alpha@1.0", "beta@2.0", "appnope@1.0"],
@@ -160,14 +168,56 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
     }
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # Each member should have its own macro call
-    env.expect.that_bool('member = "alpha@1.0"' in res).equals(True)
-    env.expect.that_bool('member = "beta@2.0"' in res).equals(True)
-    env.expect.that_bool('member = "appnope@1.0"' in res).equals(True)
-
-    # The edges JSON should include marker for the conditional edge
-    env.expect.that_bool('"marker":' in res).equals(True)
+    # 1-hop marker cycle reuses _marker_eval_*_match with no _cycle_needed_* or _EDGES_JSON.
+    darwin_match = marker_evaluator_name('sys_platform == "darwin"') + "_match"
+    env.expect.that_bool("_cycle_needed_" in res).equals(False)
+    env.expect.that_bool("_EDGES_JSON" in res).equals(False)
+    env.expect.that_bool("cycle_dep_needed.bzl" in res).equals(False)
     env.expect.that_bool("marker_ast" in res).equals(False)
+    env.expect.that_str(res).contains('name = "alpha@1.0",\n        actual = ":_raw_alpha@1.0",')
+    env.expect.that_str(res).contains('name = "beta@2.0",\n        actual = ":_raw_beta@2.0",')
+    env.expect.that_str(res).contains('name = "appnope@1.0",\n        actual = ":_raw_appnope@1.0",')
+    env.expect.that_str(res).contains('":{}": [":_raw_appnope@1.0"]'.format(darwin_match))
+
+    # Multi-hop conditional cycle (a -> b [darwin] -> c [py<3.13] -> a) emits _EDGES_JSON
+    # and pycross_cycle_dep_needed for the 2-hop edge a -> c.
+    mh_lock = {
+        "cycle_groups": {
+            "cycle_group_mh": ["a@1.0", "b@1.0", "c@1.0"],
+        },
+        "packages": {
+            "a@1.0": {
+                "cycle_group": "cycle_group_mh",
+                "marker_dependencies": [
+                    {
+                        "key": "b@1.0",
+                        "marker": 'sys_platform == "darwin"',
+                        "marker_ast": {"op": "=="},
+                    },
+                ],
+                "wheel_candidates": [{"filename": "a-1.0-py3-none-any.whl", "file_reference": {"key": "alpha_wheel"}}],
+            },
+            "b@1.0": {
+                "cycle_group": "cycle_group_mh",
+                "marker_dependencies": [
+                    {"key": "c@1.0", "marker": "python_version < '3.13'"},
+                ],
+                "wheel_candidates": [{"filename": "b-1.0-py3-none-any.whl", "file_reference": {"key": "beta_wheel"}}],
+            },
+            "c@1.0": {
+                "cycle_group": "cycle_group_mh",
+                "marker_dependencies": [{"key": "a@1.0", "marker": None}],
+                "wheel_candidates": [{"filename": "c-1.0-py3-none-any.whl", "file_reference": {"key": "appnope_wheel"}}],
+            },
+        },
+    }
+    mh_res = render_lock_bzl(mh_lock, repo_map, "my_rctx")
+    env.expect.that_str(mh_res).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
+    env.expect.that_int(mh_res.count("_CYCLE_GROUP_MH_EDGES_JSON = ")).equals(1)
+    env.expect.that_str(mh_res).contains('name = "_cycle_needed_a_1_0_c_1_0",')
+    env.expect.that_str(mh_res).contains("edges = _CYCLE_GROUP_MH_EDGES_JSON,")
+    env.expect.that_str(mh_res).contains('":_cycle_needed_a_1_0_c_1_0_match": [":_raw_c@1.0"]')
+    env.expect.that_bool("marker_ast" in mh_res).equals(False)
 
 def _test_cycle_group_marker_specific_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -828,7 +878,7 @@ def _test_conflict_state_rendering_impl(env, target):
     plain_marker = "sys_platform == 'darwin'"
     lock = {
         "cycle_groups": {
-            "cycle_group_c1": ["cyca@1.0", "cycb@1.0"],
+            "cycle_group_c1": ["cyca@1.0", "cycb@1.0", "cycc@1.0"],
         },
         "packages": {
             "cuda-toolkit@13.0.2": {
@@ -878,12 +928,24 @@ def _test_conflict_state_rendering_impl(env, target):
             "cycb@1.0": {
                 "cycle_group": "cycle_group_c1",
                 "marker_dependencies": [
-                    {"key": "cyca@1.0", "marker": None},
+                    {"key": "cycc@1.0", "marker": plain_marker},
                 ],
                 "wheel_candidates": [
                     {
                         "filename": "cycb-1.0-py3-none-any.whl",
                         "file_reference": {"key": "cb_whl"},
+                    },
+                ],
+            },
+            "cycc@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "marker_dependencies": [
+                    {"key": "cyca@1.0", "marker": None},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "cycc-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "cc_whl"},
                     },
                 ],
             },
@@ -899,6 +961,7 @@ def _test_conflict_state_rendering_impl(env, target):
         "db_whl": "@repo//db:wheel",
         "ca_whl": "@repo//ca:wheel",
         "cb_whl": "@repo//cb:wheel",
+        "cc_whl": "@repo//cc:wheel",
     }
     res_with_variants = render_lock_bzl(
         lock,
@@ -919,9 +982,9 @@ def _test_conflict_state_rendering_impl(env, target):
     # - _marker_eval_* for availability_markers (extra="") (1)
     # - _marker_eval_* for cuda-toolkit[cudart] (extra="cudart") (1)
     # - _res_eval_res_fork_conflict (1)
-    # - the 2 cycle members in cycle_group_c1 (2)
+    # - the multi-hop pycross_cycle_dep_needed evaluator (_cycle_needed_cyca_1_0_cycc_1_0) (1)
     # and NOT on plain_marker, plain_extra_marker, or res_fork_plain!
-    env.expect.that_int(res_with_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(5)
+    env.expect.that_int(res_with_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(4)
 
 def _test_conflict_state_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1201,7 +1264,7 @@ def _test_reset_cycles_impl(env, target):
     env.expect.that_collection(_library(res, "above-pure@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
 
     # Lock-level cycle_groups renders the public cycle wrapper alongside the resettable _raw_ target.
-    env.expect.that_str(res).contains('pycross_cycle_member_marker_deps(\n        name = "pure-a@1.0",\n        raw_name = "_raw_pure-a@1.0",')
+    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "pure-a@1.0",\n        actual = ":_raw_pure-a@1.0",')
 
     env.expect.that_collection(_library(res, "_raw_var-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
     env.expect.that_collection(_library(res, "_raw_var-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
@@ -1398,6 +1461,7 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
     lock = {
         "cycle_groups": {
             "cycle_group_g1": ["cyca@1.0", "cycb@1.0"],
+            "cycle_group_g2": ["mha@1.0", "mhb@1.0", "mhc@1.0"],
         },
         "packages": {
             "cyca@1.0": {
@@ -1411,6 +1475,25 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
                 "cycle_group": "cycle_group_g1",
                 "wheel_candidates": [_whl("cb", "cycb-1.0-py3-none-any.whl")],
                 "marker_dependencies": [{"key": "cyca@1.0"}],
+            },
+            "mha@1.0": {
+                "cycle_group": "cycle_group_g2",
+                "wheel_candidates": [_whl("mha", "mha-1.0-py3-none-any.whl")],
+                "marker_dependencies": [
+                    {"key": "mhb@1.0", "marker": "extra == '__variant_group_app_gpu'"},
+                ],
+            },
+            "mhb@1.0": {
+                "cycle_group": "cycle_group_g2",
+                "wheel_candidates": [_whl("mhb", "mhb-1.0-py3-none-any.whl")],
+                "marker_dependencies": [
+                    {"key": "mhc@1.0", "marker": "sys_platform == 'win32'"},
+                ],
+            },
+            "mhc@1.0": {
+                "cycle_group": "cycle_group_g2",
+                "wheel_candidates": [_whl("mhc", "mhc-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "mha@1.0"}],
             },
             "app@1.0": {
                 "wheel_candidates": [
@@ -1444,6 +1527,9 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
     repo_map = {
         "ca": "@r//ca:whl",
         "cb": "@r//cb:whl",
+        "mha": "@r//mha:whl",
+        "mhb": "@r//mhb:whl",
+        "mhc": "@r//mhc:whl",
         "app_linux": "@r//app:linux",
         "app_any": "@r//app:any",
         "da": "@r//da:whl",
@@ -1488,8 +1574,12 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
             env.expect.that_str(block).contains('variants = [":_resolver_extra_other_x_extra_other_y"]')
             env.expect.that_bool("_resolver_group_app_cpu_group_app_gpu" in block).equals(False)
 
-    # Cycle group referencing only group_app_gpu receives only that resolver.
-    cyc_block = res.split('pycross_cycle_member_marker_deps(\n        name = "cyca@1.0",')[1].split("\n    )")[0]
+    # 1-hop variant cycle (cycle_group_g1) reuses _marker_eval_*_match with no _EDGES_JSON or _cycle_needed_.
+    env.expect.that_bool("_CYCLE_GROUP_G1_EDGES" in res).equals(False)
+    env.expect.that_bool("_cycle_needed_cyca" in res).equals(False)
+
+    # Multi-hop variant cycle (cycle_group_g2) emits pycross_cycle_dep_needed with ONLY group_app_gpu's resolver.
+    cyc_block = res.split('pycross_cycle_dep_needed(\n        name = "_cycle_needed_mha_1_0_mhc_1_0",')[1].split("\n    )")[0]
     env.expect.that_str(cyc_block).contains('variants = [":_resolver_group_app_cpu_group_app_gpu"]')
     env.expect.that_bool("_resolver_extra_other_x_extra_other_y" in cyc_block).equals(False)
 
@@ -1542,7 +1632,7 @@ def _test_extras_in_cycle_impl(env, target):
     env.expect.that_str(res).contains('name = "_raw_alpha[extra]@1.0",')
     env.expect.that_str(res).contains('actual = ":_raw_alpha@1.0",')
     env.expect.that_int(res.count('name = "alpha[extra]@1.0",')).equals(1)
-    env.expect.that_str(res).contains('pycross_cycle_member_marker_deps(\n        name = "alpha[extra]@1.0",')
+    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "alpha[extra]@1.0",\n        actual = ":_raw_alpha[extra]@1.0",')
 
     # Extras proxy inside a cycle whose base is outside the cycle points to the non-_raw_ base.
     gamma_proxy = res.split('pycross_library_proxy(\n        name = "_raw_gamma[cyc]@1.0",')[1].split(")")[0]
@@ -1550,13 +1640,10 @@ def _test_extras_in_cycle_impl(env, target):
 
     # Cycle edges include the implicit alpha[extra]@1.0 -> alpha@1.0 edge, do not
     # duplicate explicit alpha[explicit]@1.0 -> alpha@1.0, and omit out-of-cycle gamma@1.0.
-    edges_section = res.split("_CYCLE_GROUP_C1_EDGES = ")[1].split("\n\n")[0]
-    extra_edges_block = edges_section.split('"alpha[extra]@1.0":')[1].split("],")[0]
-    env.expect.that_str(extra_edges_block).contains('{"dep": "alpha@1.0"}')
-    explicit_edges_block = edges_section.split('"alpha[explicit]@1.0":')[1].split("],")[0]
-    env.expect.that_int(explicit_edges_block.count('{"dep": "alpha@1.0"}')).equals(1)
-    gamma_edges_block = edges_section.split('"gamma[cyc]@1.0":')[1].split("],")[0]
-    env.expect.that_bool("gamma@1.0" in gamma_edges_block).equals(False)
+    edges = build_cycle_edges_dict(lock["cycle_groups"]["cycle_group_c1"], lock["packages"])
+    env.expect.that_bool({"dep": "alpha@1.0"} in edges["alpha[extra]@1.0"]).equals(True)
+    env.expect.that_int(len([e for e in edges["alpha[explicit]@1.0"] if e == {"dep": "alpha@1.0"}])).equals(1)
+    env.expect.that_bool("gamma@1.0" in [e["dep"] for e in edges["gamma[cyc]@1.0"]]).equals(False)
 
 def _test_extras_in_cycle(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

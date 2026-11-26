@@ -15,11 +15,21 @@ bzl_library(
 )
 
 bzl_library(
+    name = "cycle_plan",
+    srcs = ["cycle_plan.bzl"],
+    deps = [
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
     name = "cycles",
     srcs = ["cycles.bzl"],
     deps = [
         ":common",
+        ":cycle_plan",
         ":markers",
+        "//pycross/private:build_text",
         "//pycross/private:lock_contract",
         "//pycross/private:util",
     ],

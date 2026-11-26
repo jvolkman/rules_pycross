@@ -2,7 +2,6 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@rules_pycross//pycross/private:cycle_member_marker_deps.bzl", "pycross_cycle_member_marker_deps")
 load("@rules_pycross//pycross/private:dist_info.bzl", "pycross_dist_info")
 load("@rules_pycross//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 load("@rules_pycross//pycross/private:proxy.bzl", "pycross_library_proxy")
@@ -25,27 +24,20 @@ def targets():
         },
     )
 
-    _CYCLE_GROUP_AB_EDGES = {
-        "cycle-a@1.0.0": [
-            {"dep": "cycle-b@1.0.0"},
-        ],
-        "cycle-b@1.0.0": [
-            {"dep": "cycle-a@1.0.0"},
-        ],
-    }
-
-    pycross_cycle_member_marker_deps(
+    pycross_library_proxy(
         name = "cycle-a@1.0.0",
-        raw_name = "_raw_cycle-a@1.0.0",
-        member = "cycle-a@1.0.0",
-        edges = _CYCLE_GROUP_AB_EDGES,
+        actual = ":_raw_cycle-a@1.0.0",
+        deps = [
+            ":_raw_cycle-b@1.0.0",
+        ],
     )
 
-    pycross_cycle_member_marker_deps(
+    pycross_library_proxy(
         name = "cycle-b@1.0.0",
-        raw_name = "_raw_cycle-b@1.0.0",
-        member = "cycle-b@1.0.0",
-        edges = _CYCLE_GROUP_AB_EDGES,
+        actual = ":_raw_cycle-b@1.0.0",
+        deps = [
+            ":_raw_cycle-a@1.0.0",
+        ],
     )
 
     _cycle_a_1_0_0_deps = [
