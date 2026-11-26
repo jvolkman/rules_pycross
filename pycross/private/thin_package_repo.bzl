@@ -185,7 +185,7 @@ def _thin_package_repo_impl(rctx):
         has_flags,
         testonly_pins_set,
     ))
-    emit_backend_files(rctx, rctx.attr.backend_configs, workspace_repo)
+    emit_backend_files(rctx, rctx.attr.backend_names, workspace_repo)
 
     hook_backends_by_subdir = {}
     for backend_name, subdir in sorted(PACKAGE_REPO_HOOK_SUBDIRS.items()):
@@ -245,8 +245,8 @@ thin_package_repo = repository_rule(
             mandatory = True,
             doc = "User-facing repo name for this member (used in transition rules and diagnostics).",
         ),
-        "backend_configs": attr.string_dict(
-            doc = "Map of rule names to JSON-encoded config dicts.",
+        "backend_names": attr.string_list(
+            doc = "Registered backend rule names to emit `_backend/<name>.bzl` forwarding aliases for.",
         ),
         "flags": attr.string_list(
             doc = "Normalized `--<label>[=<value>]` flags applied by the repo transition.",

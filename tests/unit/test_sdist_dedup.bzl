@@ -16,7 +16,12 @@ load("//pycross/private:lock_contract.bzl", "is_extras_proxy")
 load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "slim_member_lock")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing", "select_hook_extract_patterns_for_testing")
+load(
+    "//pycross/private:sdist_repo.bzl",
+    "compute_sdist_build_config_for_testing",
+    "render_build_content_for_testing",
+    "select_hook_extract_patterns_for_testing",
+)
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "is_wheel_platform_specific")
@@ -29,19 +34,19 @@ load("//pycross/private/thin_repo:availability.bzl", "availability_condition")
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
-def _make_attr(known_packages, thin_repo = "pypi", build_backend = "", extra_build_tools = None, backend_tool_packages = None, override_backend_configs = ""):
+_TEST_BACKEND_TO_RULE = {
+    "setuptools.build_meta": "setuptools_build",
+    "scikit_build_core.build": "cmake_build",
+}
+_TEST_DEFAULT_BACKEND = "pep517_build"
+
+def _make_attr(known_packages, thin_repo = "pypi", build_backend = "", extra_build_tools = None, override_backend_configs = ""):
     return struct(
         sdist = "@pypi_foo//:foo.tar.gz",
         deps = [],
         known_packages = known_packages,
         thin_repo = thin_repo,
         build_backend = build_backend,
-        backend_to_rule = {
-            "setuptools.build_meta": "setuptools_build",
-            "scikit_build_core.build": "cmake_build",
-        },
-        backend_tool_packages = backend_tool_packages or {},
-        default_backend = "pep517_build",
         extra_build_tools = extra_build_tools or [],
         whldir_name = "",
         source_dir = "",
@@ -55,6 +60,9 @@ def _build_deps_from_requires(requires, known_packages, thin_repo):
     cfg = compute_sdist_build_config_for_testing(
         _make_attr(known_packages = known_packages, thin_repo = thin_repo),
         {"build_backend": "flit_core.buildapi", "build_requires": requires},
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = {},
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     return json.decode(cfg.macro_attrs["build_deps"]), json.decode(cfg.macro_attrs["required_build_packages"])
 
@@ -186,6 +194,9 @@ def _test_extra_build_tools_auto_backend_impl(env, target):
             "site_paths": ["foo_pkg"],
             "bin_paths": ["foo_cli"],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = {},
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_str(cfg.backend_macro).equals("setuptools_build")
     env.expect.that_collection(json.decode(cfg.macro_attrs["build_deps"])).contains_exactly([
@@ -218,6 +229,9 @@ def _test_explicit_build_backend_preserves_inspection_impl(env, target):
             "site_paths": ["foo_pkg"],
             "bin_paths": ["foo_cli"],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = {},
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_str(cfg.backend_macro).equals("pep517_build")
     env.expect.that_collection(json.decode(cfg.macro_attrs["build_deps"])).contains_exactly([
@@ -356,9 +370,15 @@ def _test_merge_dependencies_paths(name):
 # buildifier: disable=unused-variable
 def _test_tool_deps_from_thin_repo_impl(env, target):
     """tool_deps uses thin_repo (build_tools_repo or <ws>__build) and filters by known_packages."""
-    backend_tool_packages = {
-        "setuptools_build": ["setuptools", "wheel"],
-        "cmake_build": ["cmake", "ninja", "scikit-build-core"],
+    backend_configs = {
+        "setuptools_build": {
+            "rule_bzl": "@rules_pycross//pycross/backends:setuptools.bzl",
+            "tool_packages": ["setuptools", "wheel"],
+        },
+        "cmake_build": {
+            "rule_bzl": "@rules_pycross//pycross/backends:cmake.bzl",
+            "tool_packages": ["cmake", "ninja", "scikit-build-core"],
+        },
     }
 
     # Default build repo with both setuptools and wheel in known_packages.
@@ -366,12 +386,14 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
         _make_attr(
             known_packages = ["setuptools", "wheel"],
             thin_repo = "uv__build",
-            backend_tool_packages = backend_tool_packages,
         ),
         {
             "build_backend": "setuptools.build_meta",
             "build_requires": ["setuptools>=61"],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = backend_configs,
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_collection(json.decode(cfg_default.macro_attrs["tool_deps"])).contains_exactly([
         "@uv__build//setuptools:pkg",
@@ -383,12 +405,14 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
         _make_attr(
             known_packages = ["cmake", "scikit-build-core"],
             thin_repo = "custom_build_tools__build",
-            backend_tool_packages = backend_tool_packages,
         ),
         {
             "build_backend": "scikit_build_core.build",
             "build_requires": ["scikit-build-core"],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = backend_configs,
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_collection(json.decode(cfg_custom.macro_attrs["tool_deps"])).contains_exactly([
         "@custom_build_tools__build//cmake:pkg",
@@ -396,17 +420,19 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
     ])
 
     # Custom build_tools_repo with none of the backend's tool_packages emits an explicit empty list
-    # so the _backend macro does not fall back to @<ws>__build.
+    # so the backend rule does not receive unexpected defaults.
     cfg_empty = compute_sdist_build_config_for_testing(
         _make_attr(
             known_packages = [],
             thin_repo = "custom_build_tools__build",
-            backend_tool_packages = backend_tool_packages,
         ),
         {
             "build_backend": "setuptools.build_meta",
             "build_requires": [],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = backend_configs,
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_collection(json.decode(cfg_empty.macro_attrs["tool_deps"])).contains_exactly([])
 
@@ -416,7 +442,6 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
         _make_attr(
             known_packages = ["setuptools", "wheel"],
             thin_repo = "uv__build",
-            backend_tool_packages = backend_tool_packages,
             override_backend_configs = json.encode({
                 "setuptools_build": {
                     "tool_deps": json.encode({"SetupTools": "@@custom//setuptools:pkg"}),
@@ -427,6 +452,9 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
             "build_backend": "setuptools.build_meta",
             "build_requires": [],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = backend_configs,
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_collection(json.decode(cfg_override.macro_attrs["tool_deps"])).contains_exactly([
         "@@custom//setuptools:pkg",
@@ -438,7 +466,6 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
         _make_attr(
             known_packages = ["cmake"],
             thin_repo = "uv__build",
-            backend_tool_packages = backend_tool_packages,
             override_backend_configs = json.encode({
                 "cmake_build": {
                     "tool_deps": json.encode({
@@ -452,6 +479,9 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
             "build_backend": "scikit_build_core.build",
             "build_requires": [],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = backend_configs,
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_collection(json.decode(cfg_add.macro_attrs["tool_deps"])).contains_exactly([
         "@@other//ninja:pkg",
@@ -469,7 +499,6 @@ def _unknown_tool_dep_subject_impl(ctx):  # @unused
     compute_sdist_build_config_for_testing(
         _make_attr(
             known_packages = ["setuptools", "wheel"],
-            backend_tool_packages = {"setuptools_build": ["setuptools", "wheel"]},
             override_backend_configs = json.encode({
                 "setuptools_build": {
                     "tool_deps": json.encode({"pg_config": "@@//:pg_config"}),
@@ -477,6 +506,14 @@ def _unknown_tool_dep_subject_impl(ctx):  # @unused
             }),
         ),
         {"build_backend": "setuptools.build_meta", "build_requires": []},
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = {
+            "setuptools_build": {
+                "rule_bzl": "@rules_pycross//pycross/backends:setuptools.bzl",
+                "tool_packages": ["setuptools", "wheel"],
+            },
+        },
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     return []
 
@@ -504,6 +541,7 @@ def _test_build_requires_and_backend_resolution_impl(env, target):
 
     # 1. Versioned non-marker requires are forwarded; specifierless, marker-gated,
     #    and oldest-supported-numpy (calendar-versioned) entries are omitted.
+    #    Also exercises the default @pycross_backends//:registry.bzl lookup.
     cfg_reqs = compute_sdist_build_config_for_testing(
         _make_attr(known_packages = ["setuptools", "wheel", "tomli", "numpy"]),
         {
@@ -516,8 +554,13 @@ def _test_build_requires_and_backend_resolution_impl(env, target):
             ],
         },
     )
+    env.expect.that_str(cfg_reqs.backend_macro).equals("setuptools_build")
     env.expect.that_collection(json.decode(cfg_reqs.macro_attrs["build_requires"])).contains_exactly([
         "setuptools>=40.8.0",
+    ])
+    env.expect.that_collection(json.decode(cfg_reqs.macro_attrs["tool_deps"])).contains_exactly([
+        "@pypi//setuptools:pkg",
+        "@pypi//wheel:pkg",
     ])
 
     # 2. When no build_requires carry a version specifier, build_requires attr is omitted.
@@ -527,16 +570,18 @@ def _test_build_requires_and_backend_resolution_impl(env, target):
             "build_backend": "setuptools.build_meta",
             "build_requires": ["setuptools", "wheel"],
         },
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = {},
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_bool("build_requires" in cfg_no_spec.macro_attrs).equals(False)
 
-    # 3. Explicit-only registered backend (present only in backend_tool_packages, not backend_to_rule),
+    # 3. Explicit-only registered backend (present only in backend_configs, not backend_to_rule),
     #    bracketed requires canonicalization, and repr() escaping on string override attrs.
     cfg_explicit = compute_sdist_build_config_for_testing(
         _make_attr(
             known_packages = ["setuptools"],
             build_backend = "custom_explicit_build",
-            backend_tool_packages = {"custom_explicit_build": []},
             override_backend_configs = json.encode({
                 "custom_explicit_build": {
                     "custom_flag": json.encode('-DFOO="bar"'),
@@ -544,6 +589,14 @@ def _test_build_requires_and_backend_resolution_impl(env, target):
             }),
         ),
         {"build_backend": "setuptools.build_meta", "build_requires": ["setuptools"]},
+        backend_to_rule = _TEST_BACKEND_TO_RULE,
+        backend_configs = {
+            "custom_explicit_build": {
+                "rule_bzl": "//:custom.bzl",
+                "tool_packages": [],
+            },
+        },
+        default_backend = _TEST_DEFAULT_BACKEND,
     )
     env.expect.that_str(cfg_explicit.backend_macro).equals("custom_explicit_build")
     env.expect.that_str(cfg_explicit.macro_attrs["custom_flag"]).equals(repr('-DFOO="bar"'))
@@ -555,12 +608,6 @@ def _test_build_requires_and_backend_resolution_impl(env, target):
             known_packages = ["setuptools", "setuptools-rust"],
             thin_repo = "pypi",
             build_backend = "",
-            backend_to_rule = {
-                "setuptools.build_meta": "setuptools_build",
-                "setuptools.build_meta[setuptools_rust]": "setuptools_rust_build",
-            },
-            backend_tool_packages = {},
-            default_backend = "pep517_build",
             extra_build_tools = [],
             override_backend_configs = "",
             pre_build_patches = [],
@@ -569,6 +616,12 @@ def _test_build_requires_and_backend_resolution_impl(env, target):
             source_dir = "",
         ),
         {"build_backend": "setuptools.build_meta", "build_requires": ["setuptools", "setuptools-rust>=1.0"]},
+        backend_to_rule = {
+            "setuptools.build_meta": "setuptools_build",
+            "setuptools.build_meta[setuptools_rust]": "setuptools_rust_build",
+        },
+        backend_configs = {},
+        default_backend = "pep517_build",
     )
     env.expect.that_str(cfg_bracket.backend_macro).equals("setuptools_rust_build")
 
@@ -604,32 +657,74 @@ def _test_select_hook_extract_patterns_impl(env, target):
 
     # Explicit non-hook backend extracts nothing.
     env.expect.that_collection(
-        select_hook_extract_patterns_for_testing(_make_attr([], build_backend = "setuptools_build"), hook_files),
+        select_hook_extract_patterns_for_testing(
+            _make_attr([], build_backend = "setuptools_build"),
+            hook_files,
+            backend_to_rule = _TEST_BACKEND_TO_RULE,
+            default_backend = _TEST_DEFAULT_BACKEND,
+        ),
     ).contains_exactly([])
 
     # Explicit hook backend extracts only its patterns.
     env.expect.that_collection(
-        select_hook_extract_patterns_for_testing(_make_attr([], build_backend = "maturin_build"), hook_files),
+        select_hook_extract_patterns_for_testing(
+            _make_attr([], build_backend = "maturin_build"),
+            hook_files,
+            backend_to_rule = _TEST_BACKEND_TO_RULE,
+            default_backend = _TEST_DEFAULT_BACKEND,
+        ),
     ).contains_exactly(["**/Cargo.lock", "pyproject.toml"]).in_order()
 
     # Auto-detect with no hook backend in backend_to_rule extracts nothing.
     env.expect.that_collection(
-        select_hook_extract_patterns_for_testing(_make_attr([]), hook_files),
+        select_hook_extract_patterns_for_testing(
+            _make_attr([]),
+            hook_files,
+            backend_to_rule = _TEST_BACKEND_TO_RULE,
+            default_backend = _TEST_DEFAULT_BACKEND,
+        ),
     ).contains_exactly([])
 
     # Auto-detect with a registered hook backend deduplicates and sorts patterns.
-    attr_with_maturin = struct(
-        build_backend = "",
-        backend_to_rule = {"maturin": "maturin_build", "setuptools.build_meta": "setuptools_build"},
-        default_backend = "pep517_build",
-    )
     env.expect.that_collection(
-        select_hook_extract_patterns_for_testing(attr_with_maturin, hook_files),
+        select_hook_extract_patterns_for_testing(
+            struct(build_backend = ""),
+            hook_files,
+            backend_to_rule = {"maturin": "maturin_build", "setuptools.build_meta": "setuptools_build"},
+            default_backend = "pep517_build",
+        ),
     ).contains_exactly(["**/Cargo.lock", "pyproject.toml"]).in_order()
 
 def _test_select_hook_extract_patterns(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_select_hook_extract_patterns_impl)
+
+# ── Test: render_build_content emits direct rule_bzl load ───────────
+
+# buildifier: disable=unused-variable
+def _test_render_build_content_direct_load_impl(env, target):
+    """_render_build_content loads the backend rule directly from rule_bzl, not @<lock_repo>//_backend."""
+    rendered = render_build_content_for_testing(
+        macro_attrs = {
+            "name": repr("wheel_build"),
+            "sdist": repr("@pypi_foo//:foo.tar.gz"),
+            "deps": "[]",
+            "tool_deps": '["@uv__build//setuptools:pkg"]',
+        },
+        backend_macro = "setuptools_build",
+        rule_bzl = "@rules_pycross//pycross/backends:setuptools.bzl",
+        site_paths = ["foo"],
+        bin_paths = [],
+    )
+    env.expect.that_bool(
+        'load("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools_build")' in rendered,
+    ).equals(True)
+    env.expect.that_bool("//_backend:" in rendered).equals(False)
+    env.expect.that_bool("setuptools_build(" in rendered).equals(True)
+
+def _test_render_build_content_direct_load(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_render_build_content_direct_load_impl)
 
 # ── Test suite ──────────────────────────────────────────────────────
 
@@ -651,5 +746,6 @@ def sdist_dedup_test_suite(name):
             _test_build_requires_and_backend_resolution,
             _test_marker_gated_requires,
             _test_select_hook_extract_patterns,
+            _test_render_build_content_direct_load,
         ],
     )

@@ -83,21 +83,21 @@ def requirements_bzl(rctx, pins, packages, testonly_pins = {}):
     lines.append("]")
     return "\n".join(lines) + "\n"
 
-def emit_backend_files(rctx, backend_configs, workspace_repo):
+def emit_backend_files(rctx, backend_names, workspace_repo):
     """Generate `_backend/BUILD.bazel` and forwarding macro `.bzl` files.
 
     Args:
         rctx: Repository context.
-        backend_configs: Map of backend macro name -> JSON-encoded config dict.
+        backend_names: List of registered backend rule names.
         workspace_repo: Name of the workspace (backing) repo.
     """
-    if not backend_configs:
+    if not backend_names:
         return
     rctx.file(
         "_backend/BUILD.bazel",
         "exports_files(glob(['*.bzl']))\n",
     )
-    for macro_name in backend_configs.keys():
+    for macro_name in sorted(backend_names):
         lines = [
             '"""Backend macro alias for this thin repo."""',
             "",
