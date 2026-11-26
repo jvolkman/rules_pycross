@@ -147,6 +147,9 @@ def _test_extra_build_tools_override_impl(env, target):
     }
 
     annotations_data = {
+        "*": {
+            "extra_build_tools": ["baz@1.0"],
+        },
         "foo": {
             "extra_build_tools": ["bar@1.0"],
         },
@@ -155,11 +158,31 @@ def _test_extra_build_tools_override_impl(env, target):
     res = resolve(
         lock_model_data,
         annotations_data = annotations_data,
-        default_extra_build_tools_args = ["baz@1.0"],  # This should be ignored for foo
     )
 
     foo_pkg = res.packages["foo@1.0"]
     env.expect.that_collection(foo_pkg["extra_build_tools"]).contains_exactly(["bar@1.0"])
+    env.expect.that_collection(res.packages["bar@1.0"]["extra_build_tools"]).contains_exactly(["baz@1.0"])
+
+    # ignore_dependencies applies to declared runtime deps and does not drop inherited wildcard extra_build_tools.
+    lock_with_runtime_dep = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")], deps = [_make_dep("bar", "1.0")]),
+            "bar@1.0": _make_pkg("bar", "1.0", [_make_file("bar-1.0.tar.gz")]),
+            "baz@1.0": _make_pkg("baz", "1.0", [_make_file("baz-1.0.tar.gz")]),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+    res_ignored = resolve(
+        lock_with_runtime_dep,
+        annotations_data = {
+            "*": {"extra_build_tools": ["baz@1.0"]},
+            "foo": {"ignore_dependencies": ["bar", "baz"]},
+        },
+    )
+    env.expect.that_collection(res_ignored.packages["foo@1.0"]["marker_dependencies"]).contains_exactly([])
+    env.expect.that_collection(res_ignored.packages["foo@1.0"]["extra_build_tools"]).contains_exactly(["baz@1.0"])
+    env.expect.that_collection(res_ignored.packages["bar@1.0"]["extra_build_tools"]).contains_exactly(["baz@1.0"])
 
 # buildifier: disable=unused-variable
 def _test_ungated_fallback_impl(env, target):
@@ -1375,7 +1398,7 @@ def _test_extra_build_tools_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, default_extra_build_tools_args = ["setuptools@60.0"])
+    res = resolve(lock_model_data, annotations_data = {"*": {"extra_build_tools": ["setuptools@60.0"]}})
     pkg = res.packages["foo@1.0"]
 
     env.expect.that_collection(pkg["extra_build_tools"]).has_size(1)
@@ -1402,7 +1425,7 @@ def _test_build_deps_not_duplicated_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, default_extra_build_tools_args = ["setuptools@60.0"])
+    res = resolve(lock_model_data, annotations_data = {"*": {"extra_build_tools": ["setuptools@60.0"]}})
     pkg = res.packages["foo@1.0"]
 
     env.expect.that_collection(pkg["extra_build_tools"]).has_size(0)
@@ -2262,7 +2285,7 @@ def _test_lock_resolver_edge_cases_impl(env, target):
         "A": {"ignore_dependencies": ["B@1.0"]},
         "D": {"extra_dependencies": ["C"]},
     }
-    res = resolve(lock_model_data, annotations_data = annotations_data, default_extra_build_tools_args = ["TOOL"])
+    res = resolve(lock_model_data, annotations_data = annotations_data)
 
     # a@1.0 ignored b@1.0 (keeping b@2.0), so (a@1.0, b@1.0) is NO LONGER a cycle!
     a_deps = [md["key"] for md in res.packages["a@1.0"]["marker_dependencies"]]

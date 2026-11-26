@@ -45,18 +45,19 @@ def _normalize_override_name(pkg_name, backend_name, workspace_name):
         ))
     return norm
 
-def _validate_override_packages(override_configs, all_resolved_locks, workspace_memberships):
+def _validate_override_packages(override_configs, workspaces, resolved_locks):
     """Fail on backend overrides that name a package (or version) not present in their workspace.
 
     Workspaces that are not known here are skipped: they may belong to a different
     lock extension (e.g. a pdm workspace when running the uv extension).
     """
     workspace_versions = {}  # workspace_name -> {normalized package name -> {version -> True}}
-    for repo_name, rlock in all_resolved_locks.items():
-        names = workspace_versions.setdefault(workspace_memberships.get(repo_name, repo_name), {})
-        for key in rlock.get("packages", {}):
-            parts = parse_package_key(key)
-            names.setdefault(pypackaging.utils.canonicalize_name(parts.name), {})[parts.version] = True
+    for ws_name, ws in workspaces.items():
+        names = workspace_versions.setdefault(ws_name, {})
+        for repo in ws.repos:
+            for key in resolved_locks[repo.name].get("packages", {}):
+                parts = parse_package_key(key)
+                names.setdefault(pypackaging.utils.canonicalize_name(parts.name), {})[parts.version] = True
 
     for workspace_name, packages in override_configs.items():
         known_names = workspace_versions.get(workspace_name)
@@ -268,51 +269,35 @@ def _extra_build_tool_names(extra_build_tools):
         for key in extra_build_tools
     }.keys())
 
-def _compute_workspace_pkg_has_deps(all_resolved_locks, workspace_memberships):
+def _compute_workspace_pkg_has_deps(workspaces, resolved_locks):
     """Return {(workspace_name, pkg_key): True} for packages with marker_dependencies in any member."""
     has_deps = {}
-    for repo_name, rlock in all_resolved_locks.items():
-        ws_name = workspace_memberships.get(repo_name, repo_name)
-        for pkg_key, pkg in rlock.get("packages", {}).items():
-            if pkg.get("marker_dependencies"):
-                has_deps[(ws_name, pkg_key)] = True
+    for ws_name, ws in workspaces.items():
+        for repo in ws.repos:
+            for pkg_key, pkg in resolved_locks[repo.name].get("packages", {}).items():
+                if pkg.get("marker_dependencies"):
+                    has_deps[(ws_name, pkg_key)] = True
     return has_deps
 
 def create_repos(
         module_ctx,
+        workspaces,
         all_locks,
-        workspace_memberships,
-        repo_flags,
-        repo_constraint_values,
-        repo_platforms,
-        workspace_pypi_indexes = {},
-        repo_settings = {},
-        resolved_locks = None,
-        resolved_locks_json = None,
-        auto_build_repos = None):
+        resolved_locks,
+        resolved_locks_json):
     """Create all Bazel repos from resolved lock data.
 
     Args:
         module_ctx: The module_ctx or similar context object (needs .path(), .read()).
+        workspaces: Dict of workspace_name -> `struct(name, pypi_indexes, repos)` from `process_workspaces()`.
         all_locks: Dict of repo_name -> lock file Label (pointing to lock.json).
-        workspace_memberships: Dict of repo_name -> workspace_name.
-        repo_flags: Dict of repo_name -> flags string list.
-        repo_settings: Dict of repo_name -> {setting label: value} dict.
-        repo_constraint_values: Dict of repo_name -> constraint_values string list.
-        repo_platforms: Dict of repo_name -> platform string.
-        workspace_pypi_indexes: Dict of workspace_name -> list of string index URLs.
-        resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
-            lock data is taken from this dict instead of reading from all_locks file labels.
-            all_locks is still used for passing labels to package_repo/thin_package_repo.
-        resolved_locks_json: Optional dict of repo_name -> pre-encoded JSON string for
+        resolved_locks: Dict of repo_name -> resolved lock dict.
+        resolved_locks_json: Dict of repo_name -> pre-encoded JSON string for
             package_repo.member_lock_data, avoiding duplicate json.encode() calls.
-        auto_build_repos: Optional list of auto-generated `<ws>__build` repo names whose
-            `_variants` flags should not be wired into workspace resolvers or emitted.
 
     Returns:
         None. Creates repos as a side effect.
     """
-    auto_build_set = {r: True for r in (auto_build_repos or [])}
     all_remote_files = {}
 
     # Build per-workspace, per-package override configs from registered override files.
@@ -333,185 +318,163 @@ def create_repos(
         for name, config in BACKEND_CONFIGS.items()
     }
 
-    all_resolved_locks = {
-        repo_name: resolved_locks[repo_name]
-        for repo_name in all_locks.keys()
-    }
-
     known_packages_by_repo = {
-        repo_name: _known_packages_from_lock(rlock)
-        for repo_name, rlock in all_resolved_locks.items()
+        repo.name: _known_packages_from_lock(resolved_locks[repo.name])
+        for ws in workspaces.values()
+        for repo in ws.repos
     }
 
-    _validate_override_packages(override_configs, all_resolved_locks, workspace_memberships)
+    _validate_override_packages(override_configs, workspaces, resolved_locks)
 
     # Precompute which (workspace_name, pkg_key) pairs have runtime marker_dependencies
     # in any member of the workspace, matching package_repo._merge_dependencies so
     # sdist repos created from an earlier member still receive merged deps.
-    workspace_pkg_has_deps = _compute_workspace_pkg_has_deps(all_resolved_locks, workspace_memberships)
+    workspace_pkg_has_deps = _compute_workspace_pkg_has_deps(workspaces, resolved_locks)
 
-    # Generate the lock repos and any remote package repos
-    per_repo_data = {}  # repo_name -> struct(repo_map, lock_file, resolved_lock)
-    created_sdist_repos = {}  # sdist_repo_name -> True, for workspace-level dedup
-    for repo_name, lock_file in all_locks.items():
-        resolved_lock = all_resolved_locks[repo_name]
-
-        repo_remote_files = {}
-        workspace_name = workspace_memberships.get(repo_name, repo_name)
-        indexes = workspace_pypi_indexes.get(workspace_name, [])
-
-        for key, file in resolved_lock.get("remote_files", {}).items():
-            dedup_key, remote_file_repo = _remote_file_dedup_key_and_repo_name(key, file, indexes)
-            if dedup_key not in all_remote_files:
-                all_remote_files[dedup_key] = _create_remote_file_repo(remote_file_repo, file, indexes)
-            repo_remote_files[key] = all_remote_files[dedup_key]
-
-        # Pre-calculate known packages in this lock file to filter sdist build_requires
-        known_packages = known_packages_by_repo[repo_name]
-
-        lock_repo_for_deps = pkgs_repo_name(workspace_name)
-
-        # Instantiate sdist repos for packages requiring source builds.
-        for pkg_key, pkg in resolved_lock.get("packages", {}).items():
-            if pkg.get("build_target") or sdist_builds_disallowed(pkg):
-                continue
-
-            sdist_file = pkg.get("sdist_file")
-            if not sdist_file:
-                continue
-
-            sdist_file_key = sdist_file["key"]
-            sdist_label = repo_remote_files[sdist_file_key]
-
-            pkg_sdist_repo = sdist_repo_name(lock_repo_for_deps, pkg_key)
-
-            if pkg_sdist_repo in created_sdist_repos:
-                continue
-            created_sdist_repos[pkg_sdist_repo] = True
-
-            sdist_deps = (
-                [lock_sdist_deps_label(lock_repo_for_deps, pkg_key)] if (workspace_name, pkg_key) in workspace_pkg_has_deps else []
-            )
-
-            parts = parse_package_key(pkg_key)
-            pkg_version = parts.version
-
-            if pkg.get("build_tools_repo") and pkg["build_tools_repo"] not in known_packages_by_repo:
-                fail("Package '{}' sets build_tools_repo = '{}', which is not a repo created by this extension. Known repos: {}".format(
-                    pkg_key,
-                    pkg["build_tools_repo"],
-                    ", ".join(sorted(known_packages_by_repo.keys())),
-                ))
-            thin_repo = pkg.get("build_tools_repo") or build_repo_name(workspace_name)
-            sdist_repo_attrs = {
-                "name": pkg_sdist_repo,
-                "sdist": sdist_label,
-                "deps": sdist_deps,
-                "known_packages": known_packages_by_repo.get(thin_repo, known_packages),
-                "lock_repo": lock_repo_for_deps,
-                "thin_repo": thin_repo,
-                "backend_to_rule": BACKEND_TO_RULE,
-                "backend_tool_packages": backend_tool_packages,
-                "default_backend": DEFAULT_BACKEND,
-                "whldir_name": whldir_name(pkg_key),
-            }
-            remote_file = resolved_lock.get("remote_files", {}).get(sdist_file_key, {})
-            sdist_urls = remote_file.get("urls", [])
-            if remote_file.get("sha256") and not (sdist_urls and sdist_urls[0].startswith("git+")):
-                sdist_repo_attrs["sdist_sha256"] = remote_file["sha256"]
-            if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
-                sdist_repo_attrs["extra_build_tools"] = _extra_build_tool_names(pkg["extra_build_tools"])
-
-            if pkg.get("source_dir"):
-                sdist_repo_attrs["source_dir"] = pkg["source_dir"]
-
-            for attr_name in ("build_backend", "pre_build_patches", "site_hooks"):
-                if attr_name in pkg and pkg[attr_name] != None:
-                    sdist_repo_attrs[attr_name] = pkg[attr_name]
-
-            pkg_name = pypackaging.utils.canonicalize_name(parts.name)
-            if workspace_name in override_configs:
-                pkg_overrides = merge_backend_overrides(override_configs[workspace_name], pkg_name, pkg_version)
-                if pkg_overrides:
-                    sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
-
-            pycross_sdist_repo(**sdist_repo_attrs)
-
-        # Save per-repo data for workspace processing
-        per_repo_data[repo_name] = struct(
-            repo_map = repo_remote_files,
-            lock_file = lock_file,
-            resolved_lock = resolved_lock,
-        )
-
-    # Create workspace package repos and thin repos for all members.
-    workspace_groups = {}  # workspace_name -> [repo_name, ...]
-    for repo_name, uname in workspace_memberships.items():
-        workspace_groups.setdefault(uname, []).append(repo_name)
-
-    for workspace_name, member_repos in workspace_groups.items():
+    for workspace_name, ws in workspaces.items():
         workspace_repo_name = pkgs_repo_name(workspace_name)
-
-        # Merge repo_maps from all members
+        indexes = ws.pypi_indexes
+        created_sdist_repos = {}  # sdist_repo_name -> True, for workspace-level dedup
         merged_repo_map = {}
-        for member in member_repos:
-            merged_repo_map.update(per_repo_data[member].repo_map)
+
+        for repo in ws.repos:
+            repo_name = repo.name
+            resolved_lock = resolved_locks[repo_name]
+
+            repo_remote_files = {}
+            for key, file in resolved_lock.get("remote_files", {}).items():
+                dedup_key, remote_file_repo = _remote_file_dedup_key_and_repo_name(key, file, indexes)
+                if dedup_key not in all_remote_files:
+                    all_remote_files[dedup_key] = _create_remote_file_repo(remote_file_repo, file, indexes)
+                repo_remote_files[key] = all_remote_files[dedup_key]
+            merged_repo_map.update(repo_remote_files)
+
+            # Pre-calculate known packages in this lock file to filter sdist build_requires.
+            known_packages = known_packages_by_repo[repo_name]
+
+            # Instantiate sdist repos for packages requiring source builds.
+            for pkg_key, pkg in resolved_lock.get("packages", {}).items():
+                if pkg.get("build_target") or sdist_builds_disallowed(pkg):
+                    continue
+
+                sdist_file = pkg.get("sdist_file")
+                if not sdist_file:
+                    continue
+
+                sdist_file_key = sdist_file["key"]
+                sdist_label = repo_remote_files[sdist_file_key]
+
+                pkg_sdist_repo = sdist_repo_name(workspace_repo_name, pkg_key)
+
+                if pkg_sdist_repo in created_sdist_repos:
+                    continue
+                created_sdist_repos[pkg_sdist_repo] = True
+
+                sdist_deps = (
+                    [lock_sdist_deps_label(workspace_repo_name, pkg_key)] if (workspace_name, pkg_key) in workspace_pkg_has_deps else []
+                )
+
+                parts = parse_package_key(pkg_key)
+                pkg_version = parts.version
+
+                if pkg.get("build_tools_repo") and pkg["build_tools_repo"] not in known_packages_by_repo:
+                    fail("Package '{}' sets build_tools_repo = '{}', which is not a repo created by this extension. Known repos: {}".format(
+                        pkg_key,
+                        pkg["build_tools_repo"],
+                        ", ".join(sorted(known_packages_by_repo.keys())),
+                    ))
+                thin_repo = pkg.get("build_tools_repo") or build_repo_name(workspace_name)
+                sdist_repo_attrs = {
+                    "name": pkg_sdist_repo,
+                    "sdist": sdist_label,
+                    "deps": sdist_deps,
+                    "known_packages": known_packages_by_repo.get(thin_repo, known_packages),
+                    "lock_repo": workspace_repo_name,
+                    "thin_repo": thin_repo,
+                    "backend_to_rule": BACKEND_TO_RULE,
+                    "backend_tool_packages": backend_tool_packages,
+                    "default_backend": DEFAULT_BACKEND,
+                    "whldir_name": whldir_name(pkg_key),
+                }
+                remote_file = resolved_lock.get("remote_files", {}).get(sdist_file_key, {})
+                sdist_urls = remote_file.get("urls", [])
+                if remote_file.get("sha256") and not (sdist_urls and sdist_urls[0].startswith("git+")):
+                    sdist_repo_attrs["sdist_sha256"] = remote_file["sha256"]
+                if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
+                    sdist_repo_attrs["extra_build_tools"] = _extra_build_tool_names(pkg["extra_build_tools"])
+
+                if pkg.get("source_dir"):
+                    sdist_repo_attrs["source_dir"] = pkg["source_dir"]
+
+                for attr_name in ("build_backend", "pre_build_patches", "site_hooks"):
+                    if attr_name in pkg and pkg[attr_name] != None:
+                        sdist_repo_attrs[attr_name] = pkg[attr_name]
+
+                pkg_name = pypackaging.utils.canonicalize_name(parts.name)
+                if workspace_name in override_configs:
+                    pkg_overrides = merge_backend_overrides(override_configs[workspace_name], pkg_name, pkg_version)
+                    if pkg_overrides:
+                        sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
+
+                pycross_sdist_repo(**sdist_repo_attrs)
 
         member_lock_files = {
-            member: str(per_repo_data[member].lock_file)
-            for member in member_repos
+            repo.name: str(all_locks[repo.name])
+            for repo in ws.repos
         }
 
         # Compute per-package override configs for package and thin repo hooks.
         ws_overrides = override_configs.get(workspace_name)
         ws_overrides_json = json.encode(ws_overrides) if ws_overrides else None
 
-        skip_variant_members = [m for m in member_repos if m in auto_build_set]
+        skip_variant_members = [repo.name for repo in ws.repos if repo.is_auto_build_repo]
         package_repo_attrs = dict(
             name = workspace_repo_name,
             build_repo = build_repo_name(workspace_name),
             repo_map = merged_repo_map,
             backend_configs = backend_configs_json,
             member_lock_files = member_lock_files,
+            member_lock_data = {
+                repo.name: resolved_locks_json[repo.name]
+                for repo in ws.repos
+            },
         )
         if skip_variant_members:
             package_repo_attrs["skip_variant_members"] = skip_variant_members
         if ws_overrides_json:
             package_repo_attrs["override_configs"] = ws_overrides_json
-        package_repo_attrs["member_lock_data"] = {
-            member: resolved_locks_json[member]
-            for member in member_repos
-        }
         package_repo(**package_repo_attrs)
 
         # Create thin repos for each workspace member.
-        for member in member_repos:
+        ws_resolved_locks = {repo.name: resolved_locks[repo.name] for repo in ws.repos}
+        for repo in ws.repos:
+            transition = repo.transition
             thin_repo_attrs = dict(
-                name = member,
-                resolved_lock_file = per_repo_data[member].lock_file,
+                name = repo.name,
+                resolved_lock_file = all_locks[repo.name],
                 workspace_repo = workspace_repo_name,
-                member_name = member,
+                member_name = repo.name,
                 backend_configs = backend_configs_json,
             )
-            if member in auto_build_set:
+            if repo.is_auto_build_repo:
                 thin_repo_attrs["expose_variant_flags"] = False
 
-            if member in repo_flags:
-                thin_repo_attrs["flags"] = repo_flags[member]
-            if member in repo_settings:
-                thin_repo_attrs["settings"] = repo_settings[member]
+            if transition.flags:
+                thin_repo_attrs["flags"] = transition.flags
+            if transition.settings:
+                thin_repo_attrs["settings"] = transition.settings
             pins = _compute_variant_pins(
-                member,
-                thin_repo_attrs.get("flags", []),
-                thin_repo_attrs.get("settings", {}),
-                {m: per_repo_data[m].resolved_lock for m in member_repos},
+                repo.name,
+                transition.flags,
+                transition.settings,
+                ws_resolved_locks,
             )
             if pins:
                 thin_repo_attrs["variant_pins"] = pins
-            if member in repo_constraint_values:
-                thin_repo_attrs["constraint_values"] = repo_constraint_values[member]
-            if member in repo_platforms:
-                thin_repo_attrs["platform"] = repo_platforms[member]
+            if transition.constraint_values:
+                thin_repo_attrs["constraint_values"] = transition.constraint_values
+            if transition.platform:
+                thin_repo_attrs["platform"] = transition.platform
 
             if ws_overrides_json:
                 thin_repo_attrs["override_configs"] = ws_overrides_json

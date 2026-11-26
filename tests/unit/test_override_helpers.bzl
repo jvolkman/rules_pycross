@@ -279,7 +279,9 @@ _RESOLVED_LOCKS = {
     "pypi": {"packages": {"python-dateutil@2.9.0": {}, "six@1.16.0": {}, "six@1.17.0": {}, "requests[socks]@2.32.0": {}}},
     "pypi__build": {"packages": {"setuptools@70.0.0": {}}},
 }
-_MEMBERSHIPS = {"pypi": "pypi", "pypi__build": "pypi"}
+_WORKSPACES = {
+    "pypi": struct(repos = [struct(name = "pypi"), struct(name = "pypi__build")]),
+}
 
 # buildifier: disable=unused-variable
 def _test_validate_override_packages_ok_impl(env, target):
@@ -298,8 +300,8 @@ def _test_validate_override_packages_ok_impl(env, target):
             # May belong to a different lock extension.
             "pdm_workspace": {"anything": {"meson_build": {}}},
         },
+        _WORKSPACES,
         _RESOLVED_LOCKS,
-        _MEMBERSHIPS,
     )
 
 def _test_validate_override_packages_ok(name):
@@ -309,8 +311,8 @@ def _test_validate_override_packages_ok(name):
 def _unknown_override_package_subject_impl(ctx):  # @unused
     validate_override_packages_for_testing(
         {"pypi": {"no-such-package": {"setuptools_build": {}}}},
+        _WORKSPACES,
         _RESOLVED_LOCKS,
-        _MEMBERSHIPS,
     )
     return []
 
@@ -333,8 +335,8 @@ def _test_validate_override_packages_unknown(name):
 def _unknown_override_version_subject_impl(ctx):  # @unused
     validate_override_packages_for_testing(
         {"pypi": {"six@9.9.9": {"setuptools_build": {}}}},
+        _WORKSPACES,
         _RESOLVED_LOCKS,
-        _MEMBERSHIPS,
     )
     return []
 
