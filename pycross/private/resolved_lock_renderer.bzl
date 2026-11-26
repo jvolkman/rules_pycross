@@ -7,8 +7,9 @@ and a wheel chooser for platform-specific wheel selection.
 Naming conventions for generated targets:
   - `_raw_<pkg_key>`: The underlying `pycross_wheel_library` (or
     `pycross_resettable_wheel_library` when variant reset applies) target.
-  - `<pkg_key>`: For cycle members, this is a `pycross_library_proxy` (created by
-    `pycross_cycle_member_marker_deps`) that wraps the raw target and adds conditional deps.
+  - `<pkg_key>`: For cycle members, this is a `pycross_library_proxy` (planned at
+    repo-rule time in `lock_render/cycles.bzl`) that wraps the raw target and adds
+    unconditional and conditional in-cycle deps.
     For extras-only packages (e.g., `name[extra]@version`), this is a `pycross_library_proxy`
     with `actual` pointing to the base package and extra-specific deps in `deps`.
   - `<pkg_name>[_all_]@<version>`: A synthetic `pycross_library_proxy` that aggregates the
@@ -51,8 +52,6 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", variant_resolvers 
         "wheel_chooser.bzl": ["pycross_wheel_chooser"],
         "wheel_library.bzl": ["pycross_wheel_library"],
     }
-    if cycle_groups:
-        pycross_loads["cycle_member_marker_deps.bzl"] = ["pycross_cycle_member_marker_deps"]
 
     loads = {}
     reset_plan = None
@@ -76,8 +75,15 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", variant_resolvers 
     resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
     render_resolution_marker_evaluators(body_lines, resolution_marker_exprs, variant_resolvers = variant_resolvers, loads = loads)
 
-    # 2. Per-member cycle deps (marker-aware)
-    render_marker_cycle_member_deps(body_lines, cycle_groups, packages, variant_resolvers = variant_resolvers)
+    # 2. Per-member cycle deps (marker-aware, planned at repo-rule time)
+    render_marker_cycle_member_deps(
+        body_lines,
+        cycle_groups,
+        packages,
+        variant_resolvers = variant_resolvers,
+        unique_markers = unique_markers,
+        loads = loads,
+    )
 
     # 2b. Variant reset gates
     body_lines.extend(gate_lines)
@@ -89,6 +95,8 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", variant_resolvers 
     # 4. Extras aggregates ([_all_] targets)
     render_extras_aggregates(body_lines, packages)
 
+    if loads.get("cycle_dep_needed"):
+        pycross_loads["cycle_dep_needed.bzl"] = ["pycross_cycle_dep_needed"]
     if loads.get("wheel_matched"):
         pycross_loads["wheel_chooser.bzl"].append("pycross_wheel_matched")
 

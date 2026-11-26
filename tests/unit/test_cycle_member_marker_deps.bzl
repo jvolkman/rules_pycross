@@ -1,6 +1,5 @@
-"""Tests for cycle reachability group computation."""
+"""Tests for cycle reachability group computation and repo-rule-time cycle rendering."""
 
-load("@rules_python//python:py_info.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
@@ -8,18 +7,23 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "marker_evaluator_name")
+
+# buildifier: disable=bzl-visibility
 load(
-    "//pycross/private:cycle_member_marker_deps.bzl",
+    "//pycross/private/lock_render:cycle_plan.bzl",
     "compute_reachability_groups",
     "find_unconditional_deps",
     "plan_cycle_member_deps",
-    "pycross_cycle_member_marker_deps",
     "select_canonical_source",
     "single_incoming_marker",
 )
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "marker_evaluator_name")
+load("//pycross/private/lock_render:cycles.bzl", "render_marker_cycle_member_deps")
 
 # ── Test: Linear Chain Collapsing ─────────────────────────────────────
 
@@ -543,111 +547,183 @@ def _test_fuzz_reachability_equivalence(name):
         impl = _test_fuzz_reachability_equivalence_impl,
     )
 
-# ── Test: Macro Expansion (native.existing_rule paths) ────────────────
+# ── Test: Repo-Rule-Time Cycle Rendering Paths ────────────────────────
 
-def _stub_py_library_impl(_ctx):
-    return [PyInfo(transitive_sources = depset())]
-
-_stub_py_library = rule(
-    implementation = _stub_py_library_impl,
-    provides = [PyInfo],
-)
-
-_CheckRuleNamesInfo = provider(
-    "Holds snapshotted rule names for macro expansion testing.",
-    fields = ["m1_evaluators", "m2_evaluators"],
-)
-
-def _rule_CheckRuleNames_impl(ctx):
-    return [
-        DefaultInfo(),
-        _CheckRuleNamesInfo(
-            m1_evaluators = ctx.attr.m1_evaluators,
-            m2_evaluators = ctx.attr.m2_evaluators,
-        ),
-    ]
-
-_check_rule_names_holder = rule(
-    implementation = _rule_CheckRuleNames_impl,
-    attrs = {
-        "m1_evaluators": attr.string_list(),
-        "m2_evaluators": attr.string_list(),
-    },
-)
-
-def _test_macro_existing_rule_paths_impl(env, target):
-    info = target[_CheckRuleNamesInfo]
-    env.expect.that_collection(info.m1_evaluators).contains_exactly([])
-    env.expect.that_collection(info.m2_evaluators).contains_exactly([
-        "_cycle_needed_m2_hub_1_0_m2_c_1_0",
-    ])
-
-def _test_macro_existing_rule_paths(name):
-    # 1. Hub graph WITH pre-created _marker_eval_*_match target -> 0 _cycle_needed_* rules.
-    m1_edges = {
-        "m1_hub@1.0": [
-            {"dep": "m1_a@1.0"},
-            {"dep": "m1_c@1.0", "marker": "sys_platform == 'm1_linux'"},
-        ],
-        "m1_a@1.0": [{"dep": "m1_hub@1.0"}],
-        "m1_c@1.0": [{"dep": "m1_hub@1.0"}],
+def _test_repo_time_cycle_rendering_impl(env, _target):
+    # 1. Hub graph with 1-hop markers in unique_markers -> 0 _cycle_needed_* targets,
+    #    reuses _marker_eval_*_match, 0 _EDGES_JSON, no cycle_dep_needed.bzl load,
+    #    and combines sibling groups sharing the same 1-hop match into one select().
+    hub_lock = {
+        "cycle_groups": {
+            "cycle_hub": ["hub@1.0", "a@1.0", "c1@1.0", "c2@1.0"],
+        },
+        "packages": {
+            "hub@1.0": {
+                "cycle_group": "cycle_hub",
+                "wheel_candidates": [{"filename": "hub-1.0-py3-none-any.whl", "file_reference": {"key": "hub_w"}}],
+                "marker_dependencies": [
+                    {"key": "a@1.0"},
+                    {"key": "c1@1.0", "marker": "sys_platform == 'linux'"},
+                    {"key": "c2@1.0", "marker": "sys_platform == 'linux'"},
+                ],
+            },
+            "a@1.0": {
+                "cycle_group": "cycle_hub",
+                "wheel_candidates": [{"filename": "a-1.0-py3-none-any.whl", "file_reference": {"key": "a_w"}}],
+                "marker_dependencies": [{"key": "hub@1.0"}],
+            },
+            "c1@1.0": {
+                "cycle_group": "cycle_hub",
+                "wheel_candidates": [{"filename": "c1-1.0-py3-none-any.whl", "file_reference": {"key": "c1_w"}}],
+                "marker_dependencies": [{"key": "hub@1.0"}],
+            },
+            "c2@1.0": {
+                "cycle_group": "cycle_hub",
+                "wheel_candidates": [{"filename": "c2-1.0-py3-none-any.whl", "file_reference": {"key": "c2_w"}}],
+                "marker_dependencies": [{"key": "hub@1.0"}],
+            },
+        },
     }
-    native.config_setting(
-        name = marker_evaluator_name("sys_platform == 'm1_linux'") + "_match",
-        values = {"compilation_mode": "opt"},
+    hub_res = render_lock_bzl(
+        hub_lock,
+        {"hub_w": "@r//hub:w", "a_w": "@r//a:w", "c1_w": "@r//c1:w", "c2_w": "@r//c2:w"},
+        "ws__pkgs",
     )
-    for m in m1_edges.keys():
-        _stub_py_library(name = "_raw_" + m, tags = ["manual"])
-        pycross_cycle_member_marker_deps(
-            name = m,
-            raw_name = "_raw_" + m,
-            member = m,
-            edges = m1_edges,
-        )
+    linux_match = marker_evaluator_name("sys_platform == 'linux'") + "_match"
+    env.expect.that_bool("_cycle_needed_" in hub_res).equals(False)
+    env.expect.that_bool("_EDGES_JSON" in hub_res).equals(False)
+    env.expect.that_bool("cycle_dep_needed.bzl" in hub_res).equals(False)
+    env.expect.that_str(hub_res).contains('":{}": [":_raw_c1@1.0", ":_raw_c2@1.0"]'.format(linux_match))
 
-    # 2. Hub graph WITHOUT pre-created _marker_eval_*_match target -> deduplicated
-    #    _cycle_needed_* per (canonical_source, rep).
-    m2_edges = {
-        "m2_hub@1.0": [
-            {"dep": "m2_a@1.0"},
-            {"dep": "m2_a[dev]@1.0"},
-            {"dep": "m2_c@1.0", "marker": "sys_platform == 'm2_linux'"},
-        ],
-        "m2_a@1.0": [{"dep": "m2_hub@1.0"}],
-        "m2_a[dev]@1.0": [{"dep": "m2_hub@1.0"}],
-        "m2_c@1.0": [{"dep": "m2_hub@1.0"}],
+    # 2a. Multi-hop conditional cycle -> deduplicated _cycle_needed_* per (canonical_source, rep),
+    #     emits _{GROUP}_EDGES_JSON once, loads pycross_cycle_dep_needed, gates deps behind select().
+    multihop_lock = {
+        "cycle_groups": {
+            "cycle_mh": ["a@1.0", "a_peer@1.0", "b@1.0", "c@1.0"],
+        },
+        "packages": {
+            "a@1.0": {
+                "cycle_group": "cycle_mh",
+                "wheel_candidates": [{"filename": "a-1.0-py3-none-any.whl", "file_reference": {"key": "a_w"}}],
+                "marker_dependencies": [
+                    {"key": "a_peer@1.0"},
+                    {"key": "b@1.0", "marker": "sys_platform == 'linux'"},
+                ],
+            },
+            "a_peer@1.0": {
+                "cycle_group": "cycle_mh",
+                "wheel_candidates": [{"filename": "a_peer-1.0-py3-none-any.whl", "file_reference": {"key": "ap_w"}}],
+                "marker_dependencies": [{"key": "a@1.0"}],
+            },
+            "b@1.0": {
+                "cycle_group": "cycle_mh",
+                "wheel_candidates": [{"filename": "b-1.0-py3-none-any.whl", "file_reference": {"key": "b_w"}}],
+                "marker_dependencies": [
+                    {"key": "c@1.0", "marker": "python_version < '3.13'"},
+                ],
+            },
+            "c@1.0": {
+                "cycle_group": "cycle_mh",
+                "wheel_candidates": [{"filename": "c-1.0-py3-none-any.whl", "file_reference": {"key": "c_w"}}],
+                "marker_dependencies": [{"key": "a@1.0"}],
+            },
+        },
     }
-    for m in m2_edges.keys():
-        _stub_py_library(name = "_raw_" + m, tags = ["manual"])
-        pycross_cycle_member_marker_deps(
-            name = m,
-            raw_name = "_raw_" + m,
-            member = m,
-            edges = m2_edges,
-        )
-
-    existing = native.existing_rules().keys()
-    m1_evaluators = sorted([
-        r
-        for r in existing
-        if r.startswith("_cycle_needed_m1_") and not r.endswith("_match")
-    ])
-    m2_evaluators = sorted([
-        r
-        for r in existing
-        if r.startswith("_cycle_needed_m2_") and not r.endswith("_match")
-    ])
-
-    util.helper_target(
-        _check_rule_names_holder,
-        name = name + "_subject",
-        m1_evaluators = m1_evaluators,
-        m2_evaluators = m2_evaluators,
+    mh_res = render_lock_bzl(
+        multihop_lock,
+        {"a_w": "@r//a:w", "ap_w": "@r//ap:w", "b_w": "@r//b:w", "c_w": "@r//c:w"},
+        "ws__pkgs",
     )
+    env.expect.that_str(mh_res).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
+    env.expect.that_int(mh_res.count("_CYCLE_MH_EDGES_JSON = ")).equals(1)
+
+    # Both a@1.0 and a_peer@1.0 share canonical source a@1.0 -> only ONE _cycle_needed_a_1_0_c_1_0 rule.
+    env.expect.that_int(mh_res.count('name = "_cycle_needed_a_1_0_c_1_0",')).equals(1)
+    env.expect.that_int(mh_res.count('name = "_cycle_needed_a_1_0_c_1_0_match",')).equals(1)
+    env.expect.that_str(mh_res).contains('":_cycle_needed_a_1_0_c_1_0_match": [":_raw_c@1.0"]')
+
+    # 2b. Direct render_marker_cycle_member_deps call with marker absent from available_eval_matches
+    #     falls back to canonical-source-deduplicated _cycle_needed_*.
+    fallback_lines = []
+    fallback_loads = {}
+    render_marker_cycle_member_deps(
+        fallback_lines,
+        {"cycle_m2": ["m2_hub@1.0", "m2_a@1.0", "m2_a[dev]@1.0", "m2_c@1.0"]},
+        {
+            "m2_hub@1.0": {
+                "marker_dependencies": [
+                    {"key": "m2_a@1.0"},
+                    {"key": "m2_a[dev]@1.0"},
+                    {"key": "m2_c@1.0", "marker": "sys_platform == 'm2_linux'"},
+                ],
+            },
+            "m2_a@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
+            "m2_a[dev]@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
+            "m2_c@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
+        },
+        available_eval_matches = {},
+        loads = fallback_loads,
+    )
+    fallback_text = "\n".join(fallback_lines)
+    env.expect.that_bool(fallback_loads.get("cycle_dep_needed", False)).equals(True)
+    env.expect.that_int(fallback_text.count("_CYCLE_M2_EDGES_JSON = ")).equals(1)
+    env.expect.that_int(fallback_text.count("pycross_cycle_dep_needed(")).equals(1)
+    env.expect.that_str(fallback_text).contains('name = "_cycle_needed_m2_hub_1_0_m2_c_1_0",')
+
+    # Verify the encoded _EDGES_JSON literal decodes back to valid JSON containing the edge marker.
+    edges_rhs = fallback_text.split("_CYCLE_M2_EDGES_JSON = ")[1].split("\n", 1)[0]
+    decoded_edges = json.decode(json.decode(edges_rhs))
+    env.expect.that_bool("m2_hub@1.0" in decoded_edges).equals(True)
+    env.expect.that_collection([e["dep"] for e in decoded_edges["m2_hub@1.0"]]).contains_exactly([
+        "m2_a@1.0",
+        "m2_a[dev]@1.0",
+        "m2_c@1.0",
+    ])
+
+    # 3. Pure unconditional cycle -> direct pycross_library_proxy with flat deps,
+    #    0 _cycle_needed_*, 0 _EDGES_JSON, no cycle_dep_needed.bzl load.
+    uncond_lock = {
+        "cycle_groups": {
+            "cycle_uncond": ["u1@1.0", "u2@1.0"],
+        },
+        "packages": {
+            "u1@1.0": {
+                "cycle_group": "cycle_uncond",
+                "wheel_candidates": [{"filename": "u1-1.0-py3-none-any.whl", "file_reference": {"key": "u1_w"}}],
+                "marker_dependencies": [{"key": "u2@1.0"}],
+            },
+            "u2@1.0": {
+                "cycle_group": "cycle_uncond",
+                "wheel_candidates": [{"filename": "u2-1.0-py3-none-any.whl", "file_reference": {"key": "u2_w"}}],
+                "marker_dependencies": [{"key": "u1@1.0"}],
+            },
+        },
+    }
+    uncond_res = render_lock_bzl(uncond_lock, {"u1_w": "@r//u1:w", "u2_w": "@r//u2:w"}, "ws__pkgs")
+    env.expect.that_bool("_cycle_needed_" in uncond_res).equals(False)
+    env.expect.that_bool("_EDGES_JSON" in uncond_res).equals(False)
+    env.expect.that_bool("cycle_dep_needed.bzl" in uncond_res).equals(False)
+    env.expect.that_bool("select({" in uncond_res).equals(False)
+    env.expect.that_str(uncond_res).contains(
+        'pycross_library_proxy(\n        name = "u1@1.0",\n        actual = ":_raw_u1@1.0",\n        deps = [\n            ":_raw_u2@1.0",\n        ],\n    )',
+    )
+
+    # 4. Single-member degenerate cycle -> native.alias directly to _raw_<pkg>.
+    single_lines = []
+    render_marker_cycle_member_deps(
+        single_lines,
+        {"cycle_one": ["solo@1.0"]},
+        {"solo@1.0": {"marker_dependencies": [{"key": "solo@1.0"}]}},
+    )
+    single_text = "\n".join(single_lines)
+    env.expect.that_str(single_text).contains('native.alias(\n        name = "solo@1.0",\n        actual = ":_raw_solo@1.0",\n    )')
+
+def _test_repo_time_cycle_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject")
     analysis_test(
         name = name,
         target = name + "_subject",
-        impl = _test_macro_existing_rule_paths_impl,
+        impl = _test_repo_time_cycle_rendering_impl,
     )
 
 # ── Test: Extra on Intermediate Cycle Node Is Evaluated per Source Node ──
@@ -733,7 +809,7 @@ def cycle_member_marker_deps_test_suite(name):
             _test_select_canonical_source_tree,
             _test_single_incoming_marker,
             _test_fuzz_reachability_equivalence,
-            _test_macro_existing_rule_paths,
+            _test_repo_time_cycle_rendering,
             _test_cycle_extra_on_intermediate_node,
             _test_cycle_entry_extra_does_not_bleed,
         ],

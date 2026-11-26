@@ -1,7 +1,7 @@
-"""Macro for per-member cycle dependency resolution with PEP 508 markers.
+"""Pure reachability planning for cycle SCC members with PEP 508 markers.
 
-Generates reachability-gated cycle member deps using pycross_cycle_dep_needed
-evaluators and config_settings, wrapped in a py_library with select() per dep.
+Computes unconditional in-cycle dependencies and grouped conditional reachability
+checks at repo-rule time (used by `//pycross/private/lock_render:cycles.bzl`).
 
 Optimization: members that form unconditional linear chains are grouped together
 and share a single reachability check.  For example, in a cycle where
@@ -10,18 +10,8 @@ Since C has one inbound edge (from B, unconditional) and D has one inbound edge
 (from C, unconditional), they are collapsed into B's reachability group.  This
 reduces the number of evaluator targets from N×(N-1) towards N×G where G is
 the number of reachability groups (G ≤ N-1).
-
-Usage in generated lock.bzl:
-    pycross_cycle_member_marker_deps(
-        name = "pkg@1.0",
-        raw_name = "_raw_pkg@1.0",
-        member = "pkg@1.0",
-        edges = {...},  # dict edge map
-    )
 """
 
-load("//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")
-load("//pycross/private:proxy.bzl", "pycross_library_proxy")
 load("//pycross/private:util.bzl", "marker_evaluator_name", "marker_uses_extra", "parse_package_key", "sanitize_name")
 
 def find_unconditional_deps(member, other_members, edges):
@@ -328,78 +318,4 @@ def plan_cycle_member_deps(member, edges):
     return struct(
         unconditional_deps = unconditional_deps,
         conditional_groups = conditional_groups,
-    )
-
-def pycross_cycle_member_marker_deps(
-        name,
-        raw_name,
-        member,
-        edges,
-        **kwargs):
-    """Creates select()-gated cycle member deps with grouped reachability checks.
-
-    For each reachability group (set of members with identical reachability
-    from this member), reuses a pre-rendered _marker_eval_*_match config_setting
-    when the group is gated by a single 1-hop marker from U(member), or creates
-    a canonical-source-deduplicated pycross_cycle_dep_needed rule + config_setting.
-
-    Args:
-        name: The final target name (e.g. "pkg@1.0").
-        raw_name: The raw package target name (e.g. "_raw_pkg@1.0").
-        member: The package key of this cycle member.
-        edges: Dict edge map: {node: [{"dep": key, "marker": expr}, ...], ...}.
-            The keys of this dict are the full set of cycle members.
-        **kwargs: Marker value attrs (sys_platform, os_name, etc.) passed
-                  through to pycross_cycle_dep_needed.
-    """
-    if len(edges) <= 1:
-        # Single-member cycle (shouldn't happen, but handle gracefully).
-        native.alias(
-            name = name,
-            actual = ":" + raw_name,
-        )
-        return
-
-    plan = plan_cycle_member_deps(member, edges)
-
-    other_deps = [":_raw_" + u_dep for u_dep in plan.unconditional_deps]
-    edges_json = None
-
-    for cg in plan.conditional_groups:
-        if cg.eval_match_name and native.existing_rule(cg.eval_match_name):
-            match_name = cg.eval_match_name
-        else:
-            if not native.existing_rule(cg.pair_name):
-                if edges_json == None:
-                    edges_json = json.encode(edges)
-
-                # Reachability evaluator: returns FeatureFlagInfo("true"/"false")
-                pycross_cycle_dep_needed(
-                    name = cg.pair_name,
-                    source = cg.source,
-                    target = cg.representative,
-                    edges = edges_json,
-                    **kwargs
-                )
-
-                # Config setting matching reachable == "true"
-                native.config_setting(
-                    name = cg.pair_name + "_match",
-                    flag_values = {
-                        ":" + cg.pair_name: "true",
-                    },
-                )
-            match_name = cg.pair_name + "_match"
-
-        # Gate ALL members of this group behind the representative's check
-        group_deps = [":_raw_" + m for m in cg.group_members]
-        other_deps = other_deps + select({
-            ":" + match_name: group_deps,
-            "//conditions:default": [],
-        })
-
-    pycross_library_proxy(
-        name = name,
-        actual = ":" + raw_name,
-        deps = other_deps,
     )
