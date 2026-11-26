@@ -164,7 +164,6 @@ def _register_case(
             resolved_lock_file = Label(member["lock_file"]),
             workspace_repo = pkgs_repo,
             member_name = member_name,
-            generate_root_aliases = True,
         )
         if member.get("backend_configs"):
             thin_attrs["backend_configs"] = member["backend_configs"]

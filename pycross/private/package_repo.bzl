@@ -18,7 +18,7 @@ The file structure is as follows:
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":build_text.bzl", "alias", "flag_setting")
-load(":resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
+load(":resolved_lock_renderer.bzl", "render_lock_bzl_with_meta", "render_reset_bzl")
 load(":util.bzl", "format_package_key", "is_wheel_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
 def _normalize_name(name):
@@ -173,7 +173,6 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
                 flag_map = member_flag_maps.get(member, {})
                 spec = {
                     "display": "@{}//_variants".format(member),
-                    "valid": sorted(member_variant_flags[member].keys()),
                     "map": {k: v for k, v in sorted(flag_map.items())},
                 }
                 lock_build_lines.append('        "@{}//_variants:_variants": {},'.format(member, json.encode(json.encode(spec))))
@@ -353,17 +352,15 @@ def _package_repo_impl(rctx):
             qname_to_resolvers.setdefault(qname, []).append(resolver_name)
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
-    rctx.file(
-        "_lock/lock.bzl",
-        render_lock_bzl(
-            lock,
-            rctx.attr.repo_map,
-            rctx.name,
-            variant_resolvers = resolver_qnames,
-            reset_conflict_sets = [vset["qnames"] for vset in variant_sets],
-        ),
+    lock_result = render_lock_bzl_with_meta(
+        lock,
+        rctx.attr.repo_map,
+        rctx.name,
+        variant_resolvers = resolver_qnames,
+        reset_conflict_sets = [vset["qnames"] for vset in variant_sets],
     )
-    if variant_sets:
+    rctx.file("_lock/lock.bzl", lock_result.content)
+    if lock_result.has_reset:
         rctx.file(
             "_lock/reset.bzl",
             render_reset_bzl(

@@ -1,8 +1,4 @@
-"""Copy a wheel file to a stable destination.
-
-If the source is a directory, it scans for a single .whl file inside.
-If the source is a file, it uses it directly.
-"""
+"""Copy a wheel file from a wheel directory to a stable destination."""
 
 import glob
 import os
@@ -12,23 +8,20 @@ import sys
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: link_wheel.py <src_file_or_dir> <dst_file>", file=sys.stderr)
+        print("Usage: link_wheel.py <src_dir> <dst_file>", file=sys.stderr)
         sys.exit(1)
 
     src = sys.argv[1]
     dst = sys.argv[2]
 
-    if os.path.isdir(src):
-        wheels = glob.glob(os.path.join(src, "*.whl"))
-        if not wheels:
-            print(f"Error: No .whl files found in {src}", file=sys.stderr)
-            sys.exit(1)
-        if len(wheels) > 1:
-            print(f"Error: Multiple .whl files found in {src}: {wheels}", file=sys.stderr)
-            sys.exit(1)
-        src_file = wheels[0]
-    else:
-        src_file = src
+    wheels = glob.glob(os.path.join(src, "*.whl"))
+    if not wheels:
+        print(f"Error: No .whl files found in {src}", file=sys.stderr)
+        sys.exit(1)
+    if len(wheels) > 1:
+        print(f"Error: Multiple .whl files found in {src}: {wheels}", file=sys.stderr)
+        sys.exit(1)
+    src_file = wheels[0]
 
     # Ensure destination directory exists
     dst_dir = os.path.dirname(dst)

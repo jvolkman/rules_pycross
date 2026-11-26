@@ -14,7 +14,7 @@ The file structure is:
 
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS", "PACKAGE_REPO_HOOK_SUBDIRS")
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
-load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS", "emit_backend_files", "hook_subdir_build", "packages_bzl", "requirements_bzl")
+load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS", "emit_backend_files", "hook_subdir_build", "requirements_bzl")
 load("//pycross/private/thin_repo:modules_mapping_deps.bzl", "modules_mapping_deps")
 load("//pycross/private/thin_repo:pins.bzl", "append_root_aliases", "emit_pin_directories")
 load("//pycross/private/thin_repo:selects.bzl", "variant_fallbacks")
@@ -37,7 +37,7 @@ def _thin_package_repo_impl(rctx):
 
     # This repo's variant flags and conflict sets. Every set gets an
     # _unselected_<set> -> _no_variant_<set> fallback in selects; defaults come
-    # from this repo's transition (`_default_<set>`), not //conditions:default.
+    # from this repo's transition (`d:<set>` in `//_lock:_state`), not //conditions:default.
     variant_info = collect_variants(lock.get("variants", []))
     sets_by_constraint = {}  # constraint -> [conflict set suffixes (sorted qnames joined by "_")]
     for set_suffix, vset in sorted(variant_info.sets.items()):
@@ -151,7 +151,7 @@ def _thin_package_repo_impl(rctx):
         mapping_name = "modules_mapping"
 
     root_build_lines.extend([
-        'exports_files(["requirements.bzl", "_packages.bzl"])',
+        'exports_files(["requirements.bzl"])',
         "",
     ])
     root_build_lines.extend(mm.extra_target_lines)
@@ -167,8 +167,7 @@ def _thin_package_repo_impl(rctx):
 
     extras_by_base = base_packages_with_extras(packages)
 
-    if rctx.attr.generate_root_aliases:
-        append_root_aliases(root_build_lines, grouped_pins, extras_by_base)
+    append_root_aliases(root_build_lines, grouped_pins, extras_by_base)
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     unselected_groups.update(emit_pin_directories(
@@ -183,8 +182,6 @@ def _thin_package_repo_impl(rctx):
         testonly_pins_set,
     ))
     emit_backend_files(rctx, rctx.attr.backend_configs, workspace_repo)
-
-    rctx.file("_packages.bzl", packages_bzl(grouped_pins, packages))
 
     hook_backends_by_subdir = {}
     for backend_name, subdir in sorted(PACKAGE_REPO_HOOK_SUBDIRS.items()):
@@ -232,10 +229,6 @@ thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
-        "generate_root_aliases": attr.bool(
-            doc = "Whether to generate aliases like @uv//:numpy.",
-            default = False,
-        ),
         "workspace_repo": attr.string(
             mandatory = True,
             doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
@@ -264,7 +257,7 @@ thin_package_repo = repository_rule(
         ),
         "variant_pins": attr.string_dict(
             doc = "Conflict set suffix -> qualified name of the variant this repo's flags/settings select. " +
-                  "Its transition sets the workspace repo's `_pin_<set>` to it.",
+                  "Its transition merges `p:<set>` into the workspace repo's `//_lock:_state`.",
         ),
         "override_configs": attr.string(
             doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",

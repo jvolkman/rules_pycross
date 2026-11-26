@@ -6,7 +6,7 @@ The common logic is factored into _sdist_repo_common() so it can be called befor
 load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:util.bzl", "extract_pep508_name", "key_name", "underscore_name")
+load("//pycross/private:util.bzl", "extract_pep508_name", "parse_package_key", "underscore_name")
 
 def _parse_backend_spec(spec):
     """Parse a backend spec like 'setuptools.build_meta[setuptools-rust,wheel]'.
@@ -69,7 +69,7 @@ def _resolve_backend(backend_to_rule, default_backend, pyproject_backend, build_
 
     return best_rule if best_rule else default_backend
 
-def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, data_paths, include_paths, extra_build_snippets = None):
+def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, extra_build_snippets = None):
     """Render the BUILD.bazel file for an sdist repo.
 
     Args:
@@ -78,8 +78,6 @@ def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, 
         backend_macro: The backend macro name (e.g. 'meson_build').
         site_paths: The site-packages paths for the package.
         bin_paths: The bin paths for the package.
-        data_paths: The data paths for the package.
-        include_paths: The include paths for the package.
         extra_build_snippets: Optional list of raw BUILD file content strings.
     """
     attr_lines = []
@@ -108,8 +106,6 @@ pycross_wheel_metadata(
     site_paths = {site_paths},
     site_paths_exact = False,
     bin_paths = {bin_paths},
-    data_paths = {data_paths},
-    include_paths = {include_paths},
 )
 """.format(
         lock_repo = rctx.attr.lock_repo,
@@ -118,8 +114,6 @@ pycross_wheel_metadata(
         attrs = "\n".join(attr_lines),
         site_paths = site_paths,
         bin_paths = bin_paths,
-        data_paths = data_paths,
-        include_paths = include_paths,
     )
 
     if extra_build_snippets:
@@ -171,8 +165,8 @@ def _compute_sdist_build_config(attr, metadata):
         metadata: Decoded dict from inspect_package.py.
 
     Returns:
-        A struct with macro_attrs, backend_macro, site_paths, bin_paths, data_paths,
-        include_paths, applied_override_config, non_matching_override_backends.
+        A struct with macro_attrs, backend_macro, site_paths, bin_paths,
+        applied_override_config, non_matching_override_backends.
     """
     _validate_build_backend(attr)
 
@@ -196,8 +190,6 @@ def _compute_sdist_build_config(attr, metadata):
 
     site_paths = metadata.get("site_paths", [])
     bin_paths = metadata.get("bin_paths", [])
-    data_paths = metadata.get("data_paths", [])
-    include_paths = metadata.get("include_paths", [])
 
     parsed_requires = [(req, pypackaging.requirements.parse(req)) for req in requires]
     build_requires_names = [parsed.name for _, parsed in parsed_requires]
@@ -238,7 +230,7 @@ def _compute_sdist_build_config(attr, metadata):
             build_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(req_name))] = True
 
     for dep in attr.extra_build_tools:
-        dep_name = key_name(dep)
+        dep_name = parse_package_key(dep).name
         build_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(dep_name))] = True
 
     macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
@@ -292,8 +284,6 @@ def _compute_sdist_build_config(attr, metadata):
         backend_macro = backend_macro,
         site_paths = site_paths,
         bin_paths = bin_paths,
-        data_paths = data_paths,
-        include_paths = include_paths,
         applied_override_config = matching_config,
         non_matching_override_backends = non_matching_backends,
     )
@@ -356,14 +346,12 @@ def _sdist_repo_common(rctx):
     config = _compute_sdist_build_config(rctx.attr, metadata)
     site_paths = config.site_paths
     bin_paths = config.bin_paths
-    data_paths = config.data_paths
-    include_paths = config.include_paths
 
     rctx.file("inspection.json", json.encode({
         "site_paths": site_paths,
         "bin_paths": bin_paths,
-        "data_paths": data_paths,
-        "include_paths": include_paths,
+        "data_paths": [],
+        "include_paths": [],
         "warnings": warnings,
     }))
 
@@ -379,10 +367,8 @@ def _sdist_repo_common(rctx):
         backend_macro = config.backend_macro,
         site_paths = site_paths,
         bin_paths = bin_paths,
-        data_paths = data_paths,
-        include_paths = include_paths,
         applied_override_config = config.applied_override_config,
-        render = lambda macro_attrs, backend_macro, extra_build_snippets = None: _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, data_paths, include_paths, extra_build_snippets),
+        render = lambda macro_attrs, backend_macro, extra_build_snippets = None: _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, extra_build_snippets),
     )
 
 # -- Default (generic) sdist repo rule --

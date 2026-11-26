@@ -13,7 +13,7 @@ load("//pycross/private:util.bzl", "coerce_transition_values", "excluded_variant
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/thin_repo:metadata.bzl", "hook_subdir_build", "packages_bzl", "requirements_bzl")
+load("//pycross/private/thin_repo:metadata.bzl", "hook_subdir_build", "requirements_bzl")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/thin_repo:modules_mapping_deps.bzl", "modules_mapping_deps")
@@ -697,23 +697,14 @@ def _test_pin_build_aggregated_only_branches_with_extras(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_aggregated_only_branches_with_extras_impl)
 
-# ── Test: multi-branch sdist and _packages.bzl ─────────────────────
+# ── Test: multi-branch sdist ───────────────────────────────────────
 
 # buildifier: disable=unused-variable
 def _test_pin_build_multi_branch_sdist_impl(env, target):
-    """When only a non-first branch has an sdist, :sdist and PACKAGES.has_sdist still reflect it."""
+    """When only a non-first branch has an sdist, :sdist still reflects it."""
     pin_target_dict = {
         "res_foo_1_0": "foo@1.0",
         "res_foo_2_0": "foo@2.0",
-    }
-    packages = {
-        "foo@1.0": {
-            "wheel_candidates": [{"filename": "foo-1.0-py3-none-any.whl"}],
-        },
-        "foo@2.0": {
-            "wheel_candidates": [{"filename": "foo-2.0-py3-none-any.whl"}],
-            "sdist_file": {"key": "foo_2_sdist"},
-        },
     }
     res = _pin_build(
         target_name = "foo",
@@ -727,12 +718,6 @@ def _test_pin_build_multi_branch_sdist_impl(env, target):
     env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": "@ws//_sdist:foo@2.0"' in res).equals(True)
     env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in res).equals(True)
     env.expect.that_bool('"@ws//_sdist:foo@1.0"' not in res).equals(True)
-
-    pkgs_bzl = packages_bzl(
-        {"foo": {"base_target": pin_target_dict, "extras": {}}},
-        packages,
-    )
-    env.expect.that_bool("has_sdist = True," in pkgs_bzl).equals(True)
 
 def _test_pin_build_multi_branch_sdist(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1548,39 +1533,15 @@ def _test_partial_fork_maybe_and_testonly(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_partial_fork_maybe_and_testonly_impl)
 
 # buildifier: disable=unused-variable
-def _test_requirement_extra_canon_and_extras_only_metadata_impl(env, target):
-    """requirement() canonicalizes extras and _packages.bzl includes extras-only pins."""
+def _test_requirement_extra_canon_impl(env, target):
+    """requirement() canonicalizes extras."""
     mock_rctx = struct(name = "my_repo")
     req_bzl = requirements_bzl(mock_rctx, {}, {})
     env.expect.that_str(req_bzl).contains('extra = pypackaging.utils.canonicalize_name(extra.rstrip("]"))')
 
-    grouped_pins = {
-        "uvicorn": {
-            "base_target": None,
-            "extras": {"standard": {"": "uvicorn[standard]@0.30.0"}},
-        },
-        "httpx": {
-            "base_target": None,
-            "extras": {
-                "http2": {"extra_a": "httpx[http2]@0.26.0"},
-                "socks": {"extra_b": "httpx[socks]@0.27.0"},
-            },
-        },
-    }
-    packages = {
-        "uvicorn@0.30.0": {"sdist_file": {"key": "uv_sdist"}},
-        "uvicorn[standard]@0.30.0": {},
-        "httpx@0.26.0": {},
-        "httpx@0.27.0": {},
-    }
-
-    pkgs_bzl = packages_bzl(grouped_pins, packages)
-    uvicorn_block = pkgs_bzl.split('"uvicorn": struct(')[1].split("),")[0]
-    env.expect.that_str(uvicorn_block).contains("has_sdist = True,")
-
-def _test_requirement_extra_canon_and_extras_only_metadata(name):
+def _test_requirement_extra_canon(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_requirement_extra_canon_and_extras_only_metadata_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirement_extra_canon_impl)
 
 # buildifier: disable=unused-variable
 def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl(env, target):
@@ -1660,7 +1621,7 @@ def thin_package_repo_test_suite(name):
             _test_cargo_build_filters_backends_and_wildcards,
             _test_modules_mapping_deps_selection,
             _test_partial_fork_maybe_and_testonly,
-            _test_requirement_extra_canon_and_extras_only_metadata,
+            _test_requirement_extra_canon,
             _test_pin_build_emits_empty_brackets_when_aggregated_without_extras,
             _test_render_transition_bzl_and_maybe_build,
             _test_transition_settings,

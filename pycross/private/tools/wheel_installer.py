@@ -178,9 +178,6 @@ class PycrossWheelDestination(SchemeDictionaryDestination):
             self.write_to_fs(scheme, remapped_record_file_path, record_stream, is_executable=False)
 
 
-NormalizedDistInfoDestination = PycrossWheelDestination
-
-
 class FilteredWheelFile(WheelFile):
     def __init__(self, f: zipfile.ZipFile, install_exclude_globs: List[str]) -> None:
         super().__init__(f)

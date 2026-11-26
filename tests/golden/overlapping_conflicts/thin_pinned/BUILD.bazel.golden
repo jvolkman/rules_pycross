@@ -12,7 +12,7 @@ pycross_transitioning_file_proxy(
     actual = ":_modules_mapping",
 )
 
-exports_files(["requirements.bzl", "_packages.bzl"])
+exports_files(["requirements.bzl"])
 
 selects.config_setting_group(
     name = "_mm_any_a8db7e10",

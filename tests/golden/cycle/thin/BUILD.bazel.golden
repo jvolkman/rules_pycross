@@ -5,7 +5,7 @@ package(default_visibility = ["//visibility:public"])
 # Empty library for _maybe_ targets on incompatible platforms.
 py_library(name = "_empty_library", visibility = ["//:__subpackages__"])
 
-exports_files(["requirements.bzl", "_packages.bzl"])
+exports_files(["requirements.bzl"])
 
 pycross_modules_mapping(
     name = "modules_mapping",

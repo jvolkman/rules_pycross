@@ -23,8 +23,8 @@ load("//pycross/private/lock_render:reset_plan.bzl", "compute_reset_plan", "conf
 
 render_reset_bzl = _render_reset_bzl
 
-def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, reset_conflict_sets = None):
-    """Renders a lock.bzl file from a resolved lock structure.
+def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", variant_resolvers = None, reset_conflict_sets = None):
+    """Renders a lock.bzl file along with generation metadata.
 
     Args:
         lock: The parsed lock.json dict.
@@ -37,7 +37,8 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
             settings install with them reset (see render_reset_bzl).
 
     Returns:
-        A string containing the rendered lock.bzl file.
+        A `struct(content, has_reset)` where `content` is the rendered `lock.bzl`
+        string and `has_reset` is True iff `:reset.bzl` is loaded and used.
     """
     packages = lock.get("packages", {})
     cycle_groups = lock.get("cycle_groups", {})
@@ -104,7 +105,8 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         for bzl, symbols in sorted(pycross_loads.items())
     ]
 
-    if reset_plan:
+    has_reset = bool(reset_plan)
+    if has_reset:
         lines.append('load(":reset.bzl", "pycross_resettable_wheel_library")')
     if loads.get("selects"):
         lines.append('load("@bazel_skylib//lib:selects.bzl", "selects")')
@@ -118,4 +120,31 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
     ])
     lines.extend(body_lines)
 
-    return "\n".join(lines) + "\n"
+    return struct(
+        content = "\n".join(lines) + "\n",
+        has_reset = has_reset,
+    )
+
+def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, reset_conflict_sets = None):
+    """Renders a lock.bzl file from a resolved lock structure.
+
+    Args:
+        lock: The parsed lock.json dict.
+        repo_map: A dict mapping file keys to repo labels.
+        rctx_name: The name of the package repository.
+        variant_resolvers: Optional list of variant_resolver target labels, or
+            dict mapping resolver label -> list of item qualified names.
+        reset_conflict_sets: The workspace's conflict sets (lists of qualified
+            names). When given, packages that don't depend on the variant
+            settings install with them reset (see render_reset_bzl).
+
+    Returns:
+        A string containing the rendered lock.bzl file.
+    """
+    return render_lock_bzl_with_meta(
+        lock,
+        repo_map,
+        rctx_name = rctx_name,
+        variant_resolvers = variant_resolvers,
+        reset_conflict_sets = reset_conflict_sets,
+    ).content

@@ -17,8 +17,6 @@ Usage in generated lock.bzl:
         raw_name = "_raw_pkg@1.0",
         member = "pkg@1.0",
         edges = {...},  # dict edge map
-        sys_platform = select(SYS_PLATFORM_VALUES),
-        ...
     )
 """
 

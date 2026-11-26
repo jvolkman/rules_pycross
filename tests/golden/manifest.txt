@@ -5,7 +5,6 @@ cycle/pkgs/_lock/lock.bzl.golden
 cycle/pkgs/_sdist/BUILD.bazel.golden
 cycle/pkgs/_wheel/BUILD.bazel.golden
 cycle/thin/BUILD.bazel.golden
-cycle/thin/_packages.bzl.golden
 cycle/thin/cycle_a/BUILD.bazel.golden
 cycle/thin/cycle_b/BUILD.bazel.golden
 cycle/thin/leaf/BUILD.bazel.golden
@@ -18,7 +17,6 @@ extras/pkgs/_sdist/BUILD.bazel.golden
 extras/pkgs/_wheel/BUILD.bazel.golden
 extras/thin/BUILD.bazel.golden
 extras/thin/__maybe/BUILD.bazel.golden
-extras/thin/_packages.bzl.golden
 extras/thin/only_extra/BUILD.bazel.golden
 extras/thin/pkg_a/BUILD.bazel.golden
 extras/thin/requirements.bzl.golden
@@ -31,7 +29,6 @@ forks/pkgs/_sdist/BUILD.bazel.golden
 forks/pkgs/_wheel/BUILD.bazel.golden
 forks/thin/BUILD.bazel.golden
 forks/thin/__actual/forked_lib/BUILD.bazel.golden
-forks/thin/_packages.bzl.golden
 forks/thin/app_lib/BUILD.bazel.golden
 forks/thin/forked_lib/BUILD.bazel.golden
 forks/thin/requirements.bzl.golden
@@ -45,7 +42,6 @@ overlapping_conflicts/pkgs/_wheel/BUILD.bazel.golden
 overlapping_conflicts/thin_default/BUILD.bazel.golden
 overlapping_conflicts/thin_default/__actual/iniconfig/BUILD.bazel.golden
 overlapping_conflicts/thin_default/__actual/typing_extensions/BUILD.bazel.golden
-overlapping_conflicts/thin_default/_packages.bzl.golden
 overlapping_conflicts/thin_default/_transition.bzl.golden
 overlapping_conflicts/thin_default/_variants/BUILD.bazel.golden
 overlapping_conflicts/thin_default/iniconfig/BUILD.bazel.golden
@@ -55,7 +51,6 @@ overlapping_conflicts/thin_default/typing_extensions/BUILD.bazel.golden
 overlapping_conflicts/thin_pinned/BUILD.bazel.golden
 overlapping_conflicts/thin_pinned/__actual/iniconfig/BUILD.bazel.golden
 overlapping_conflicts/thin_pinned/__actual/typing_extensions/BUILD.bazel.golden
-overlapping_conflicts/thin_pinned/_packages.bzl.golden
 overlapping_conflicts/thin_pinned/_transition.bzl.golden
 overlapping_conflicts/thin_pinned/_variants/BUILD.bazel.golden
 overlapping_conflicts/thin_pinned/iniconfig/BUILD.bazel.golden
@@ -75,7 +70,6 @@ plain/thin/__maybe/BUILD.bazel.golden
 plain/thin/_backend/BUILD.bazel.golden
 plain/thin/_backend/pep517_build.bzl.golden
 plain/thin/_backend/setuptools_build.bzl.golden
-plain/thin/_packages.bzl.golden
 plain/thin/alpha/BUILD.bazel.golden
 plain/thin/beta/BUILD.bazel.golden
 plain/thin/devtool/BUILD.bazel.golden
@@ -94,7 +88,6 @@ sdist_reset/pkgs/_wheel/BUILD.bazel.golden
 sdist_reset/thin_build/BUILD.bazel.golden
 sdist_reset/thin_build/__actual/merged_pkg/BUILD.bazel.golden
 sdist_reset/thin_build/__maybe/BUILD.bazel.golden
-sdist_reset/thin_build/_packages.bzl.golden
 sdist_reset/thin_build/_transition.bzl.golden
 sdist_reset/thin_build/_variants/BUILD.bazel.golden
 sdist_reset/thin_build/merged_pkg/BUILD.bazel.golden
@@ -104,7 +97,6 @@ sdist_reset/thin_main/BUILD.bazel.golden
 sdist_reset/thin_main/_backend/BUILD.bazel.golden
 sdist_reset/thin_main/_backend/pep517_build.bzl.golden
 sdist_reset/thin_main/_backend/setuptools_build.bzl.golden
-sdist_reset/thin_main/_packages.bzl.golden
 sdist_reset/thin_main/_transition.bzl.golden
 sdist_reset/thin_main/_variants/BUILD.bazel.golden
 sdist_reset/thin_main/custom_build/BUILD.bazel.golden
