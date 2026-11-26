@@ -40,13 +40,14 @@ def _pycross_wheel_dir_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.whldir_name)
 
     args = ctx.actions.args()
+    args.add("wrap-wheel")
     args.add(src)
     args.add_all([out], expand_directories = False)
 
     ctx.actions.run(
         inputs = [src],
         outputs = [out],
-        executable = ctx.executable._copy_file,
+        executable = ctx.executable._wheel_file_op,
         arguments = [args],
         mnemonic = "PycrossWheelDir",
         execution_requirements = {"supports-path-mapping": "1"},
@@ -66,8 +67,8 @@ pycross_wheel_dir = rule(
             doc = "Name for the output TreeArtifact directory (e.g., 'numpy-1.24.0.whldir').",
             mandatory = True,
         ),
-        "_copy_file": attr.label(
-            default = Label("//pycross/private/tools:copy_file"),
+        "_wheel_file_op": attr.label(
+            default = Label("//pycross/private/tools:wheel_file_op"),
             cfg = "exec",
             executable = True,
         ),

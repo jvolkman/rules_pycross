@@ -19,13 +19,14 @@ def _pycross_wheel_zipimport_library_impl(ctx):
         )
     else:
         args = ctx.actions.args()
+        args.add("unwrap-wheel")
         args.add_all([wheel_file], expand_directories = False)
         args.add(stable_wheel)
 
         ctx.actions.run(
             inputs = [wheel_file],
             outputs = [stable_wheel],
-            executable = ctx.executable._link_wheel,
+            executable = ctx.executable._wheel_file_op,
             arguments = [args],
             mnemonic = "PycrossLinkWheel",
             execution_requirements = {"supports-path-mapping": "1"},
@@ -70,8 +71,8 @@ pycross_wheel_zipimport_library = rule(
             allow_files = True,
             mandatory = True,
         ),
-        "_link_wheel": attr.label(
-            default = Label("//pycross/private/tools:link_wheel"),
+        "_wheel_file_op": attr.label(
+            default = Label("//pycross/private/tools:wheel_file_op"),
             cfg = "exec",
             executable = True,
         ),

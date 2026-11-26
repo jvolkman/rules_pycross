@@ -53,38 +53,24 @@ def exec_internal_tool(rctx, tool, args, *, quiet = False, include_patch_module 
     if hasattr(rctx, "watch"):
         rctx.watch(tool)
 
-    extra_sys_path = ""
+    tool_path = str(rctx.path(tool))
     if include_patch_module:
         patch_module = Label("//pycross/private/patching:pycross_patch.py")
         patch_module_dir = rctx.path(patch_module).dirname
         if hasattr(rctx, "watch"):
             rctx.watch(patch_module)
-        extra_sys_path = "sys.path.insert(0, {})\n".format(repr(str(patch_module_dir)))
+        cmd = [
+            python_exe,
+            "-I",
+            "-c",
+            "import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); sys.argv.pop(0); runpy.run_path(sys.argv[0], run_name='__main__')",
+            str(patch_module_dir),
+            tool_path,
+        ] + args
+    else:
+        cmd = [python_exe, "-I", tool_path] + args
 
-    wrapper_script = """
-import runpy
-import sys
-
-tool_path = {tool}
-{extra_sys_path}sys.argv = [tool_path] + sys.argv[1:]
-
-runpy.run_path(tool_path, run_name="__main__")
-"""
-
-    wrapper_file = rctx.path("_internal_wrapper.py")
-    rctx.file(wrapper_file, wrapper_script.format(
-        extra_sys_path = extra_sys_path,
-        tool = repr(str(rctx.path(tool))),
-    ))
-
-    result = rctx.execute(
-        [python_exe, "-I", str(wrapper_file)] + args,
-        quiet = quiet,
-    )
-
-    # This file embeds host-specific paths and is not needed after execution;
-    # leaving it behind would make the calling repo's contents host-specific.
-    rctx.delete(wrapper_file)
+    result = rctx.execute(cmd, quiet = quiet)
 
     if result.return_code != 0:
         fail("Failed to execute internal tool: {}\n{}".format(tool, result.stderr))

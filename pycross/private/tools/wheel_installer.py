@@ -5,6 +5,7 @@ The wheels may be pre-built or built from sdist tarballs using pypa/build (via w
 
 from __future__ import annotations
 
+import argparse
 import fnmatch
 import os
 import re
@@ -27,7 +28,6 @@ from installer.sources import WheelFile
 from installer.utils import Scheme
 from installer.utils import construct_record_file
 from installer.utils import parse_wheel_filename
-from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.inspect_package import find_installed_site_paths
 from pycross_patch import apply_patch_or_exit
 
@@ -373,8 +373,37 @@ def main(args: Any) -> None:
             entry_points_output.touch()
 
 
+def _read_multiline_param_file(path: str) -> list[str]:
+    """Read a Bazel multiline param file as UTF-8, splitting strictly on LF."""
+    with open(path, encoding="utf-8", newline="\n") as f:
+        content = f.read()
+    if not content:
+        return []
+    lines = content.split("\n")
+    if content.endswith("\n"):
+        lines.pop()
+    return lines
+
+
+def _expand_param_files(argv: list[str]) -> list[str]:
+    """Expand Bazel multiline `--params-file=<path>` arguments as UTF-8.
+
+    Handled explicitly rather than via `ArgumentParser(fromfile_prefix_chars="@")`
+    because Python 3.10-3.11 on Windows defaults `open()` to `cp1252`, breaking
+    non-ASCII UTF-8 paths in param files, and because `--params-file=` avoids
+    ambiguous `@`-prefixed literal arguments.
+    """
+    expanded: list[str] = []
+    for arg in argv:
+        if arg.startswith("--params-file="):
+            expanded.extend(_read_multiline_param_file(arg[len("--params-file=") :]))
+        else:
+            expanded.append(arg)
+    return expanded
+
+
 def parse_flags(argv: list[str] | None = None) -> Any:
-    parser = FlagFileArgumentParser(description="Extract a Python wheel.")
+    parser = argparse.ArgumentParser(description="Extract a Python wheel.")
 
     parser.add_argument(
         "--wheel",
@@ -475,7 +504,8 @@ def parse_flags(argv: list[str] | None = None) -> Any:
         help="Optimization level for .pyc precompilation.",
     )
 
-    return parser.parse_args(argv)
+    raw_argv = sys.argv[1:] if argv is None else argv
+    return parser.parse_args(_expand_param_files(raw_argv))
 
 
 if __name__ == "__main__":

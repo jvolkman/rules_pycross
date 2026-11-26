@@ -159,7 +159,7 @@ REPAIR_BUILD_ATTRS = {
 
 TOOL_EXTRACT_ATTRS = {
     "_extract_wheel_bin": attr.label(
-        default = Label("//pycross/private/tools:extract_wheel_bin"),
+        default = Label("//pycross/private/tools:wheel_file_op"),
         executable = True,
         cfg = "exec",
     ),

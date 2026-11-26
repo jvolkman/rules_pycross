@@ -1,11 +1,15 @@
+import importlib.util
 import io
+import sys
 import tarfile
+import types
 import unittest
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
+import pycross.private.tools.inspect_package as inspect_package_mod
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_BACKEND
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_REQUIRES
 from pycross.private.tools.inspect_package import _resolve_top_level_paths
@@ -1181,6 +1185,114 @@ class InspectPackageTest(unittest.TestCase):
             wres = inspect_wheel(wheel)
         self.assertEqual(zip_spy.call_count, 1)
         self.assertEqual(wres["bin_paths"], ["run"])
+
+    def test_sdist_pre_build_patch_file_only_excludes_non_package_trees(self):
+        """Patched file-only sdists preserve archive-dir trust and still exclude bench/ and crates/."""
+        patch_file = self.temp_path / "bump-requires.patch"
+        patch_file.write_text(
+            "--- a/pyproject.toml\n"
+            "+++ b/pyproject.toml\n"
+            "@@ -1,2 +1,2 @@\n"
+            " [build-system]\n"
+            '-requires = ["maturin>=1.0"]\n'
+            '+requires = ["maturin>=1.5"]\n'
+        )
+
+        # File-only tarball (no DIRTYPE entries): bench/run.py and crates/ must remain excluded.
+        compiled_sdist = self.create_tarball(
+            "cext_pkg-1.0.tar.gz",
+            {
+                "cext_pkg-1.0/pyproject.toml": (
+                    '[build-system]\nrequires = ["maturin>=1.0"]\nbuild-backend = "maturin"\n'
+                ),
+                "cext_pkg-1.0/Cargo.toml": '[package]\nname = "cext_pkg"\nversion = "1.0.0"\n',
+                "cext_pkg-1.0/crates/core/src/lib.rs": "// rust\n",
+                "cext_pkg-1.0/bench/run.py": "# benchmark\n",
+            },
+        )
+        patched_compiled = inspect_sdist(compiled_sdist, pre_build_patches=[patch_file])
+        self.assertEqual(patched_compiled["build_requires"], ["maturin>=1.5"])
+        self.assertEqual(patched_compiled["site_paths"], [])
+
+        # File-only zip with a real package alongside stray bench/run.py keeps only the package.
+        mixed_zip = self.create_zip(
+            "mixed_pkg-1.0.zip",
+            {
+                "mixed_pkg-1.0/pyproject.toml": (
+                    '[build-system]\nrequires = ["maturin>=1.0"]\nbuild-backend = "maturin"\n'
+                ),
+                "mixed_pkg-1.0/mixed_pkg/__init__.py": "",
+                "mixed_pkg-1.0/bench/run.py": "# benchmark\n",
+                "mixed_pkg-1.0/crates/core/src/lib.rs": "// rust\n",
+            },
+        )
+        patched_mixed = inspect_sdist(mixed_zip, pre_build_patches=[patch_file])
+        self.assertEqual(patched_mixed["site_paths"], ["mixed_pkg"])
+
+        # Explicit DIRTYPE archive keeps trusting explicit namespace directories after patching.
+        ns_sdist = self._create_tarball_with_dirs(
+            "ns_pkg-1.0.tar.gz",
+            {
+                "ns_pkg-1.0/pyproject.toml": (
+                    '[build-system]\nrequires = ["maturin>=1.0"]\nbuild-backend = "maturin"\n'
+                ),
+                "ns_pkg-1.0/myns/helper.py": "# namespace module\n",
+            },
+        )
+        patched_ns = inspect_sdist(ns_sdist, pre_build_patches=[patch_file])
+        self.assertEqual(patched_ns["site_paths"], ["myns/helper.py"])
+
+        # File-only tarball + patch creating newpkg/__init__.py discovers newpkg while still excluding bench/.
+        add_pkg_patch = self.temp_path / "add-newpkg.patch"
+        add_pkg_patch.write_text("--- /dev/null\n+++ b/newpkg/__init__.py\n@@ -0,0 +1 @@\n+# new package\n")
+        patched_added = inspect_sdist(compiled_sdist, pre_build_patches=[add_pkg_patch])
+        self.assertEqual(patched_added["site_paths"], ["newpkg"])
+
+    def test_wheel_and_installed_site_paths_do_not_require_tomllib(self):
+        """Importing inspect_package and inspecting wheels/site-packages work without stdlib tomllib (Python 3.10)."""
+        wheel = self.create_zip(
+            "pkg-1.0-py3-none-any.whl",
+            {
+                "pkg/__init__.py": "",
+                "pkg-1.0.dist-info/METADATA": "Name: pkg",
+            },
+        )
+        lib_dir = self.temp_path / "site-packages"
+        (lib_dir / "pkg").mkdir(parents=True)
+        (lib_dir / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+
+        spec = importlib.util.spec_from_file_location("_inspect_package_no_tomllib", inspect_package_mod.__file__)
+        assert spec is not None and spec.loader is not None
+        fresh_mod = importlib.util.module_from_spec(spec)
+
+        with mock.patch.dict(sys.modules, {"tomllib": None}):
+            spec.loader.exec_module(fresh_mod)
+            self.assertEqual(fresh_mod.inspect_wheel(wheel)["site_paths"], ["pkg"])
+            self.assertEqual(fresh_mod.find_installed_site_paths(lib_dir), ["pkg"])
+
+            # Python 3.10 sdist fallback uses pip._vendor.tomli when tomllib is absent.
+            fake_tomli = types.ModuleType("pip._vendor.tomli")
+            fake_tomli.TOMLDecodeError = ValueError
+            fake_tomli.loads = lambda _s: {"build-system": {"build-backend": "fallback.backend", "requires": ["x"]}}
+            fake_vendor = types.ModuleType("pip._vendor")
+            fake_vendor.tomli = fake_tomli
+            fake_pip = types.ModuleType("pip")
+            fake_pip._vendor = fake_vendor
+
+            sdist = self.create_tarball(
+                "py310-1.0.tar.gz",
+                {
+                    "py310-1.0/pyproject.toml": '[build-system]\nbuild-backend = "ignored"\n',
+                    "py310-1.0/pkg/__init__.py": "",
+                },
+            )
+            with mock.patch.dict(
+                sys.modules,
+                {"pip": fake_pip, "pip._vendor": fake_vendor, "pip._vendor.tomli": fake_tomli},
+            ):
+                result = fresh_mod.inspect_sdist(sdist)
+            self.assertEqual(result["build_backend"], "fallback.backend")
+            self.assertEqual(result["build_requires"], ["x"])
 
 
 if __name__ == "__main__":

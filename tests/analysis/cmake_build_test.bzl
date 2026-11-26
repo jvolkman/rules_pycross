@@ -10,7 +10,13 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:cmake_build.bzl", "cmake_build")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/build/rules:common_attrs.bzl", "TOOL_EXTRACT_ATTRS")
 
 def _mock_pkg_impl(ctx):
     out = ctx.actions.declare_directory(ctx.label.name + "_dir")
@@ -87,11 +93,35 @@ def _test_cmake_build_resources_impl(env, target):
         "MAKEFLAGS": "-j6",
     })
 
+def _mock_bin_extract_impl(ctx):
+    tool = register_bin_extract_action(ctx, ctx.attr.pkg[PycrossExtractedWheelInfo].site_packages, "cmake")
+    return [DefaultInfo(files = depset([tool.file]))]
+
+_mock_bin_extract = rule(
+    implementation = _mock_bin_extract_impl,
+    attrs = TOOL_EXTRACT_ATTRS | {"pkg": attr.label(mandatory = True)},
+)
+
+def _test_register_bin_extract_action_uses_extract_bin(name):
+    util.helper_target(_mock_pkg, name = name + "_cmake", package_name = "cmake")
+    util.helper_target(_mock_bin_extract, name = name + "_subject", pkg = name + "_cmake")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_register_bin_extract_action_uses_extract_bin_impl,
+    )
+
+def _test_register_bin_extract_action_uses_extract_bin_impl(env, target):
+    action = env.expect.that_target(target).action_named("PycrossExtractWheelBin")
+    action.argv().contains("extract-bin")
+    action.argv().contains("cmake")
+
 def cmake_build_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_cmake_build_basic,
             _test_cmake_build_resources,
+            _test_register_bin_extract_action_uses_extract_bin,
         ],
     )
