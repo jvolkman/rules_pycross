@@ -10,7 +10,6 @@ bzl_library(
         "//pycross/private:build_text",
         "//pycross/private:lock_contract",
         "//pycross/private:util",
-        "//pycross/private:variant_util",
     ],
 )
 

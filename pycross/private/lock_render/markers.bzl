@@ -3,19 +3,9 @@
 load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
 load("//pycross/private:lock_contract.bzl", "constraint_setting_name", "marker_match_target_name")
 load("//pycross/private:util.bzl", "marker_evaluator_name", "marker_uses_extra", "parse_package_key")
-load("//pycross/private:variant_util.bzl", "marker_mentions_variant")
 load(":common.bzl", "ind")
 
-def format_variants_attr(resolvers):
-    """Format a `variants = [...]` attribute line for evaluator and cycle targets.
-
-    Args:
-        resolvers: Non-empty iterable of variant_resolver target labels.
-
-    Returns:
-        Attribute string `variants = ["...", ...],`.
-    """
-    return "variants = [{}],".format(", ".join([json.encode(r) for r in resolvers]))
+VARIANT_STATE_ATTR = 'variants = [":_variant_state"],'
 
 def collect_unique_markers(packages):
     """Collect all unique `(marker, extra)` pairs across packages.
@@ -47,41 +37,7 @@ def collect_unique_markers(packages):
             markers[(marker, "")] = True
     return markers.keys()
 
-def matching_variant_resolvers(markers, variant_resolvers):
-    """Return the subset of variant_resolvers referenced by markers.
-
-    Args:
-        markers: Iterable of PEP 508 marker strings.
-        variant_resolvers: Either a list of resolver target labels (all returned
-            when any marker references `__variant_`) or a dict mapping
-            resolver target label -> list of item qualified names.
-
-    Returns:
-        List of matching resolver target labels.
-    """
-    if not variant_resolvers:
-        return []
-    variant_markers = [m for m in markers if m and "__variant_" in m]
-    if not variant_markers:
-        return []
-    if type(variant_resolvers) != "dict":
-        return variant_resolvers
-
-    matched = []
-    for label, qnames in sorted(variant_resolvers.items()):
-        found = False
-        for q in qnames:
-            for m in variant_markers:
-                if marker_mentions_variant(m, q):
-                    found = True
-                    break
-            if found:
-                break
-        if found:
-            matched.append(label)
-    return matched if matched else sorted(variant_resolvers.keys())
-
-def _render_evaluator_and_setting(lines, eval_name, expr, setting_name, extra = None, resolvers = None):
+def _render_evaluator_and_setting(lines, eval_name, expr, setting_name, extra = None, has_variants = False):
     """Append a `pycross_pep508_evaluator` and its matching `native.config_setting`."""
     lines.extend([
         ind("pycross_pep508_evaluator("),
@@ -90,36 +46,34 @@ def _render_evaluator_and_setting(lines, eval_name, expr, setting_name, extra = 
     ])
     if extra:
         lines.append(ind("extra = {},".format(json.encode(extra)), 2))
-    if resolvers:
-        lines.append(ind(format_variants_attr(resolvers), 2))
+    if has_variants and expr and "__variant_" in expr:
+        lines.append(ind(VARIANT_STATE_ATTR, 2))
     lines.extend([
         ind(")"),
         "",
     ])
     lines.extend(flag_setting(setting_name, ":" + eval_name, "true", indent = 1, use_native = True))
 
-def render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
+def render_marker_evaluators(lines, unique_markers, has_variants = False):
     """Render deduped pycross_pep508_evaluator and config_setting targets.
 
     Args:
         lines: Output lines list.
         unique_markers: Iterable of (marker_str, extra) tuples.
-        variant_resolvers: Optional list of variant_resolver target labels, or
-            dict mapping resolver label -> list of item qualified names.
+        has_variants: Whether the workspace defines a `:_variant_state` target.
     """
     for marker_str, extra in sorted(unique_markers):
         eval_name = marker_evaluator_name(marker_str, extra)
-        resolvers = matching_variant_resolvers([marker_str], variant_resolvers)
         _render_evaluator_and_setting(
             lines,
             eval_name,
             marker_str,
             marker_match_target_name(eval_name),
             extra = extra,
-            resolvers = resolvers,
+            has_variants = has_variants,
         )
 
-def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_resolvers = None, loads = None):
+def render_resolution_marker_evaluators(lines, resolution_marker_exprs, has_variants = False, loads = None):
     """Render pycross_pep508_evaluator + config_setting for resolution-marker forks.
 
     Entries in ``resolution_marker_exprs`` are either:
@@ -131,8 +85,7 @@ def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_
         lines: Output lines list.
         resolution_marker_exprs: Dict mapping constraint_name to either a
             PEP 508 marker expression string or a compound dict.
-        variant_resolvers: Optional list of variant_resolver target labels, or
-            dict mapping resolver label -> list of item qualified names.
+        has_variants: Whether the workspace defines a `:_variant_state` target.
         loads: Optional dict tracking emitted helper loads (`"selects"`).
     """
     for constraint_name, entry in sorted(resolution_marker_exprs.items()):
@@ -149,11 +102,10 @@ def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_
                 loads["selects"] = True
         else:
             eval_name = "_res_eval_{}".format(constraint_name)
-            resolvers = matching_variant_resolvers([entry], variant_resolvers)
             _render_evaluator_and_setting(
                 lines,
                 eval_name,
                 entry,
                 constraint_setting_name(constraint_name),
-                resolvers = resolvers,
+                has_variants = has_variants,
             )

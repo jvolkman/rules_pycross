@@ -13,9 +13,10 @@ and computes the consistent assignment across all conflict sets:
 
 Thin projection rules (`variant_set_projection` for `_resolver_<set>`, and
 `variant_item_projection` for multi-set items `_item_<qname>`) expose
-`config_common.FeatureFlagInfo` values so `config_setting` targets and PEP 508
-marker evaluators can match them directly without two-stage rival plumbing or
-`_is_<q>_via_<j>` groups.
+`config_common.FeatureFlagInfo` values so `config_setting` targets can match
+them directly without two-stage rival plumbing or `_is_<q>_via_<j>` groups.
+PEP 508 marker evaluators and cycle reachability rules consume
+`VariantStateInfo` directly from `variant_state`.
 """
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
@@ -28,15 +29,10 @@ load(
     "VARIANT_STATE_USABLE_PREFIX",
     "variant_state_key",
 )
+load(":providers.bzl", _VariantStateInfo = "VariantStateInfo")
 load(":variant_util.bzl", "decode_variant_state", "excluded_variant_items", "split_variant_tokens")
 
-VariantStateInfo = provider(
-    doc = "Resolved conflict-variant selections for all conflict sets in a workspace.",
-    fields = {
-        "sets": "dict[str, str]: set_key -> active variant item qname, or '' if unselected.",
-        "active_items": "dict[str, bool]: set of active variant item qnames across all sets.",
-    },
-)
+VariantStateInfo = _VariantStateInfo
 
 def _check_item(set_items, value, source):
     if set_items and value not in set_items:

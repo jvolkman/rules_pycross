@@ -5,10 +5,19 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:variant_resolver.bzl", "variant_item_projection", "variant_set_projection", "variant_state")
+load("//pycross/private:pep508_marker_values.bzl", "collect_markers", "marker_value_attrs")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:providers.bzl", _ProvidersVariantStateInfo = "VariantStateInfo")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:variant_resolver.bzl", "VariantStateInfo", "variant_item_projection", "variant_set_projection", "variant_state")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:variant_util.bzl", "merge_variant_state")
@@ -1074,6 +1083,257 @@ def _test_inconsistent_conflicting_defaults_fails(name):
         expect_failure = True,
     )
 
+# ── Direct VariantStateInfo consumption in evaluators & cycles ───────
+
+_CollectedMarkersInfo = provider(
+    doc = "Test provider exposing markers collected via collect_markers(ctx).",
+    fields = ["markers"],
+)
+
+def _marker_probe_impl(ctx):
+    return [_CollectedMarkersInfo(markers = collect_markers(ctx))]
+
+_marker_probe = rule(
+    implementation = _marker_probe_impl,
+    attrs = marker_value_attrs(),
+    provides = [_CollectedMarkersInfo],
+)
+
+_VARIANT_CYCLE_EDGES = json.encode({
+    "p1@1.0": [{"dep": "p2@1.0", "marker": "extra == '__variant_a'"}],
+    "p2@1.0": [{"dep": "p3@1.0", "marker": "extra == '__variant_d'"}],
+    "p3@1.0": [{"dep": "p1@1.0"}],
+})
+
+def _setup_direct_state_targets(name):
+    """Create an overlapping + disjoint multi-set variant_state and projections."""
+    flag_refs = _setup_flags(name, ["a", "b", "c", "d", "e"])
+    state_flag = _setup_string(name + "_state_setting", "")
+    variant_state(
+        name = name + "_state",
+        state = state_flag,
+        sets = {
+            "s1": ["a", "b"],
+            "s2": ["a", "c"],
+            "s3": ["d", "e"],
+        },
+        flags = dict(zip(flag_refs, ["a", "b", "c", "d", "e"])),
+        tags = ["manual"],
+    )
+    variant_set_projection(
+        name = name + "_proj_s1",
+        state = ":" + name + "_state",
+        set_key = "s1",
+        tags = ["manual"],
+    )
+    variant_set_projection(
+        name = name + "_proj_s2",
+        state = ":" + name + "_state",
+        set_key = "s2",
+        tags = ["manual"],
+    )
+    return flag_refs
+
+def _expect_extra_value(expected):
+    def impl(env, target):
+        extra = target[_CollectedMarkersInfo].markers["extra"]
+        if type(expected) == "list":
+            env.expect.that_collection(extra).contains_exactly(expected).in_order()
+        else:
+            env.expect.that_str(extra).equals(expected)
+
+    return impl
+
+def _test_variant_state_provider_reexport_impl(env, target):
+    env.expect.that_bool(VariantStateInfo == _ProvidersVariantStateInfo).equals(True)
+    info = target[_ProvidersVariantStateInfo]
+    env.expect.that_dict(info.active_items).contains_exactly({"a": True})
+
+def _test_variant_state_provider_reexport(name):
+    """VariantStateInfo lives in providers.bzl and remains bound in variant_resolver.bzl."""
+    flag_refs = _setup_direct_state_targets(name)
+    analysis_test(
+        name = name,
+        target = name + "_state",
+        impl = _test_variant_state_provider_reexport_impl,
+        config_settings = {str(Label(flag_refs[0])): True},
+    )
+
+def _test_direct_variant_state_zero_active(name):
+    """Direct VariantStateInfo with 0 active variants evaluates extra markers as false."""
+    _setup_direct_state_targets(name)
+    _marker_probe(
+        name = name + "_probe",
+        extra = "cudart",
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    pycross_pep508_evaluator(
+        name = name + "_eval",
+        expr = "extra == '__variant_a'",
+        extra = "cudart",
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    pycross_cycle_dep_needed(
+        name = name + "_cycle",
+        source = "p1@1.0",
+        target = "p2@1.0",
+        edges = _VARIANT_CYCLE_EDGES,
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name + "_probe_test",
+        target = name + "_probe",
+        impl = _expect_extra_value("cudart"),
+    )
+    analysis_test(
+        name = name + "_eval_test",
+        target = name + "_eval",
+        impl = _expect_value("false"),
+    )
+    analysis_test(
+        name = name + "_cycle_test",
+        target = name + "_cycle",
+        impl = _expect_value("false"),
+    )
+    native.test_suite(
+        name = name,
+        tests = [name + "_probe_test", name + "_eval_test", name + "_cycle_test"],
+    )
+
+def _test_direct_variant_state_single_overlapping_dedup(name):
+    """Active item shared across overlapping sets is deduplicated in markers['extra']."""
+    flag_refs = _setup_direct_state_targets(name)
+    cfg = {str(Label(flag_refs[0])): True}
+
+    _marker_probe(
+        name = name + "_probe_state",
+        extra = "cudart",
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    _marker_probe(
+        name = name + "_probe_projections",
+        extra = "cudart",
+        variants = [":" + name + "_proj_s1", ":" + name + "_proj_s2"],
+        tags = ["manual"],
+    )
+    pycross_pep508_evaluator(
+        name = name + "_eval",
+        expr = "extra == '__variant_a' and extra != '__variant_d' and extra == 'cudart'",
+        extra = "cudart",
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    pycross_cycle_dep_needed(
+        name = name + "_cycle_hop1",
+        source = "p1@1.0",
+        target = "p2@1.0",
+        edges = _VARIANT_CYCLE_EDGES,
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    pycross_cycle_dep_needed(
+        name = name + "_cycle_hop2",
+        source = "p1@1.0",
+        target = "p3@1.0",
+        edges = _VARIANT_CYCLE_EDGES,
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name + "_probe_state_test",
+        target = name + "_probe_state",
+        impl = _expect_extra_value(["cudart", "__variant_a"]),
+        config_settings = cfg,
+    )
+    analysis_test(
+        name = name + "_probe_projections_test",
+        target = name + "_probe_projections",
+        impl = _expect_extra_value(["cudart", "__variant_a"]),
+        config_settings = cfg,
+    )
+    analysis_test(
+        name = name + "_eval_test",
+        target = name + "_eval",
+        impl = _expect_value("true"),
+        config_settings = cfg,
+    )
+    analysis_test(
+        name = name + "_cycle_hop1_test",
+        target = name + "_cycle_hop1",
+        impl = _expect_value("true"),
+        config_settings = cfg,
+    )
+    analysis_test(
+        name = name + "_cycle_hop2_test",
+        target = name + "_cycle_hop2",
+        impl = _expect_value("false"),
+        config_settings = cfg,
+    )
+    native.test_suite(
+        name = name,
+        tests = [
+            name + "_probe_state_test",
+            name + "_probe_projections_test",
+            name + "_eval_test",
+            name + "_cycle_hop1_test",
+            name + "_cycle_hop2_test",
+        ],
+    )
+
+def _test_direct_variant_state_multiple_active(name):
+    """Direct VariantStateInfo with multiple active variants enables multi-hop cycle and compound markers."""
+    flag_refs = _setup_direct_state_targets(name)
+    cfg = {
+        str(Label(flag_refs[0])): True,  # a (in s1 and s2)
+        str(Label(flag_refs[3])): True,  # d (in s3)
+    }
+
+    _marker_probe(
+        name = name + "_probe",
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    pycross_pep508_evaluator(
+        name = name + "_eval",
+        expr = "extra == '__variant_a' and extra == '__variant_d' and extra != '__variant_b'",
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    pycross_cycle_dep_needed(
+        name = name + "_cycle",
+        source = "p1@1.0",
+        target = "p3@1.0",
+        edges = _VARIANT_CYCLE_EDGES,
+        variants = [":" + name + "_state"],
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name + "_probe_test",
+        target = name + "_probe",
+        impl = _expect_extra_value(["", "__variant_a", "__variant_d"]),
+        config_settings = cfg,
+    )
+    analysis_test(
+        name = name + "_eval_test",
+        target = name + "_eval",
+        impl = _expect_value("true"),
+        config_settings = cfg,
+    )
+    analysis_test(
+        name = name + "_cycle_test",
+        target = name + "_cycle",
+        impl = _expect_value("true"),
+        config_settings = cfg,
+    )
+    native.test_suite(
+        name = name,
+        tests = [name + "_probe_test", name + "_eval_test", name + "_cycle_test"],
+    )
+
 # ── Suite ────────────────────────────────────────────────────────────
 
 def variant_resolver_test_suite(name):
@@ -1119,5 +1379,9 @@ def variant_resolver_test_suite(name):
             _test_multi_flag_conflict_omits_internal_qnames,
             _test_inconsistent_pin_and_sibling_flag_fails,
             _test_inconsistent_conflicting_defaults_fails,
+            _test_variant_state_provider_reexport,
+            _test_direct_variant_state_zero_active,
+            _test_direct_variant_state_single_overlapping_dedup,
+            _test_direct_variant_state_multiple_active,
         ],
     )

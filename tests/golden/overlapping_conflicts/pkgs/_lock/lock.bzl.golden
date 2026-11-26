@@ -17,7 +17,7 @@ def targets():
     pycross_pep508_evaluator(
         name = "_marker_eval_extra____variant_extra_app_xorextra____v_570754500",
         expr = "extra == '__variant_extra_app_x' or extra == '__variant_group_app_g-b'",
-        variants = [":_resolver_extra_app_x_extra_app_y", ":_resolver_extra_app_x_group_app_g-a", ":_resolver_group_app_g-a_group_app_g-b"],
+        variants = [":_variant_state"],
     )
 
     native.config_setting(
@@ -30,7 +30,7 @@ def targets():
     pycross_pep508_evaluator(
         name = "_marker_eval_extra____variant_group_app_g_a_-1597200453",
         expr = "extra == '__variant_group_app_g-a'",
-        variants = [":_resolver_extra_app_x_group_app_g-a", ":_resolver_group_app_g-a_group_app_g-b"],
+        variants = [":_variant_state"],
     )
 
     native.config_setting(
@@ -43,7 +43,7 @@ def targets():
     pycross_pep508_evaluator(
         name = "_marker_eval_sys_platform__win32or_extra____variant_g_-1029222370",
         expr = "sys_platform == 'win32' or (extra == '__variant_group_app_g-a' and extra == '__variant_group_app_g-b')",
-        variants = [":_resolver_extra_app_x_group_app_g-a", ":_resolver_group_app_g-a_group_app_g-b"],
+        variants = [":_variant_state"],
     )
 
     native.config_setting(

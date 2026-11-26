@@ -140,6 +140,7 @@ bzl_library(
     deps = [
         ":deferred_failure",
         ":lock_contract",
+        ":providers",
         ":variant_util",
         "@bazel_skylib//rules:common_settings",
         "@rules_python//python:py_info_bzl",
@@ -361,6 +362,7 @@ bzl_library(
     name = "pep508_marker_values",
     srcs = ["pep508_marker_values.bzl"],
     deps = [
+        ":providers",
         "@bazel_skylib//rules:common_settings",
         "@pypackaging.bzl//:pypackaging",
     ],

@@ -5,7 +5,7 @@ load("//pycross/private:lock_contract.bzl", "is_extras_proxy", "marker_match_tar
 load("//pycross/private:util.bzl", "base_package_key", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 load(":common.bzl", "ind")
 load(":cycle_plan.bzl", "plan_cycle_member_deps")
-load(":markers.bzl", "format_variants_attr", "matching_variant_resolvers")
+load(":markers.bzl", "VARIANT_STATE_ATTR")
 
 def build_cycle_edges_dict(scc, packages):
     """Builds the in-cycle edge map for marker mode.
@@ -45,7 +45,7 @@ def render_marker_cycle_member_deps(
         lines,
         cycle_groups,
         packages,
-        variant_resolvers = None,
+        has_variants = False,
         available_eval_matches = None,
         unique_markers = None,
         loads = None):
@@ -66,7 +66,7 @@ def render_marker_cycle_member_deps(
         lines: Output lines list.
         cycle_groups: Dict mapping cycle group name -> list of member package keys.
         packages: Lock packages dict.
-        variant_resolvers: Optional list/dict of variant_resolver labels.
+        has_variants: Whether the workspace defines a `:_variant_state` target.
         available_eval_matches: Optional dict/set of pre-rendered `<eval_name>_match`
             target names. When `None`, derived from `unique_markers` if provided,
             otherwise `{}`.
@@ -113,13 +113,11 @@ def render_marker_cycle_member_deps(
             if loads != None:
                 loads["cycle_dep_needed"] = True
 
-            edge_markers = [
-                entry.get("marker", "")
+            needs_variants = has_variants and any([
+                "__variant_" in (entry.get("marker") or "")
                 for edge_list in edges.values()
                 for entry in edge_list
-                if entry.get("marker")
-            ]
-            resolvers = matching_variant_resolvers(edge_markers, variant_resolvers)
+            ])
 
             sanitized_group_name = sanitize_name(group_name).upper()
             edges_var_name = "_{}_EDGES_JSON".format(sanitized_group_name)
@@ -134,8 +132,8 @@ def render_marker_cycle_member_deps(
                     ind("target = {},".format(json.encode(representative)), 2),
                     ind("edges = {},".format(edges_var_name), 2),
                 ])
-                if resolvers:
-                    lines.append(ind(format_variants_attr(resolvers), 2))
+                if needs_variants:
+                    lines.append(ind(VARIANT_STATE_ATTR, 2))
                 lines.extend([
                     ind(")"),
                     "",

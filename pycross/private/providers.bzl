@@ -42,3 +42,11 @@ PycrossUnsupportedWheelInfo = provider(
         "package": "string: Package identifier already named by a contextualized deferred failure action, or empty string for the generic `no_match_error` sentinel.",
     },
 )
+
+VariantStateInfo = provider(
+    doc = "Resolved conflict-variant selections for all conflict sets in a workspace.",
+    fields = {
+        "sets": "dict[str, str]: set_key -> active variant item qname, or '' if unselected.",
+        "active_items": "dict[str, bool]: set of active variant item qnames across all sets.",
+    },
+)

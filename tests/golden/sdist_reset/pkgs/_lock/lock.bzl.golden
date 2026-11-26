@@ -17,7 +17,7 @@ def targets():
     pycross_pep508_evaluator(
         name = "_marker_eval_extra____variant_extra_app_gpu_-1952400583",
         expr = "extra == '__variant_extra_app_gpu'",
-        variants = [":_resolver_extra_app_cpu_extra_app_gpu"],
+        variants = [":_variant_state"],
     )
 
     native.config_setting(
