@@ -246,11 +246,6 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
         str(ctx.target_python),
     ]
 
-    target_env_tags = ctx.bazel_config.get("target_environment_tags", [])
-    for tag in target_env_tags:
-        if "manylinux" in tag:
-            crossenv_args.extend(["--manylinux", tag])
-
     try:
         stdlib = host_sysconfig.get_path("stdlib")
         crossenv_env = ctx.build_env.copy()
@@ -271,7 +266,7 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
 
 def build_crossenv_or_standard_venv(ctx: BuildContext) -> None:
     """Build a crossenv venv when cross-compiling, or a standard venv otherwise."""
-    if ctx.exec_python != ctx.target_python or ctx.bazel_config.get("always_use_crossenv"):
+    if ctx.exec_python != ctx.target_python:
         build_crossenv_venv(ctx)
     else:
         build_standard_venv(ctx)

@@ -61,7 +61,7 @@ class CcToolchainTest(unittest.TestCase):
 
         cflags = "-O2 -target x86_64-linux-gnu --sysroot=/tmp/sysroot"
         ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,--as-needed -Wl,-O1 -lpthread"
-        wrapper = wrap_compiler("cc", "/usr/bin/gcc", cflags, Path(sys.executable), bin_dir, ldflags=ldflags)
+        wrapper = wrap_compiler("cc", "/usr/bin/gcc", cflags, bin_dir, ldflags=ldflags)
 
         self.assertTrue(wrapper.exists())
         self.assertTrue(os.access(wrapper, os.X_OK))
@@ -88,7 +88,7 @@ class CcToolchainTest(unittest.TestCase):
 
         cflags = "-O2 -target x86_64-linux-gnu --sysroot=/dev/null"
         ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,-rpath,$ORIGIN -Wl,--as-needed -Wl,-O1 -lpthread"
-        wrapper = wrap_compiler("cc", str(fake_cc), cflags, Path(sys.executable), bin_dir, ldflags=ldflags)
+        wrapper = wrap_compiler("cc", str(fake_cc), cflags, bin_dir, ldflags=ldflags)
 
         def run_wrapper(*args: str) -> list[str]:
             out = subprocess.check_output([str(wrapper), *args], text=True)
@@ -142,7 +142,7 @@ class CcToolchainTest(unittest.TestCase):
         bin_dir.mkdir(exist_ok=True)
         fake_cc = self._make_fake_cc()
 
-        wrapper = wrap_compiler("cc", str(fake_cc), "-O2", Path(sys.executable), bin_dir, ldflags="-lpthread")
+        wrapper = wrap_compiler("cc", str(fake_cc), "-O2", bin_dir, ldflags="-lpthread")
         # Confirm the wrapper checks needs_filter before rebuilding "$@".
         content = wrapper.read_text()
         self.assertIn("needs_filter=0", content)
@@ -160,9 +160,7 @@ class CcToolchainTest(unittest.TestCase):
         # Like the @llvm musl toolchain: -static-pie is executable-only.
         ldflags = "-static-pie -fuse-ld=lld -L/tmp/musl -Wl,--gc-sections"
         ldsharedflags = "-fuse-ld=lld -L/tmp/musl -Wl,--gc-sections -shared"
-        wrapper = wrap_compiler(
-            "cc", str(fake_cc), "-O2", Path(sys.executable), bin_dir, ldflags=ldflags, ldsharedflags=ldsharedflags
-        )
+        wrapper = wrap_compiler("cc", str(fake_cc), "-O2", bin_dir, ldflags=ldflags, ldsharedflags=ldsharedflags)
 
         def run_wrapper(*args: str) -> list[str]:
             return json.loads(subprocess.check_output([str(wrapper), *args], text=True))
@@ -221,6 +219,34 @@ class CcToolchainTest(unittest.TestCase):
         )
         # Executable links get the executable set, including -no-pie.
         self.assertEqual(run_wrapper("a.o", "-o", "a"), ["a.o", "-o", "a", "-fuse-ld=lld", "-no-pie", "-Wl,-S"])
+
+    def test_setup_cc_layer_cxx_wrapper_uses_cxxflags(self):
+        ctx = MockBuildContext(self.temp_path)
+        fake_cc = self._make_fake_cc()
+        cc_config = {
+            "CC": str(fake_cc),
+            "CXX": str(fake_cc),
+            "CFLAGS": "-O2 -target x86_64-linux-gnu --sysroot=/c-sysroot",
+            "CXXFLAGS": "-O2 -target aarch64-apple-darwin -isysroot /cxx-sdk --sysroot=/cxx-sysroot",
+            "LDFLAGS": "",
+            "LDSHAREDFLAGS": "-shared",
+            "AR": "/usr/bin/ar",
+            "ARFLAGS": "rcs",
+        }
+
+        setup_cc_layer(ctx, cc_config)
+
+        cc_out = json.loads(subprocess.check_output([ctx.sysconfig_vars["CC"], "-c", "a.c"], text=True))
+        cxx_out = json.loads(subprocess.check_output([ctx.sysconfig_vars["CXX"], "-c", "a.cc"], text=True))
+
+        self.assertEqual(cc_out, ["-target", "x86_64-linux-gnu", "--sysroot=/c-sysroot", "-c", "a.c"])
+        self.assertEqual(
+            cxx_out,
+            ["-target", "aarch64-apple-darwin", "-isysroot", "/cxx-sdk", "--sysroot=/cxx-sysroot", "-c", "a.cc"],
+        )
+        self.assertNotIn("LDSHAREDFLAGS", ctx.sysconfig_vars)
+        self.assertNotIn("LDSHAREDFLAGS", ctx.build_env)
+        self.assertFalse((self.temp_path / "cc_layer" / "include").exists())
 
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)
@@ -345,7 +371,7 @@ class CcToolchainTest(unittest.TestCase):
         )
         self.assertEqual(
             [Path(path) for path in ctx.build_env["PYCROSS_INCLUDE_PATH"].split(";")],
-            [ctx.temp_dir / "cc_layer" / "include", execroot / "dep include"],
+            [execroot / "dep include"],
         )
         self.assertEqual(ctx.build_env["DISTUTILS_USE_SDK"], "1")
         for key in ("Path", "Include", "Lib"):

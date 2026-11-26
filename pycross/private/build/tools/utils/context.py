@@ -23,7 +23,6 @@ class BuildContext:
     original_sdist_root: str
     sdist_dir: Path
     env_dir: Path
-    bin_dir: Path
     tools_dir: Path
 
     # Key files & executables
@@ -160,7 +159,6 @@ def load_build_context(config_path: str) -> BuildContext:
         original_sdist_root=original_sdist_root,
         sdist_dir=sdist_dir,
         env_dir=temp_dir / "env",
-        bin_dir=temp_dir / "bin",
         tools_dir=temp_dir / "tools",
         sdist_path=(prefix / Path(bazel_config["sdist"])).absolute(),
         exec_python=(

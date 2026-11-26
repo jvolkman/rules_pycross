@@ -64,10 +64,9 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
 
     layer_dir = ctx.temp_dir / "cc_layer"
     layer_lib_dir = layer_dir / "lib"
-    layer_include_dir = layer_dir / "include"
 
     toolchain_provides_cxx_headers = "-nostdlibinc" in cflags_raw or "-nostdlibinc" in cxxflags_raw
-    include_paths = [_cmake_escape(layer_include_dir.absolute().as_posix())]
+    include_paths = []
     for inc_dir_str in cc_config.get("include_dirs", []):
         inc_dir = Path(replace_placeholder(ctx.prefix, inc_dir_str)).absolute()
         if toolchain_provides_cxx_headers and ("libcxx" in str(inc_dir) or "libcxxabi" in str(inc_dir)):
@@ -90,7 +89,6 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     if ranlib_path:
         toolchain_lines.append(f'set(CMAKE_RANLIB "{_cmake_escape(ranlib_path.as_posix())}" CACHE STRING "" FORCE)')
 
-    include_path_args = " ".join(f'"{p}"' for p in include_paths)
     toolchain_lines.extend(
         [
             "",
@@ -102,7 +100,13 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
             f'set(CMAKE_MODULE_LINKER_FLAGS_INIT "{ldflags}")',
             "",
             f'list(PREPEND CMAKE_LIBRARY_PATH "{_cmake_escape(layer_lib_dir.absolute().as_posix())}")',
-            f"list(PREPEND CMAKE_INCLUDE_PATH {include_path_args})",
+        ]
+    )
+    if include_paths:
+        include_path_args = " ".join(f'"{p}"' for p in include_paths)
+        toolchain_lines.append(f"list(PREPEND CMAKE_INCLUDE_PATH {include_path_args})")
+    toolchain_lines.extend(
+        [
             "",
             "# Disable stripping during CMake installation step because the host",
             "# strip utility cannot handle cross-compiled binaries (e.g. Mach-O).",
@@ -130,7 +134,7 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
 
     # Strip compiler env vars so CMake exclusively uses the toolchain file
     # rather than mixing in environment overrides.
-    for key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "LDSHAREDFLAGS", "AR", "ARFLAGS"]:
+    for key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "AR", "ARFLAGS"]:
         ctx.build_env.pop(key, None)
 
 

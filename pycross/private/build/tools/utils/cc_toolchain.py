@@ -113,13 +113,11 @@ def wrap_compiler(
     lang: str,
     cc_exe: str,
     cflags: str,
-    python_exe: Path | None,
     bin_dir: Path,
     ldflags: str = "",
     ldsharedflags: str | None = None,
 ) -> Path:
     """Generate POSIX /bin/sh compiler wrapper scripts to filter incompatible linker flags."""
-    del python_exe  # Kept for signature compatibility; wrappers use POSIX /bin/sh directly.
     assert lang in ("cc", "cxx")
 
     cc_path = Path(cc_exe)
@@ -250,10 +248,8 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     """Populate environment parameters and wrappers for Bazel CC Toolchains."""
     native_msvc = os.name == "nt" and "msvc_env" in cc_config
     layer_bin_dir = ctx.temp_dir / "cc_layer" / "bin"
-    layer_include_dir = ctx.temp_dir / "cc_layer" / "include"
     layer_lib_dir = ctx.temp_dir / "cc_layer" / "lib"
     layer_bin_dir.mkdir(parents=True, exist_ok=True)
-    layer_include_dir.mkdir(parents=True, exist_ok=True)
     layer_lib_dir.mkdir(parents=True, exist_ok=True)
 
     for lib_path_str in cc_config.get("static_libs", []):
@@ -294,13 +290,12 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
         orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
         cc_path = wrap_compiler(
-            "cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags, ldsharedflags=raw_ldsharedflags
+            "cc", orig_cc, cflags, layer_bin_dir, ldflags=raw_ldflags, ldsharedflags=raw_ldsharedflags
         )
         cxx_path = wrap_compiler(
             "cxx",
             orig_cxx,
-            cflags,
-            ctx.exec_python,
+            cxxflags,
             layer_bin_dir,
             ldflags=raw_ldflags,
             ldsharedflags=raw_ldsharedflags,
@@ -341,22 +336,16 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         {
             "CC": str(cc_path.absolute()),
             "CXX": str(cxx_path.absolute()),
-            "CFLAGS": cflags
-            + f" -I{layer_include_dir.absolute()}"
-            + (f" {extra_includes_str}" if extra_includes_str else ""),
-            "CXXFLAGS": cxxflags
-            + f" -I{layer_include_dir.absolute()}"
-            + (f" {extra_includes_str}" if extra_includes_str else ""),
+            "CFLAGS": " ".join(p for p in (cflags, extra_includes_str) if p),
+            "CXXFLAGS": " ".join(p for p in (cxxflags, extra_includes_str) if p),
             "LDFLAGS": ldflags,
-            # Bazel's shared-library link flags, exposed to builders that consume them directly.
-            "LDSHAREDFLAGS": raw_ldsharedflags,
             "AR": replace_placeholder(ctx.prefix, cc_config["AR"]),
             "ARFLAGS": replace_placeholder(ctx.prefix, cc_config["ARFLAGS"]),
         }
     )
     # Propagate the compiled CC toolchain flags directly to the shell environment dictionary
     # so that downstream non-python builders (like Meson/Ninja) receive them cleanly.
-    for env_key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "LDSHAREDFLAGS", "AR", "ARFLAGS"]:
+    for env_key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "AR", "ARFLAGS"]:
         if env_key in ctx.sysconfig_vars:
             ctx.build_env[env_key] = ctx.sysconfig_vars[env_key]
 
@@ -376,7 +365,7 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         ctx.sysconfig_vars["LDCXXSHARED"] = " ".join([ctx.sysconfig_vars["CXX"], "-shared"])
 
     # Set library search paths and the compiler environment for build subprocesses.
-    include_paths = [str(layer_include_dir.absolute())] + [
+    include_paths = [
         str(Path(replace_placeholder(ctx.prefix, p)).absolute()) for p in cc_config.get("include_dirs", [])
     ]
     inherited_path = ctx.build_env.get("PATH", "")

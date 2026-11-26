@@ -108,7 +108,8 @@ class HooksTest(unittest.TestCase):
             )
             hook_exe.chmod(0o755)
 
-        run_pre_build_hook(ctx, {"executable": hook_exe.name, "env": {"PYCROSS_TEST_OUTPUT": str(output_file)}})
+        ctx.build_env["PYCROSS_TEST_OUTPUT"] = str(output_file)
+        run_pre_build_hook(ctx, {"executable": hook_exe.name})
 
         sdist_root, build_path, hook_cwd, pythonpath = output_file.read_text().splitlines()
         self.assertEqual(Path(sdist_root), ctx.sdist_root_dir)

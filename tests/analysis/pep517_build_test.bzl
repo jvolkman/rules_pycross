@@ -109,6 +109,31 @@ def _test_pep517_build_basic_impl(env, target):
     env.expect.that_str(cs_actions[0].content).contains("--build-option")
     env.expect.that_str(cs_actions[0].content).contains("--pure")
 
+def _test_pep517_build_config_settings_data_location(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(_mock_sdist, name = name + "_data")
+    util.helper_target(
+        pep517_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        data = [name + "_data"],
+        config_settings = {"--config": ["$(location " + name + "_data)"]},
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pep517_build_config_settings_data_location_impl,
+    )
+
+def _test_pep517_build_config_settings_data_location_impl(env, target):
+    cs_actions = [a for a in target.actions if a.mnemonic == "FileWrite" and any([o.basename == "config_settings.json" for o in a.outputs.to_list()])]
+    env.expect.that_int(len(cs_actions)).equals(1)
+    settings = json.decode(cs_actions[0].content)
+    expected_suffix = target.label.name.removesuffix("_subject") + "_data.tar.gz"
+    env.expect.that_int(len(settings["--config"])).equals(1)
+    env.expect.that_bool(settings["--config"][0].endswith(expected_suffix)).equals(True)
+    env.expect.that_bool("$(location" in settings["--config"][0]).equals(False)
+
 def _test_pep517_build_resources(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")
     util.helper_target(
@@ -218,6 +243,7 @@ def pep517_build_test_suite(name):
             _test_pep517_build_valid_deps,
             _test_pep517_build_invalid_deps,
             _test_pep517_build_basic,
+            _test_pep517_build_config_settings_data_location,
             _test_pep517_build_resources,
             _test_pep517_build_scratch_dirs,
             _test_validate_build_requires,

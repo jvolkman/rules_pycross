@@ -9,7 +9,7 @@ load(
     "configure_features",
     "create_msvc_environment",
     "get_flags_info",
-    "get_headers",
+    "get_include_dirs",
     "get_libraries",
     "get_tools_info",
 )
@@ -55,7 +55,6 @@ def _get_sysconfig_data(workspace_name, tools, flags):
         "CXX": cxx,
         "CFLAGS": _join_flags_list(workspace_name, flags.cc),
         "CXXFLAGS": _join_flags_list(workspace_name, flags.cxx),
-        "CCSHARED": "-fPIC" if flags.needs_pic_for_dynamic_libraries else "",
         "LDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_executable),
         "LDSHAREDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_shared),
         "AR": ar,
@@ -147,15 +146,13 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
     linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt, native_deps, make_vars) for linkopt in linkopts]
     flags = get_flags_info(
         ctx,
-        copts,
-        linkopts,
-        native_deps = native_deps,
         cc_toolchain = cpp_toolchain,
         feature_configuration = feature_configuration,
+        copts = copts,
+        linkopts = linkopts,
+        native_deps = native_deps,
     )
     tools = get_tools_info(
-        ctx,
-        cc_toolchain = cpp_toolchain,
         feature_configuration = feature_configuration,
     )
     sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
@@ -174,13 +171,12 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
             continue
         ccinfo = dep[CcInfo]
 
-        headers_and_includes = get_headers(ccinfo)
         transitive_files.append(ccinfo.compilation_context.headers)
 
         # force=True: main-repo source paths (e.g. "pkg/include") have no
         # prefix to match, and the builder resolves relative paths against
         # the sdist dir.
-        for inc in headers_and_includes.include_dirs:
+        for inc in get_include_dirs(ccinfo):
             include_dirs.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc, True))
 
         libraries = get_libraries(ccinfo)
@@ -218,7 +214,7 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
         meson_properties = expanded_meson_properties,
     )
     if target_os == "windows" and cpp_toolchain.compiler == "msvc-cl":
-        cc_config["msvc_env"] = create_msvc_environment(ctx, cpp_toolchain, feature_configuration)
+        cc_config["msvc_env"] = create_msvc_environment(cpp_toolchain, feature_configuration)
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_cc_config.json")
     ctx.actions.write(config_json, json.encode(cc_config))

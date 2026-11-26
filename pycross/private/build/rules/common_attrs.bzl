@@ -195,18 +195,6 @@ def group_tool_deps(tool_deps_list):
         result.setdefault(dep[PycrossPackageInfo].package_name, []).append(dep)
     return result
 
-def get_wheel(target):
-    """Extracts the wheel output from a target.
-
-    Args:
-        target: Target, a wheel build target.
-
-    Returns:
-        File: the wheel file or TreeArtifact directory containing a .whl file.
-    """
-    files = target[DefaultInfo].files.to_list()
-    return files[0]
-
 def get_unzipped_wheel(target):
     """Extracts the site_packages TreeArtifact from a target.
 

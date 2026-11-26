@@ -245,7 +245,7 @@ def register_pep517_action(
 
         unique_deps = []
         seen_labels = {}
-        for dep in deps + build_deps:
+        for dep in deps + build_deps + data:
             if dep.label not in seen_labels:
                 seen_labels[dep.label] = True
                 unique_deps.append(dep)

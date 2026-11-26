@@ -25,9 +25,7 @@ bzl_library(
     name = "repaired_wheel",
     srcs = ["repaired_wheel.bzl"],
     deps = [
-        ":cc_toolchain_util",
         ":wheel_shared_libraries",
-        "//pycross/private:providers",
         "//pycross/private/build/actions:repair_action",
     ],
 )
@@ -51,7 +49,6 @@ bzl_library(
     deps = [
         "@bazel_skylib//lib:collections",
         "@rules_cc//cc:action_names_bzl",
-        "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_cc//cc/common",
     ],
 )

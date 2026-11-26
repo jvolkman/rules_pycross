@@ -50,7 +50,6 @@ class TargetContext:
     extension_suffixes: Optional[List[str]]  # target's importlib.machinery.EXTENSION_SUFFIXES
     home: str
     macosx_deployment_target: Optional[str]
-    manylinux_tags: List[str]
     multiarch: Optional[str]
     platform: str  # e.g. apple-aarch64
     project_base: str  # bin dir of target executable
@@ -194,7 +193,6 @@ def build_context(
     lib_path: str,
     sysconfig_vars: Dict[str, Any],
     sysconfig_data_file: str,
-    manylinux_tags: List[str],
     target_platform: Optional[str],
     uname_machine: Optional[str],
 ) -> Context:
@@ -226,7 +224,6 @@ def build_context(
         extension_suffixes=utils.target_extension_suffixes(sysconfig_vars),
         home=str(home),
         macosx_deployment_target=macosx_deployment_target,
-        manylinux_tags=manylinux_tags,
         multiarch=sysconfig_vars.get("MULTIARCH"),
         platform=target_platform,
         project_base=str(project_base),
@@ -246,34 +243,6 @@ def build_context(
     )
 
     return context
-
-
-def expand_manylinux_tags(tags: List[str]) -> List[str]:
-    """
-    Convert legacy manylinux tags to PEP600, because pip only looks for one
-    or the other
-    """
-
-    manylinux_tags = set(tags)
-    extra_tags = set()
-
-    # we'll be very strict here: don't assume that manylinux2014 implies
-    # manylinux1 and so on.
-    if "manylinux1" in manylinux_tags:
-        extra_tags.add("manylinux_2_5")
-    if "manylinux2010" in manylinux_tags:
-        extra_tags.add("manylinux_2_12")
-    if "manylinux2014" in manylinux_tags:
-        extra_tags.add("manylinux_2_17")
-    if "manylinux_2_5" in manylinux_tags:
-        extra_tags.add("manylinux1")
-    if "manylinux_2_12" in manylinux_tags:
-        extra_tags.add("manylinux2010")
-    if "manylinux_2_17" in manylinux_tags:
-        extra_tags.add("manylinux2014")
-
-    manylinux_tags.update(extra_tags)
-    return sorted(manylinux_tags)
 
 
 def write_sysconfig_data(sysconfig_data_path: Path, sysconfig_vars: Dict[str, Any]) -> None:
@@ -298,7 +267,6 @@ def build_env(
     env_dir: str,
     target_python_exe: str,
     sysconfig_vars: Dict[str, Any],
-    manylinux_tags: List[str],
 ) -> Path:
     pyver = "python" + sysconfig.get_config_var("py_version_short")
     env_path = Path(env_dir)
@@ -322,7 +290,6 @@ def build_env(
         lib_path=str(lib_path),
         sysconfig_vars=sysconfig_vars,
         sysconfig_data_file=str(sysconfig_data_file),
-        manylinux_tags=expand_manylinux_tags(manylinux_tags),
         target_platform=None,  # guess
         uname_machine=None,  # guess
     )
@@ -332,13 +299,7 @@ def build_env(
     stdlib = os.path.abspath(os.path.dirname(os.__file__))
     dynload = os.path.join(stdlib, "lib-dynload")
 
-    xopt = subprocess.run(
-        [sys.executable, "--help-xoptions"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    disable_frozen_modules = "frozen_modules=" in xopt.stdout
+    disable_frozen_modules = sys.version_info >= (3, 11)
 
     tmpl = utils.TemplateContext()
     tmpl.update(context.__dict__)
@@ -392,14 +353,6 @@ def main():
         help="A JSON file containing sysconfig data.",
     )
     parser.add_argument(
-        "--manylinux",
-        action="append",
-        default=[],
-        help="""Declare compatibility with the given manylinux platform tag to
-                enable pre-compiled wheels. This argument may be given multiple
-                times.""",
-    )
-    parser.add_argument(
         "--env-dir",
         help="Path to the created environment.",
     )
@@ -417,5 +370,4 @@ def main():
         env_dir=args.env_dir,
         target_python_exe=args.target_python,
         sysconfig_vars=sysconfig_vars,
-        manylinux_tags=args.manylinux,
     )

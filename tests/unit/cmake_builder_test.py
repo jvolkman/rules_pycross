@@ -60,9 +60,9 @@ class CmakeBuilderTest(unittest.TestCase):
 
         # Populates library and filtered include search paths.
         layer_lib = (self.temp_path / "cc_layer" / "lib").absolute().as_posix()
-        layer_inc = (self.temp_path / "cc_layer" / "include").absolute().as_posix()
         self.assertIn(f'list(PREPEND CMAKE_LIBRARY_PATH "{layer_lib}")', content)
-        self.assertIn(f'list(PREPEND CMAKE_INCLUDE_PATH "{layer_inc}" "{native_inc.as_posix()}")', content)
+        self.assertIn(f'list(PREPEND CMAKE_INCLUDE_PATH "{native_inc.as_posix()}")', content)
+        self.assertNotIn("cc_layer/include", content)
         self.assertNotIn("libcxx", content)
 
 
