@@ -73,7 +73,7 @@ def _pin_build(
 
 # buildifier: disable=unused-variable
 def _test_pin_build_no_transition_impl(env, target):
-    """Without target_platform, should use pycross_library_proxy / pycross_file_proxy."""
+    """Without target_platform, should use pycross_thin_library_proxy / pycross_file_proxy."""
     res = _pin_build(
         target_name = "numpy",
         pin_target_dict = {"": "numpy@1.26.0"},
@@ -81,8 +81,9 @@ def _test_pin_build_no_transition_impl(env, target):
     ).build
 
     # Should load the non-transitioning rules
-    env.expect.that_bool("pycross_library_proxy" in res).equals(True)
+    env.expect.that_bool("pycross_thin_library_proxy" in res).equals(True)
     env.expect.that_bool("pycross_file_proxy" in res).equals(True)
+    env.expect.that_bool("pycross_library_proxy" not in res).equals(True)
 
     # Should NOT have transitioning variants
     env.expect.that_bool("pycross_transitioning_library_proxy" not in res).equals(True)
@@ -146,7 +147,7 @@ def _test_pin_build_transition_loads_impl(env, target):
 
     # Without platform: load should have non-transitioning
     load_no = [line for line in res_no_platform.split("\n") if line.startswith("load(")][0]
-    env.expect.that_bool('"pycross_library_proxy"' in load_no).equals(True)
+    env.expect.that_bool('"pycross_thin_library_proxy"' in load_no).equals(True)
     env.expect.that_bool('"pycross_file_proxy"' in load_no).equals(True)
     env.expect.that_bool("transitioning" not in load_no).equals(True)
 
@@ -1610,7 +1611,7 @@ def _test_render_transition_bzl_and_maybe_build_impl(env, _target):
     env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values")')
     env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:variant_util.bzl", "merge_variant_state")')
     env.expect.that_str(bzl).contains("merge_variant_state(settings[_VARIANT_STATE_LABEL], _VARIANT_STATE_OVERRIDES)")
-    env.expect.that_str(bzl).contains("pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition)")
+    env.expect.that_str(bzl).contains("pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition, supports_deps = False)")
     env.expect.that_str(bzl).contains("pycross_transitioning_file_proxy = make_file_proxy_rule(cfg = _repo_transition)")
     env.expect.that_bool("_SETTING_VALUES" in bzl).equals(False)
     env.expect.that_bool("split_setting_value" in bzl).equals(False)

@@ -1,4 +1,4 @@
-load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")
+load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_thin_library_proxy")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -7,7 +7,7 @@ alias(
     actual = ":pkg",
 )
 
-pycross_library_proxy(
+pycross_thin_library_proxy(
     name = "pkg",
     actual = "@golden_extras__pkgs//_lock:only-extra[_all_]@1.0.0",
 )
@@ -26,12 +26,12 @@ alias(
     name = "data",
     actual = ":pkg",
 )
-pycross_library_proxy(
+pycross_thin_library_proxy(
     name = "[]",
     actual = "@golden_extras__pkgs//_lock:only-extra@1.0.0",
 )
 
-pycross_library_proxy(
+pycross_thin_library_proxy(
     name = "[opt]",
     actual = "@golden_extras__pkgs//_lock:only-extra[opt]@1.0.0",
 )

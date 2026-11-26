@@ -35,6 +35,6 @@ _repo_transition = transition(
     ],
 )
 
-pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition)
+pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition, supports_deps = False)
 
 pycross_transitioning_file_proxy = make_file_proxy_rule(cfg = _repo_transition)

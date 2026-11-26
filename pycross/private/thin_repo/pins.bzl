@@ -126,8 +126,8 @@ def pin_build(pin, repo_ctx):
         file_rule = "pycross_transitioning_file_proxy"
     else:
         # No transition.
-        proxy_load = 'load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")'
-        lib_rule = "pycross_library_proxy"
+        proxy_load = 'load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_thin_library_proxy")'
+        lib_rule = "pycross_thin_library_proxy"
         file_rule = "pycross_file_proxy"
 
     lines = []
@@ -145,6 +145,28 @@ def pin_build(pin, repo_ctx):
         if target_platform:
             lines.append("    platform = {},".format(json.encode(target_platform)))
         lines.extend([")", ""])
+
+    def _emit_maybe_target(maybe_name, actual_maybe_name, pkg_target, actual_target, target_dict, available_keys, helper_prefix):
+        if not target_dict or (not available_keys and "" in target_dict):
+            return
+        out_lines = actual_lines if has_transition else lines
+        alias_name = actual_maybe_name if has_transition else maybe_name
+        alias_target = actual_target if has_transition else pkg_target
+        used = used_actual if has_transition else used_main
+        unselected_groups.update(emit_maybe_alias(
+            out_lines,
+            alias_name,
+            alias_target,
+            target_dict,
+            available_keys,
+            workspace_repo,
+            no_variant_fallbacks = no_variant_fallbacks,
+            helper_prefix = helper_prefix,
+            packages = packages,
+            used = used,
+        ))
+        if has_transition:
+            _emit_proxy(lib_rule, maybe_name, json.encode("{}:{}".format(actual_pkg_ref, actual_maybe_name)), is_testonly = testonly)
 
     actual_pkg = None
     if pin_target_dict:
@@ -190,67 +212,26 @@ def pin_build(pin, repo_ctx):
         actual_extra = proxy_actual(actual_lines, extra_target_dict, lock_ref, workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
         unselected_groups.update(actual_extra.unselected_groups)
         _emit_proxy(lib_rule, "[{}]".format(extra_name), actual_extra.expr, is_testonly = testonly)
-        extra_maybe = extras_maybe_keys.get(extra_name)
-        if extra_target_dict and (extra_maybe or "" not in extra_target_dict):
-            if has_transition:
-                actual_extra_maybe = "extra_{}_maybe".format(extra_name)
-                unselected_groups.update(emit_maybe_alias(
-                    actual_lines,
-                    actual_extra_maybe,
-                    actual_extra.label,
-                    extra_target_dict,
-                    extra_maybe,
-                    workspace_repo,
-                    no_variant_fallbacks = no_variant_fallbacks,
-                    helper_prefix = "_maybe_extra_{}".format(extra_name),
-                    packages = packages,
-                    used = used_actual,
-                ))
-                _emit_proxy(lib_rule, "[{}]_maybe".format(extra_name), json.encode("{}:{}".format(actual_pkg_ref, actual_extra_maybe)), is_testonly = testonly)
-            else:
-                unselected_groups.update(emit_maybe_alias(
-                    lines,
-                    "[{}]_maybe".format(extra_name),
-                    ":[{}]".format(extra_name),
-                    extra_target_dict,
-                    extra_maybe,
-                    workspace_repo,
-                    no_variant_fallbacks = no_variant_fallbacks,
-                    helper_prefix = "_maybe_extra_{}".format(extra_name),
-                    packages = packages,
-                    used = used_main,
-                ))
+        _emit_maybe_target(
+            maybe_name = "[{}]_maybe".format(extra_name),
+            actual_maybe_name = "extra_{}_maybe".format(extra_name),
+            pkg_target = ":[{}]".format(extra_name),
+            actual_target = actual_extra.label,
+            target_dict = extra_target_dict,
+            available_keys = extras_maybe_keys.get(extra_name),
+            helper_prefix = "_maybe_extra_{}".format(extra_name),
+        )
 
-    if pin_target_dict and (maybe_available_keys or "" not in pin_target_dict):
-        maybe_name = safe_name(target_name, "maybe")
-        pkg_name = safe_name(target_name, "pkg")
-        if has_transition:
-            unselected_groups.update(emit_maybe_alias(
-                actual_lines,
-                "maybe",
-                actual_pkg.label,
-                pin_target_dict,
-                maybe_available_keys,
-                workspace_repo,
-                no_variant_fallbacks = no_variant_fallbacks,
-                helper_prefix = "_maybe",
-                packages = packages,
-                used = used_actual,
-            ))
-            _emit_proxy(lib_rule, maybe_name, json.encode("{}:maybe".format(actual_pkg_ref)), is_testonly = testonly)
-        else:
-            unselected_groups.update(emit_maybe_alias(
-                lines,
-                maybe_name,
-                ":{}".format(pkg_name),
-                pin_target_dict,
-                maybe_available_keys,
-                workspace_repo,
-                no_variant_fallbacks = no_variant_fallbacks,
-                helper_prefix = "_maybe",
-                packages = packages,
-                used = used_main,
-            ))
+    if pin_target_dict:
+        _emit_maybe_target(
+            maybe_name = safe_name(target_name, "maybe"),
+            actual_maybe_name = "maybe",
+            pkg_target = ":{}".format(safe_name(target_name, "pkg")),
+            actual_target = actual_pkg.label,
+            target_dict = pin_target_dict,
+            available_keys = maybe_available_keys,
+            helper_prefix = "_maybe",
+        )
 
     header_lines = [proxy_load]
     if used_main.get("selects"):

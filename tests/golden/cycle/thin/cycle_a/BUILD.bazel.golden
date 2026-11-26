@@ -1,4 +1,4 @@
-load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")
+load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_thin_library_proxy")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -7,7 +7,7 @@ alias(
     actual = ":pkg",
 )
 
-pycross_library_proxy(
+pycross_thin_library_proxy(
     name = "pkg",
     actual = "@golden_cycle__pkgs//_lock:cycle-a@1.0.0",
 )
