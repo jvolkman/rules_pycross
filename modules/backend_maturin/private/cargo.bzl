@@ -4,52 +4,64 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 
 _CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
 
-def find_cargo_lock_in_sdist(rctx, sdist_root):
+def find_cargo_lock_in_sdist(rctx, sdist_root, source_dir = ""):
     """Find Cargo.lock in sdist.
 
-    Checks pyproject.toml (maturin and setuptools-rust config) for the manifest
-    directory and walks up to the sdist root to support Cargo workspaces.
+    Checks pyproject.toml (maturin and setuptools-rust config) under
+    ``source_dir`` (or ``sdist_root`` when unset) for the manifest directory
+    and walks up to ``sdist_root`` to support Cargo workspaces.
 
     Args:
         rctx: The repository context.
-        sdist_root: The root directory of the extracted sdist.
+        sdist_root: The archive-root directory of the extracted sdist (or hook files dir).
+        source_dir: Optional package subdirectory within the sdist archive.
 
     Returns:
         The Path to the Cargo.lock file, or None if not found.
     """
-    pyproject_path = sdist_root.get_child("pyproject.toml")
+    source_dir_parts = [p for p in source_dir.split("/") if p and p != "."]
+    pkg_dir = sdist_root
+    for part in source_dir_parts:
+        pkg_dir = pkg_dir.get_child(part)
+
+    pyproject_path = pkg_dir.get_child("pyproject.toml")
     manifest_path = "Cargo.toml"
 
     if pyproject_path.exists:
         pyproject = decode(rctx.read(pyproject_path))
 
         # Check Maturin
-        maturin_config = pyproject.get("tool", {}).get("maturin", {})
-        if maturin_config:
-            manifest_path = maturin_config.get("manifest-path", "Cargo.toml")
+        tool_cfg = pyproject.get("tool", {})
+        maturin_config = tool_cfg.get("maturin", {})
+        if type(maturin_config) == "dict" and "manifest-path" in maturin_config:
+            manifest_path = maturin_config["manifest-path"]
         else:
             # Check Setuptools-Rust
-            ext_modules = pyproject.get("tool", {}).get("setuptools-rust", {}).get("ext-modules", [])
-            if ext_modules and type(ext_modules) == "list":
+            sr_config = tool_cfg.get("setuptools-rust", {})
+            ext_modules = sr_config.get("ext-modules", []) if type(sr_config) == "dict" else []
+            if type(ext_modules) == "list" and ext_modules and type(ext_modules[0]) == "dict":
                 manifest_path = ext_modules[0].get("path", "Cargo.toml")
 
-        parts = [p for p in manifest_path.split("/")[:-1] if p and p != "."]
+    parts = list(source_dir_parts)
+    for part in manifest_path.split("/")[:-1]:
+        if not part or part == ".":
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+        else:
+            parts.append(part)
 
-        # Walk from the manifest directory up to sdist_root (Cargo places
-        # Cargo.lock at the workspace root when manifest-path points into a
-        # member subdirectory).
-        for depth in range(len(parts), -1, -1):
-            d = sdist_root
-            for part in parts[:depth]:
-                d = d.get_child(part)
-            lock = d.get_child("Cargo.lock")
-            if lock.exists:
-                return lock
-        return None
-
-    lock = sdist_root.get_child("Cargo.lock")
-    if lock.exists:
-        return lock
+    # Walk from the manifest directory up to sdist_root (Cargo places
+    # Cargo.lock at the workspace root when manifest-path or source_dir
+    # points into a member subdirectory).
+    for depth in range(len(parts), -1, -1):
+        d = sdist_root
+        for part in parts[:depth]:
+            d = d.get_child(part)
+        lock = d.get_child("Cargo.lock")
+        if lock.exists:
+            return lock
 
     return None
 

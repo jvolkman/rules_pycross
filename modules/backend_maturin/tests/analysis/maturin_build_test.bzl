@@ -5,6 +5,8 @@ load("@rules_python//python:defs.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
+load("//private:cargo.bzl", "find_cargo_lock_in_sdist")
+load("//private:rust_common_sdist_hook.bzl", "rust_common_sdist_hook")
 load("//rules:maturin_build.bzl", "maturin_build")
 
 def _mock_pkg_impl(ctx):
@@ -198,6 +200,106 @@ def _test_maturin_build_vendored_crates_path_impl(env, target):
     vendor_env = build_action.actual.env.get("CARGO_VENDORED_SOURCES", "")
     env.expect.that_bool(vendor_env.endswith("/custom_vendor")).equals(True)
 
+def _fake_path(rel_path, files):
+    exists = rel_path == "" or rel_path in files or any([p.startswith(rel_path + "/") for p in files])
+    is_dir = rel_path == "" or any([p.startswith(rel_path + "/") for p in files])
+    return struct(
+        path = rel_path,
+        exists = exists,
+        is_dir = is_dir,
+        get_child = lambda name: _fake_path((rel_path + "/" + name) if rel_path else name, files),
+        readdir = lambda: [_fake_path(rel_path + "/ws-1.0", files)] if rel_path == "cargo_lock_check_tmp" else [],
+    )
+
+def _test_rust_sdist_hook_uses_hook_files_dir_without_extract(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_rust_sdist_hook_uses_hook_files_dir_without_extract_impl,
+    )
+
+# buildifier: disable=unused-variable
+def _test_rust_sdist_hook_uses_hook_files_dir_without_extract_impl(env, target):
+    # 1. Workspace upward walk from maturin manifest-path finds root Cargo.lock.
+    workspace_files = {
+        "pyproject.toml": '[tool.maturin]\nmanifest-path = "crates/py/Cargo.toml"\n',
+        "Cargo.lock": '[[package]]\nname = "demo"\nversion = "0.1.0"\n',
+    }
+    fake_rctx = struct(
+        name = "test_sdist_repo",
+        attr = struct(source_dir = ""),
+        read = lambda p: workspace_files[p.path],
+        report_progress = lambda _msg: None,
+        delete = lambda _p: None,
+        extract = lambda **_kwargs: fail("rust_common_sdist_hook must not re-extract sdist archive"),
+    )
+    found_ws = find_cargo_lock_in_sdist(fake_rctx, _fake_path("", workspace_files))
+    env.expect.that_str(found_ws.path).equals("Cargo.lock")
+
+    # 2. Nested setuptools-rust lock next to Cargo.toml is preferred over workspace root.
+    sr_files = {
+        "pyproject.toml": '[[tool.setuptools-rust.ext-modules]]\npath = "src/rust/Cargo.toml"\n',
+        "Cargo.lock": "root\n",
+        "src/rust/Cargo.lock": "nested\n",
+    }
+    sr_rctx = struct(read = lambda p: sr_files[p.path])
+    found_sr = find_cargo_lock_in_sdist(sr_rctx, _fake_path("", sr_files))
+    env.expect.that_str(found_sr.path).equals("src/rust/Cargo.lock")
+
+    # 3. source_dir inside a Cargo workspace reads py/pyproject.toml and walks up to root Cargo.lock.
+    sub_ws_files = {
+        "Cargo.lock": '[[package]]\nname = "demo"\nversion = "0.1.0"\n',
+        "py/pyproject.toml": '[tool.maturin]\nmanifest-path = "Cargo.toml"\n',
+        "bindings/py/pyproject.toml": '[tool.maturin]\nmanifest-path = "../rust/Cargo.toml"\n',
+        "bindings/rust/Cargo.lock": '[[package]]\nname = "demo"\nversion = "0.2.0"\n',
+    }
+    sub_ws_rctx = struct(
+        name = "test_sub_ws_repo",
+        attr = struct(source_dir = "py"),
+        read = lambda p: sub_ws_files[p.path],
+        report_progress = lambda _msg: None,
+        delete = lambda _p: None,
+        extract = lambda **_kwargs: fail("rust_common_sdist_hook must not re-extract sdist archive"),
+    )
+    env.expect.that_str(
+        find_cargo_lock_in_sdist(sub_ws_rctx, _fake_path("", sub_ws_files), source_dir = "py").path,
+    ).equals("Cargo.lock")
+    env.expect.that_str(
+        find_cargo_lock_in_sdist(sub_ws_rctx, _fake_path("", sub_ws_files), source_dir = "bindings/py").path,
+    ).equals("bindings/rust/Cargo.lock")
+
+    # 4. rust_common_sdist_hook consumes result.hook_files_dir (with source_dir) without touching rctx.extract.
+    hook_res = rust_common_sdist_hook(
+        sub_ws_rctx,
+        struct(
+            applied_override_config = {},
+            hook_files_dir = _fake_path("", sub_ws_files),
+        ),
+    )
+    env.expect.that_str(hook_res.extra_attrs["vendored_crates"]).equals('":vendored_crates"')
+
+    # 5. Version-skew fallback: if result omits hook_files_dir, falls back to rctx.extract.
+    extracted_calls = []
+    fallback_files = {
+        "cargo_lock_check_tmp/ws-1.0/Cargo.lock": '[[package]]\nname = "demo"\nversion = "0.1.0"\n',
+        "cargo_lock_check_tmp/ws-1.0/py/pyproject.toml": '[tool.maturin]\nmanifest-path = "Cargo.toml"\n',
+        "Cargo.lock.extracted": '[[package]]\nname = "demo"\nversion = "0.1.0"\n',
+    }
+    fallback_rctx = struct(
+        name = "test_fallback_repo",
+        attr = struct(sdist = "@fake//:sdist.tar.gz", source_dir = "py"),
+        path = lambda p: _fake_path(p, fallback_files),
+        file = lambda _p, _content: None,
+        read = lambda p: fallback_files[p.path],
+        report_progress = lambda _msg: None,
+        delete = lambda _p: None,
+        extract = lambda **kwargs: extracted_calls.append(kwargs),
+    )
+    fallback_res = rust_common_sdist_hook(fallback_rctx, struct(applied_override_config = {}))
+    env.expect.that_int(len(extracted_calls)).equals(1)
+    env.expect.that_str(fallback_res.extra_attrs["vendored_crates"]).equals('":vendored_crates"')
+
 def maturin_build_test_suite(name):
     test_suite(
         name = name,
@@ -207,5 +309,6 @@ def maturin_build_test_suite(name):
             _test_maturin_build_missing_tools,
             _test_maturin_build_tool_deps_aspect,
             _test_maturin_build_vendored_crates_path,
+            _test_rust_sdist_hook_uses_hook_files_dir_without_extract,
         ],
     )

@@ -7,12 +7,11 @@ load(
     "CC_TOOLCHAINS",
     "CC_TOOLCHAIN_ATTRS",
     "COMMON_BUILD_ATTRS",
+    "COMMON_TOOLCHAINS",
     "REPAIR_BUILD_ATTRS",
     "extract_cc_layer",
-    "get_resource_set",
     "pycross_exec_platform_transition",
-    "register_pep517_action",
-    "register_repair_action",
+    "run_wheel_build",
 )
 
 def get_executable_file(val):
@@ -182,9 +181,7 @@ RUST_BUILD_COMMON_ATTRS = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATT
     ),
 }
 
-RUST_BUILD_TOOLCHAINS = [
-    "@rules_python//python:toolchain_type",
-    config_common.toolchain_type("@rules_pycross//pycross:toolchain_type", mandatory = False),
+RUST_BUILD_TOOLCHAINS = COMMON_TOOLCHAINS + [
     "@rules_rust//rust:toolchain_type",
 ] + CC_TOOLCHAINS
 
@@ -241,15 +238,11 @@ def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
             ctx.files.vendored_crates,
         )
 
-    resources = get_resource_set(ctx.attr)
     env = {}
-    if resources.parallelism > 0:
-        env["CARGO_BUILD_JOBS"] = str(resources.parallelism)
-        env["MAKEFLAGS"] = "-j{}".format(resources.parallelism)
     if cargo_vendored_sources:
         env["CARGO_VENDORED_SOURCES"] = cargo_vendored_sources
 
-    build_result = register_pep517_action(
+    return run_wheel_build(
         ctx,
         builder = ctx.attr._builder,
         additional_build_deps = additional_build_deps,
@@ -258,23 +251,6 @@ def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
         extra_files = extra_files,
         extra_inputs = ctx.files.vendored_crates if ctx.attr.vendored_crates else [],
         env = env,
-        resource_set = resources.resource_set,
-    )
-
-    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-    repair_result = register_repair_action(
-        ctx,
-        input_wheel_dir = build_result.wheel_dir,
-        native_deps = ctx.attr.native_deps,
-        repair_tool = ctx.executable._repair_tool,
-        target_environment = target_environment,
-        repair_exclude_globs = ctx.attr.repair_exclude_globs,
+        parallelism_env_vars = ("CARGO_BUILD_JOBS",),
         repair_deps = tool_deps.get("repairwheel", []),
     )
-
-    return [
-        DefaultInfo(files = depset([repair_result.wheel_dir])),
-        OutputGroupInfo(
-            raw_wheel = depset([build_result.wheel_dir]),
-        ),
-    ]

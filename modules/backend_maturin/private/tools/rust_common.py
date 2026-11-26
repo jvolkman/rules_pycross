@@ -10,21 +10,13 @@ import sys
 import textwrap
 from pathlib import Path
 
+from private.tools.cargo_manifest import find_cargo_dir  # noqa: F401
+from private.tools.cargo_manifest import load_toml_file
+
 from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import resolve_sandbox_path
 from pycross.private.build.tools.utils.sysconfig_utils import SYSCONFIG_DATA_NAME
-
-
-def load_toml_file(path: Path) -> dict:
-    """Parse a TOML file using tomllib (Python 3.11+) or pip vendored tomli (Python 3.10)."""
-    try:
-        import tomllib
-    except ImportError:
-        from pip._vendor import tomli as tomllib  # type: ignore[no-redef]
-
-    with open(path, "rb") as f:
-        return tomllib.load(f)
 
 
 def _find_cargo_workspace_root(cargo_dir: Path) -> Path:

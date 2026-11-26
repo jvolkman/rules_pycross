@@ -49,6 +49,69 @@ def resolve_import_path_fn(workspace_name, root_path, sibling_layout):
 
     return fn
 
+def collect_py_import_paths(ctx, targets, fallback_bin_dir = None):
+    """Collects execroot import paths and transitive sources from PyInfo targets.
+
+    Resolves each target's ``PyInfo.imports`` against the distinct root paths present in
+    ``PyInfo.transitive_sources`` (falling back to ``fallback_bin_dir`` or ``ctx.bin_dir.path``
+    only when ``transitive_sources`` is empty), and appends ``<dir>/site-packages`` for
+    directory TreeArtifacts (installed wheels under ``venvs_site_packages``).
+
+    Args:
+        ctx: The rule context.
+        targets: list[Target], targets that may provide PyInfo.
+        fallback_bin_dir: optional str, root path used when transitive_sources is empty.
+
+    Returns:
+        struct(
+            paths = list[str],   # deduplicated execroot import paths in stable order
+            sources = depset,    # combined PyInfo.transitive_sources
+        )
+    """
+    py_infos = [dep[PyInfo] for dep in targets if PyInfo in dep]
+    if not py_infos:
+        return struct(paths = [], sources = depset())
+
+    sources = depset(transitive = [info.transitive_sources for info in py_infos])
+    imports = depset(transitive = [info.imports for info in py_infos])
+    source_list = sources.to_list()
+
+    seen_roots = {}
+    root_paths = []
+    for src in source_list:
+        root_path = src.root.path
+        if root_path not in seen_roots:
+            seen_roots[root_path] = True
+            root_paths.append(root_path)
+    if not root_paths:
+        root_paths = [fallback_bin_dir if fallback_bin_dir != None else ctx.bin_dir.path]
+
+    sibling_layout = is_sibling_repository_layout_enabled()
+    map_fns = [
+        resolve_import_path_fn(ctx.workspace_name, root_path, sibling_layout)
+        for root_path in root_paths
+    ]
+
+    seen_paths = {}
+    result_paths = []
+    for imp in imports.to_list():
+        for map_fn in map_fns:
+            resolved = map_fn(imp)
+            if resolved not in seen_paths:
+                seen_paths[resolved] = True
+                result_paths.append(resolved)
+
+    # Installed wheels (pycross_wheel_library TreeArtifacts) don't list their site-packages in
+    # PyInfo.imports under venvs_site_packages, so add them from the sources as well.
+    for src in source_list:
+        if src.is_directory:
+            site_packages = paths.join(src.path, "site-packages")
+            if site_packages not in seen_paths:
+                seen_paths[site_packages] = True
+                result_paths.append(site_packages)
+
+    return struct(paths = result_paths, sources = sources)
+
 def validate_build_requires(build_requires, build_deps, sdist_name):
     """Validate PEP 508 build-system.requires against resolved build_deps versions.
 
@@ -218,43 +281,18 @@ def register_pep517_action(
     dummy_target = ctx.attr._dummy_bin_file[0] if type(ctx.attr._dummy_bin_file) == "list" else ctx.attr._dummy_bin_file
     deps_bin_dir = dummy_target[DefaultInfo].files.to_list()[0].root.path
 
-    all_deps = deps + build_deps
-    imports = depset(transitive = [d[PyInfo].imports for d in all_deps])
-    map_fn = resolve_import_path_fn(
-        ctx.workspace_name,
-        deps_bin_dir,
-        is_sibling_repository_layout_enabled(),
-    )
-    python_paths = [map_fn(imp) for imp in imports.to_list()]
+    py_imports = collect_py_import_paths(ctx, deps + build_deps, fallback_bin_dir = deps_bin_dir)
+    python_paths = py_imports.paths
+    transitive_inputs.append(py_imports.sources)
 
-    # Installed wheels (pycross_wheel_library TreeArtifacts) don't list their site-packages in
-    # PyInfo.imports under venvs_site_packages, so add them from the sources as well.
-    sources = depset(transitive = [dep[PyInfo].transitive_sources for dep in all_deps])
-    for src in sources.to_list():
-        if src.is_directory:
-            site_packages = paths.join(src.path, "site-packages")
-            if site_packages not in python_paths:
-                python_paths.append(site_packages)
-    transitive_inputs.append(sources)
-
-    # Resolve user-provided config settings
-    config_settings_file = None
-    if config_settings != None and type(config_settings) == "dict" and len(config_settings) > 0:
-        config_settings_file = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
-        inputs.append(config_settings_file)
-
-        unique_deps = []
+    has_config_settings = config_settings != None and type(config_settings) == "dict" and len(config_settings) > 0
+    unique_deps = []
+    if has_config_settings or build_env:
         seen_labels = {}
         for dep in deps + build_deps + data:
             if dep.label not in seen_labels:
                 seen_labels[dep.label] = True
                 unique_deps.append(dep)
-
-        expanded_settings = {}
-        for key, value in config_settings.items():
-            expanded_settings[key] = [ctx.expand_location(vi, unique_deps) for vi in value]
-
-        ctx.actions.write(config_settings_file, json.encode(expanded_settings))
 
     # Resolve pkg-config and hooks
     expanded_site_hooks = []
@@ -300,28 +338,25 @@ def register_pep517_action(
         "target_python": target_python,
         "python_paths": python_paths,
         "layers": layer_jsons,
-        "config_settings_raw": config_settings_file.path if config_settings_file else None,
         "site_hooks": expanded_site_hooks,
         "pkg_config_files": pkg_config_paths,
         "path_tools": path_tools_list,
         "wheel_dir": out_wheel_dir.path,
     }
 
-    # Merge programmatic env defaults (e.g. parallelism flags from
-    # resource_size) with user-specified build_env.  User values win.
-    merged_env = dict(env)
-    merged_env.update(build_env)
-    if merged_env:
-        unique_deps = []
-        seen_labels = {}
-        for dep in deps + build_deps + data:
-            if dep.label not in seen_labels:
-                seen_labels[dep.label] = True
-                unique_deps.append(dep)
-        expanded_env = {}
-        for key, value in merged_env.items():
-            expanded_env[key] = ctx.expand_location(value, unique_deps)
-        main_config["build_env"] = expanded_env
+    if has_config_settings:
+        main_config["config_settings"] = {
+            key: [ctx.expand_location(vi, unique_deps) for vi in value]
+            for key, value in config_settings.items()
+        }
+
+    # User-specified build_env is recorded in main_config and applied over
+    # action_env (which carries programmatic defaults like MAKEFLAGS) in context.py.
+    if build_env:
+        main_config["build_env"] = {
+            key: ctx.expand_location(value, unique_deps)
+            for key, value in build_env.items()
+        }
 
     # Data files: make available in the sandbox.
     for d in data:
@@ -379,11 +414,10 @@ def register_pep517_action(
     action_env.update({
         "PYCROSS_BUILD_ROOT": build_root,
         "PYCROSS_SDIST_DIR": sdist_root,
-        "PYTHONPATH": ":".join([sdist_root] + python_paths),
     })
 
-    # Also set programmatic env on the action so subprocesses inherit
-    # them directly, in addition to build_env in the config JSON.
+    # Programmatic env defaults (e.g. MAKEFLAGS, CARGO_VENDORED_SOURCES) are
+    # passed via action_env; user build_env in main_config overrides them.
     action_env.update(env)
 
     # No "supports-path-mapping": paths are embedded in the config JSON and

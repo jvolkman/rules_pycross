@@ -1,31 +1,16 @@
 """Implementation of the cmake_build rule."""
 
-load("//pycross/private/build:resource_sets.bzl", "get_resource_set")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
-load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
-load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load("//pycross/private/build/actions:tool_extract.bzl", "PycrossExtractedToolInfo", "extract_wheel_tool_aspect")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "defer_build_error", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
+load("//pycross/private/build/actions:tool_extract.bzl", "extract_wheel_tool_aspect", "extract_wheel_tools")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "COMMON_TOOLCHAINS", "REPAIR_BUILD_ATTRS", "defer_build_error", "group_tool_deps", "resolve_path_tools", "run_wheel_build")
 
 def _cmake_build_impl(ctx):
     # 1. Extract tools
     tool_deps = group_tool_deps(ctx.attr.tool_deps)
-
-    missing_tools = [t for t in ("cmake", "ninja") if t not in tool_deps]
-    if missing_tools:
-        return defer_build_error(ctx, ["Missing '{}' in tool_deps".format(t) for t in missing_tools])
-
-    tool_executables = []
-    for tool_pkg in ("cmake", "ninja"):
-        dep = tool_deps[tool_pkg][0]
-        if PycrossExtractedToolInfo in dep:
-            info = dep[PycrossExtractedToolInfo]
-            tool_executables.append(struct(name = info.name, file = info.file))
-        else:
-            # Validates PycrossExtractedWheelInfo and fails with a clear message if missing.
-            get_unzipped_wheel(dep)
-            fail("Expected PycrossExtractedToolInfo on '{}' tool target {}".format(tool_pkg, dep.label))
+    tool_executables, missing_errors = extract_wheel_tools(tool_deps, ("cmake", "ninja"))
+    if missing_errors:
+        return defer_build_error(ctx, missing_errors)
 
     tool_executables.extend(resolve_path_tools(ctx))
 
@@ -51,43 +36,16 @@ def _cmake_build_impl(ctx):
     if "ninja" in tool_deps:
         additional_build_deps.extend(tool_deps["ninja"])
 
-    resources = get_resource_set(ctx.attr)
-    env = {}
-    if resources.parallelism > 0:
-        sc = str(resources.parallelism)
-        env["CMAKE_BUILD_PARALLEL_LEVEL"] = sc
-        env["NINJA_JOBS"] = sc
-        env["MAKEFLAGS"] = "-j{}".format(sc)
-
-    # 3. Build wheel
-    build_result = register_pep517_action(
+    # 3. Build and repair wheel
+    return run_wheel_build(
         ctx,
         builder = ctx.attr._builder,
         additional_build_deps = additional_build_deps,
         tool_executables = tool_executables,
         layers = [cc_layer],
-        env = env,
-        resource_set = resources.resource_set,
-    )
-
-    # 4. Repair wheel — CMake builds always produce native code.
-    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-    repair_result = register_repair_action(
-        ctx,
-        input_wheel_dir = build_result.wheel_dir,
-        native_deps = ctx.attr.native_deps,
-        repair_tool = ctx.executable._repair_tool,
-        target_environment = target_environment,
-        repair_exclude_globs = ctx.attr.repair_exclude_globs,
+        parallelism_env_vars = ("CMAKE_BUILD_PARALLEL_LEVEL", "NINJA_JOBS"),
         repair_deps = tool_deps.get("repairwheel", []),
     )
-
-    return [
-        DefaultInfo(files = depset([repair_result.wheel_dir])),
-        OutputGroupInfo(
-            raw_wheel = depset([build_result.wheel_dir]),
-        ),
-    ]
 
 cmake_build = rule(
     implementation = _cmake_build_impl,
@@ -104,9 +62,6 @@ cmake_build = rule(
             cfg = "exec",
         ),
     },
-    toolchains = [
-        "@rules_python//python:toolchain_type",
-        config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
-    ] + CC_TOOLCHAINS,
+    toolchains = COMMON_TOOLCHAINS + CC_TOOLCHAINS,
     fragments = CC_FRAGMENTS,
 )

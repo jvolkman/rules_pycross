@@ -11,6 +11,9 @@ bzl_library(
         "//pycross/private/build:resource_sets",
         "//pycross/private/build:transitions",
         "//pycross/private/build:wheel_shared_libraries",
+        "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
+        "@rules_cc//cc/common",
         "@rules_python//python:py_info_bzl",
     ],
 )
@@ -22,8 +25,6 @@ bzl_library(
         ":common_attrs",
         "//pycross/private/build:transitions",
         "//pycross/private/build/actions:cc_layer",
-        "//pycross/private/build/actions:pep517_action",
-        "//pycross/private/build/actions:repair_action",
         "//pycross/private/build/actions:tool_extract",
     ],
 )
@@ -34,8 +35,6 @@ bzl_library(
     deps = [
         ":common_attrs",
         "//pycross/private:providers",
-        "//pycross/private/build/actions:pep517_action",
-        "//pycross/private/build/actions:repair_action",
     ],
 )
 
@@ -44,9 +43,8 @@ bzl_library(
     srcs = ["setuptools_build.bzl"],
     deps = [
         ":common_attrs",
+        "//pycross/private/build:transitions",
         "//pycross/private/build/actions:cc_layer",
-        "//pycross/private/build/actions:pep517_action",
-        "//pycross/private/build/actions:repair_action",
     ],
 )
 
@@ -57,8 +55,6 @@ bzl_library(
         ":common_attrs",
         "//pycross/private/build:transitions",
         "//pycross/private/build/actions:cc_layer",
-        "//pycross/private/build/actions:pep517_action",
-        "//pycross/private/build/actions:repair_action",
         "//pycross/private/build/actions:tool_extract",
     ],
 )

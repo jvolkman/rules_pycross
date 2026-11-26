@@ -96,6 +96,12 @@ def _test_pep517_build_basic(name):
     )
     analysis_test(name = name, target = name + "_subject", impl = _test_pep517_build_basic_impl)
 
+def _main_config(target):
+    actions = [a for a in target.actions if a.mnemonic == "FileWrite" and any([o.basename.endswith("_config.json") for o in a.outputs.to_list()])]
+    if len(actions) != 1:
+        fail("Expected 1 main config FileWrite action, got {}".format(len(actions)))
+    return json.decode(actions[0].content)
+
 # buildifier: disable=unused-variable
 def _test_pep517_build_basic_impl(env, target):
     env.expect.that_target(target).has_provider(DefaultInfo)
@@ -104,10 +110,17 @@ def _test_pep517_build_basic_impl(env, target):
     wheel_dir = target[DefaultInfo].files.to_list()[0]
     env.expect.that_bool(wheel_dir.is_directory).equals(True)
 
+    # config_settings are inlined into the main config JSON (no separate config_settings.json action).
     cs_actions = [a for a in target.actions if a.mnemonic == "FileWrite" and any([o.basename == "config_settings.json" for o in a.outputs.to_list()])]
-    env.expect.that_int(len(cs_actions)).equals(1)
-    env.expect.that_str(cs_actions[0].content).contains("--build-option")
-    env.expect.that_str(cs_actions[0].content).contains("--pure")
+    env.expect.that_int(len(cs_actions)).equals(0)
+
+    cfg = _main_config(target)
+    env.expect.that_dict(cfg["config_settings"]).contains_exactly({"--build-option": ["--pure"]})
+    env.expect.that_bool("config_settings_raw" in cfg).equals(False)
+
+    # PYTHONPATH must not be set on action_env (context.py scrubs it and python_paths carries it).
+    build_action = [a for a in target.actions if a.mnemonic == "PycrossPep517Build"][0]
+    env.expect.that_bool("PYTHONPATH" in build_action.env).equals(False)
 
 def _test_pep517_build_config_settings_data_location(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")
@@ -118,6 +131,8 @@ def _test_pep517_build_config_settings_data_location(name):
         sdist = name + "_sdist",
         data = [name + "_data"],
         config_settings = {"--config": ["$(location " + name + "_data)"]},
+        build_env = {"DATA_FILE": "$(location " + name + "_data)"},
+        resource_size = "medium",
     )
     analysis_test(
         name = name,
@@ -126,13 +141,18 @@ def _test_pep517_build_config_settings_data_location(name):
     )
 
 def _test_pep517_build_config_settings_data_location_impl(env, target):
-    cs_actions = [a for a in target.actions if a.mnemonic == "FileWrite" and any([o.basename == "config_settings.json" for o in a.outputs.to_list()])]
-    env.expect.that_int(len(cs_actions)).equals(1)
-    settings = json.decode(cs_actions[0].content)
+    cfg = _main_config(target)
+    settings = cfg["config_settings"]
     expected_suffix = target.label.name.removesuffix("_subject") + "_data.tar.gz"
     env.expect.that_int(len(settings["--config"])).equals(1)
     env.expect.that_bool(settings["--config"][0].endswith(expected_suffix)).equals(True)
     env.expect.that_bool("$(location" in settings["--config"][0]).equals(False)
+
+    # User build_env stays in main_config["build_env"]; programmatic env (MAKEFLAGS) stays on action_env.
+    env.expect.that_bool(cfg["build_env"]["DATA_FILE"].endswith(expected_suffix)).equals(True)
+    env.expect.that_bool("MAKEFLAGS" in cfg["build_env"]).equals(False)
+    build_action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    build_action.env().contains_at_least({"MAKEFLAGS": "-j6"})
 
 def _test_pep517_build_resources(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")

@@ -6,6 +6,26 @@ This module provides the building blocks needed to implement custom
 wheel-building rules and override extensions that integrate with
 rules_pycross.
 
+<a id="PycrossExtractedToolInfo"></a>
+
+## PycrossExtractedToolInfo
+
+<pre>
+load("@rules_pycross//pycross:backend.bzl", "PycrossExtractedToolInfo")
+
+PycrossExtractedToolInfo(<a href="#PycrossExtractedToolInfo-name">name</a>, <a href="#PycrossExtractedToolInfo-file">file</a>)
+</pre>
+
+Extracted tool executable from a wheel package target.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="PycrossExtractedToolInfo-name"></a>name |  str: executable name to place on PATH.    |
+| <a id="PycrossExtractedToolInfo-file"></a>file |  File: extracted executable file.    |
+
+
 <a id="PycrossExtractedWheelInfo"></a>
 
 ## PycrossExtractedWheelInfo
@@ -123,7 +143,7 @@ A dict of JSON-encoded backend attribute values.
 <pre>
 load("@rules_pycross//pycross:backend.bzl", "extract_cc_layer")
 
-extract_cc_layer(<a href="#extract_cc_layer-ctx">ctx</a>, <a href="#extract_cc_layer-native_deps">native_deps</a>, <a href="#extract_cc_layer-copts">copts</a>, <a href="#extract_cc_layer-linkopts">linkopts</a>, <a href="#extract_cc_layer-meson_properties">meson_properties</a>)
+extract_cc_layer(<a href="#extract_cc_layer-ctx">ctx</a>, <a href="#extract_cc_layer-native_deps">native_deps</a>, <a href="#extract_cc_layer-copts">copts</a>, <a href="#extract_cc_layer-linkopts">linkopts</a>)
 </pre>
 
 Extracts CC toolchain info, headers, and libraries from native deps.
@@ -144,7 +164,6 @@ Requires the calling rule to declare:
 | <a id="extract_cc_layer-native_deps"></a>native_deps |  list[Target], targets providing CcInfo.   |  none |
 | <a id="extract_cc_layer-copts"></a>copts |  list[str], extra compiler flags.   |  none |
 | <a id="extract_cc_layer-linkopts"></a>linkopts |  list[str], extra linker flags.   |  none |
-| <a id="extract_cc_layer-meson_properties"></a>meson_properties |  dict, meson cross-file properties.   |  `{}` |
 
 **RETURNS**
 
@@ -153,6 +172,33 @@ struct(
       transitive_files = depset, # all files needed at build time
       make_vars = dict,        # template variables from deps
   )
+
+
+<a id="extract_wheel_tools"></a>
+
+## extract_wheel_tools
+
+<pre>
+load("@rules_pycross//pycross:backend.bzl", "extract_wheel_tools")
+
+extract_wheel_tools(<a href="#extract_wheel_tools-tool_deps">tool_deps</a>, <a href="#extract_wheel_tools-required_names">required_names</a>)
+</pre>
+
+Collects aspect-extracted tool executables from grouped tool_deps.
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="extract_wheel_tools-tool_deps"></a>tool_deps |  dict[str, list[Target]], targets grouped by `group_tool_deps()`.   |  none |
+| <a id="extract_wheel_tools-required_names"></a>required_names |  sequence[str], required tool package names to extract.   |  none |
+
+**RETURNS**
+
+A tuple `(tool_executables, missing_errors)` where `tool_executables` is a
+  list of `struct(name, file)` and `missing_errors` is a list of error strings
+  for any required tools absent from `tool_deps`.
 
 
 <a id="get_resource_set"></a>
@@ -258,6 +304,67 @@ Create a module extension for a build-system backend.
 **RETURNS**
 
 A `module_extension` value.
+
+
+<a id="make_wheel_tool_aspect"></a>
+
+## make_wheel_tool_aspect
+
+<pre>
+load("@rules_pycross//pycross:backend.bzl", "make_wheel_tool_aspect")
+
+make_wheel_tool_aspect(<a href="#make_wheel_tool_aspect-tool_names">tool_names</a>)
+</pre>
+
+Creates an aspect that extracts named executables from wheel tool_deps.
+
+Assign the returned aspect to a top-level symbol in your `.bzl` file and
+attach it to the rule's `tool_deps` attribute so each tool binary is
+extracted once per tool target rather than once per sdist build target.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="make_wheel_tool_aspect-tool_names"></a>tool_names |  sequence[str], PEP 503 normalized package/binary names to extract.   |  none |
+
+**RETURNS**
+
+An aspect providing `PycrossExtractedToolInfo` on matching targets.
+
+
+<a id="merge_backend_overrides"></a>
+
+## merge_backend_overrides
+
+<pre>
+load("@rules_pycross//pycross:backend.bzl", "merge_backend_overrides")
+
+merge_backend_overrides(<a href="#merge_backend_overrides-scope">scope</a>, <a href="#merge_backend_overrides-pkg_name">pkg_name</a>, <a href="#merge_backend_overrides-version">version</a>)
+</pre>
+
+Merge wildcard, package-specific, and version-specific backend overrides.
+
+Entries are layered from least to most specific: "*", then "name", then
+"name@version". Each layer overrides individual fields of the previous ones.
+Fields are replaced, not merged (i.e. if both wildcard and specific set copts,
+the more specific value wins entirely).
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="merge_backend_overrides-scope"></a>scope |  dict mapping override keys ("*", "name", or "name@version") to {backend_name: backend_attrs} dicts.   |  none |
+| <a id="merge_backend_overrides-pkg_name"></a>pkg_name |  the normalized package name to look up.   |  none |
+| <a id="merge_backend_overrides-version"></a>version |  optional package version; enables "name@version" entries.   |  `""` |
+
+**RETURNS**
+
+A merged dict of {backend_name: backend_attrs}, or empty dict.
 
 
 <a id="register_bin_extract_action"></a>
@@ -394,6 +501,46 @@ Each entry in ``ctx.attr.path_tools`` is either:
 **RETURNS**
 
 list[struct]: Each struct has ``name``, ``file``, and ``files_to_run``.
+
+
+<a id="run_wheel_build"></a>
+
+## run_wheel_build
+
+<pre>
+load("@rules_pycross//pycross:backend.bzl", "run_wheel_build")
+
+run_wheel_build(<a href="#run_wheel_build-ctx">ctx</a>, <a href="#run_wheel_build-builder">builder</a>, <a href="#run_wheel_build-additional_build_deps">additional_build_deps</a>, <a href="#run_wheel_build-layers">layers</a>, <a href="#run_wheel_build-tool_executables">tool_executables</a>, <a href="#run_wheel_build-extra_files">extra_files</a>,
+                <a href="#run_wheel_build-extra_inputs">extra_inputs</a>, <a href="#run_wheel_build-env">env</a>, <a href="#run_wheel_build-parallelism_env_vars">parallelism_env_vars</a>, <a href="#run_wheel_build-native_deps">native_deps</a>, <a href="#run_wheel_build-repair_deps">repair_deps</a>)
+</pre>
+
+Runs the standard PEP 517 build and wheel repair tail for a backend rule.
+
+Computes the action resource set, populates `MAKEFLAGS` and any backend-specific
+`parallelism_env_vars` when parallelism is configured, registers the PEP 517 build
+and wheel repair actions, and returns `[DefaultInfo, OutputGroupInfo(raw_wheel=...)]`.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="run_wheel_build-ctx"></a>ctx |  The rule context (must declare `COMMON_BUILD_ATTRS` and `REPAIR_BUILD_ATTRS`).   |  none |
+| <a id="run_wheel_build-builder"></a>builder |  Target, the PEP 517 builder executable.   |  none |
+| <a id="run_wheel_build-additional_build_deps"></a>additional_build_deps |  list[Target], extra build-time Python deps merged with `ctx.attr.build_deps`.   |  `[]` |
+| <a id="run_wheel_build-layers"></a>layers |  list[struct], layer configs (e.g. from `extract_cc_layer()`).   |  `[]` |
+| <a id="run_wheel_build-tool_executables"></a>tool_executables |  list[struct(name, file)], executables to place on PATH.   |  `[]` |
+| <a id="run_wheel_build-extra_files"></a>extra_files |  dict[str, File], files to inject into the sdist directory before building.   |  `{}` |
+| <a id="run_wheel_build-extra_inputs"></a>extra_inputs |  list[File], extra inputs to the build action.   |  `[]` |
+| <a id="run_wheel_build-env"></a>env |  dict[str, str], extra programmatic environment variables for the build action.   |  `{}` |
+| <a id="run_wheel_build-parallelism_env_vars"></a>parallelism_env_vars |  sequence[str], additional env var names (besides `MAKEFLAGS`) to populate with `str(resources.parallelism)` when parallelism > 0.   |  `()` |
+| <a id="run_wheel_build-native_deps"></a>native_deps |  optional list[Target], CcInfo deps for repair; defaults to `ctx.attr.native_deps` if present.   |  `None` |
+| <a id="run_wheel_build-repair_deps"></a>repair_deps |  list[Target], optional PyInfo targets (e.g. `repairwheel` override) for repair.   |  `[]` |
+
+**RETURNS**
+
+list of providers: `[DefaultInfo, OutputGroupInfo(raw_wheel = ...)]`.
 
 
 <a id="create_overrides_repo"></a>

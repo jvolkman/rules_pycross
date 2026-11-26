@@ -9,7 +9,8 @@ import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Optional
+
+from private.tools.cargo_manifest import find_cargo_dir
 
 
 def derive_default_output(sdist_path: Path) -> str:
@@ -35,42 +36,6 @@ def _extract_sdist(sdist_path: Path, dest: Path) -> None:
             if hasattr(tarfile, "data_filter"):
                 tar.extraction_filter = tarfile.data_filter
             tar.extractall(path=dest)
-
-
-def _find_cargo_toml_dir_from_pyproject(sdist_root: Path) -> Optional[Path]:
-    pyproject_path = sdist_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return sdist_root
-
-    try:
-        import tomllib
-    except ImportError:
-        try:
-            from pip._vendor import tomli as tomllib  # type: ignore[no-redef]
-        except ImportError:
-            print("Warning: tomllib/tomli not found. Searching for Cargo.toml instead.", file=sys.stderr)
-            return None
-
-    try:
-        with open(pyproject_path, "rb") as f:
-            pyproject_data = tomllib.load(f)
-        tool_cfg = pyproject_data.get("tool", {})
-        maturin_cfg = tool_cfg.get("maturin", {})
-        if maturin_cfg and "manifest-path" in maturin_cfg:
-            manifest_path = maturin_cfg["manifest-path"]
-        else:
-            ext_modules = tool_cfg.get("setuptools-rust", {}).get("ext-modules", [])
-            if ext_modules and isinstance(ext_modules, list) and isinstance(ext_modules[0], dict):
-                manifest_path = ext_modules[0].get("path", "Cargo.toml")
-            else:
-                manifest_path = "Cargo.toml"
-        return (sdist_root / manifest_path).parent
-    except Exception as e:
-        print(
-            f"Warning: Failed to parse pyproject.toml: {e}. Searching for Cargo.toml instead.",
-            file=sys.stderr,
-        )
-        return None
 
 
 def main():
@@ -116,11 +81,10 @@ def main():
         if not sdist_root:
             sdist_root = tmp_path
 
-        # Find Cargo.toml.
-        # We also want to support manifest-path if defined in pyproject.toml
-        cargo_toml_dir = _find_cargo_toml_dir_from_pyproject(sdist_root)
+        # Find Cargo.toml (respecting manifest-path / setuptools-rust config in pyproject.toml).
+        cargo_toml_dir = find_cargo_dir(sdist_root)
 
-        if not cargo_toml_dir or not (cargo_toml_dir / "Cargo.toml").exists():
+        if not (cargo_toml_dir / "Cargo.toml").exists():
             # Fallback to searching
             print("Searching for Cargo.toml...")
             cargo_toml_paths = list(sdist_root.glob("**/Cargo.toml"))

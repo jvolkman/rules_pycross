@@ -299,6 +299,33 @@ class RustCommonTest(unittest.TestCase):
         self.assertEqual(ctx.build_env["CXXFLAGS_aarch64_unknown_linux_gnu"], "-O2 -std=c++17")
         self.assertNotIn("ARFLAGS", ctx.build_env)
 
+    def test_find_cargo_dir_maturin_setuptools_rust_and_fallbacks(self):
+        # Missing pyproject.toml falls back to sdist_root.
+        self.assertEqual(rust_common.find_cargo_dir(self.sdist_dir), self.sdist_dir)
+
+        # Maturin manifest-path.
+        (self.sdist_dir / "pyproject.toml").write_text('[tool.maturin]\nmanifest-path = "crates/py/Cargo.toml"\n')
+        self.assertEqual(
+            rust_common.find_cargo_dir(self.sdist_dir, backend="maturin"), self.sdist_dir / "crates" / "py"
+        )
+        self.assertEqual(rust_common.find_cargo_dir(self.sdist_dir), self.sdist_dir / "crates" / "py")
+        self.assertEqual(rust_common.find_cargo_dir(self.sdist_dir, backend="setuptools-rust"), self.sdist_dir)
+
+        # setuptools-rust ext-modules path.
+        (self.sdist_dir / "pyproject.toml").write_text(
+            '[[tool.setuptools-rust.ext-modules]]\ntarget = "pkg._rust"\npath = "src/rust/Cargo.toml"\n'
+        )
+        self.assertEqual(
+            rust_common.find_cargo_dir(self.sdist_dir, backend="setuptools-rust"),
+            self.sdist_dir / "src" / "rust",
+        )
+        self.assertEqual(rust_common.find_cargo_dir(self.sdist_dir), self.sdist_dir / "src" / "rust")
+        self.assertEqual(rust_common.find_cargo_dir(self.sdist_dir, backend="maturin"), self.sdist_dir)
+
+        # Malformed TOML falls back to sdist_root without raising.
+        (self.sdist_dir / "pyproject.toml").write_text("[invalid toml\n")
+        self.assertEqual(rust_common.find_cargo_dir(self.sdist_dir), self.sdist_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

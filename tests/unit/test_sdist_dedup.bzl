@@ -13,7 +13,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:package_repo.bzl", "merge_dependencies_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing")
+load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing", "select_hook_extract_patterns_for_testing")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_file.bzl", "render_wheel_file_build_for_testing")
@@ -532,6 +532,44 @@ def _test_marker_gated_requires(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_marker_gated_requires_impl)
 
+# ── Test: select_hook_extract_patterns ──────────────────────────────
+
+# buildifier: disable=unused-variable
+def _test_select_hook_extract_patterns_impl(env, target):
+    hook_files = {
+        "maturin_build": ["pyproject.toml", "**/Cargo.lock"],
+        "setuptools_rust_build": ["pyproject.toml", "**/Cargo.lock"],
+    }
+
+    # Explicit non-hook backend extracts nothing.
+    env.expect.that_collection(
+        select_hook_extract_patterns_for_testing(_make_attr([], build_backend = "setuptools_build"), hook_files),
+    ).contains_exactly([])
+
+    # Explicit hook backend extracts only its patterns.
+    env.expect.that_collection(
+        select_hook_extract_patterns_for_testing(_make_attr([], build_backend = "maturin_build"), hook_files),
+    ).contains_exactly(["**/Cargo.lock", "pyproject.toml"]).in_order()
+
+    # Auto-detect with no hook backend in backend_to_rule extracts nothing.
+    env.expect.that_collection(
+        select_hook_extract_patterns_for_testing(_make_attr([]), hook_files),
+    ).contains_exactly([])
+
+    # Auto-detect with a registered hook backend deduplicates and sorts patterns.
+    attr_with_maturin = struct(
+        build_backend = "",
+        backend_to_rule = {"maturin": "maturin_build", "setuptools.build_meta": "setuptools_build"},
+        default_backend = "pep517_build",
+    )
+    env.expect.that_collection(
+        select_hook_extract_patterns_for_testing(attr_with_maturin, hook_files),
+    ).contains_exactly(["**/Cargo.lock", "pyproject.toml"]).in_order()
+
+def _test_select_hook_extract_patterns(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_select_hook_extract_patterns_impl)
+
 # ── Test suite ──────────────────────────────────────────────────────
 
 def sdist_dedup_test_suite(name):
@@ -551,5 +589,6 @@ def sdist_dedup_test_suite(name):
             _test_tool_deps_override_unknown_key,
             _test_build_requires_and_backend_resolution,
             _test_marker_gated_requires,
+            _test_select_hook_extract_patterns,
         ],
     )

@@ -35,6 +35,10 @@ backends.register(
     pyproject_backends = ["maturin"],
     rule_bzl = "@rules_pycross_backend_maturin//rules:maturin_build.bzl",
     sdist_hook_bzl = "@rules_pycross_backend_maturin//private:rust_common_sdist_hook.bzl",
+    sdist_hook_files = [
+        "**/pyproject.toml",
+        "**/Cargo.lock",
+    ],
     sdist_hook_fn = "rust_common_sdist_hook",
     tool_packages = ["maturin"],
 )
@@ -50,6 +54,10 @@ backends.register(
     ],
     rule_bzl = "@rules_pycross_backend_maturin//rules:setuptools_rust_build.bzl",
     sdist_hook_bzl = "@rules_pycross_backend_maturin//private:rust_common_sdist_hook.bzl",
+    sdist_hook_files = [
+        "**/pyproject.toml",
+        "**/Cargo.lock",
+    ],
     sdist_hook_fn = "rust_common_sdist_hook",
     tool_packages = [
         "setuptools",

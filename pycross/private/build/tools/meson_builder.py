@@ -67,8 +67,10 @@ def setup_venv(ctx):
 
 
 def pre_build(ctx):
-    cc_layer_config = next((m for m in load_layers(ctx) if "CC" in m), None)
-    generate_cross_ini(ctx, cc_layer_config)
+    layers = load_layers(ctx)
+    cc_layer_config = next((m for m in layers if "CC" in m), None)
+    meson_layer_config = next((m for m in layers if "meson_properties" in m or "allow_native_exec" in m), None)
+    generate_cross_ini(ctx, cc_layer_config, meson_layer_config)
 
 
 def prepare_env(ctx):

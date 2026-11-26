@@ -25,4 +25,5 @@ bzl_library(
 bzl_library(
     name = "cargo_lock_package_repo_hook",
     srcs = ["cargo_lock_package_repo_hook.bzl"],
+    deps = ["@rules_pycross//pycross:backend"],
 )

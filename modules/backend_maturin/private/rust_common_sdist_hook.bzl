@@ -19,37 +19,43 @@ def rust_common_sdist_hook(rctx, result):
 
     has_vendored = False
     cargo_lock_path = None
+    extracted_temp_lock = False
     if cargo_lock_label:
         cargo_lock_path = rctx.path(Label(cargo_lock_label))
     else:
-        # Extract sdist to find Cargo.lock
-        tmp_dir = "cargo_lock_check_tmp"
-        rctx.extract(archive = rctx.attr.sdist, output = tmp_dir)
+        source_dir = getattr(rctx.attr, "source_dir", "")
+        hook_files_dir = getattr(result, "hook_files_dir", None)
+        if hook_files_dir != None:
+            if hook_files_dir.exists:
+                lock_candidate = find_cargo_lock_in_sdist(rctx, hook_files_dir, source_dir = source_dir)
+                if lock_candidate and lock_candidate.exists:
+                    cargo_lock_path = lock_candidate
+        else:
+            # Version-skew fallback for older rules_pycross that do not populate hook_files_dir.
+            tmp_dir = "cargo_lock_check_tmp"
+            rctx.extract(archive = rctx.attr.sdist, output = tmp_dir)
 
-        sdist_root = None
-        for child in rctx.path(tmp_dir).readdir():
-            if child.is_dir:
-                sdist_root = child
-                break
-        if not sdist_root:
-            sdist_root = rctx.path(tmp_dir)
+            sdist_root = None
+            for child in rctx.path(tmp_dir).readdir():
+                if child.is_dir:
+                    sdist_root = child
+                    break
+            if not sdist_root:
+                sdist_root = rctx.path(tmp_dir)
 
-        lock_candidate = find_cargo_lock_in_sdist(rctx, sdist_root)
-        if lock_candidate and lock_candidate.exists:
-            # Copy it out before deleting tmp
-            extracted_lock = rctx.path("Cargo.lock.extracted")
-            rctx.file(extracted_lock, rctx.read(lock_candidate))
-            cargo_lock_path = extracted_lock
+            lock_candidate = find_cargo_lock_in_sdist(rctx, sdist_root, source_dir = source_dir)
+            if lock_candidate and lock_candidate.exists:
+                extracted_lock = rctx.path("Cargo.lock.extracted")
+                rctx.file(extracted_lock, rctx.read(lock_candidate))
+                cargo_lock_path = extracted_lock
+                extracted_temp_lock = True
 
-        rctx.delete(tmp_dir)
+            rctx.delete(tmp_dir)
 
     if cargo_lock_path:
         vendor_crates_from_lock(rctx, cargo_lock_path)
         has_vendored = True
-
-        # Clean up temporary extracted lock
-        extracted = rctx.path("Cargo.lock.extracted")
-        if extracted.exists:
+        if extracted_temp_lock:
             rctx.delete("Cargo.lock.extracted")
 
     extra_attrs = {}

@@ -19,7 +19,6 @@ def _mock_cc_layer_impl(ctx):
         native_deps = ctx.attr.native_deps,
         copts = ctx.attr.copts,
         linkopts = ctx.attr.linkopts,
-        meson_properties = {},
     )
     return [
         DefaultInfo(files = depset([cc_layer.config_json])),
@@ -77,6 +76,7 @@ def _test_extract_cc_layer_flags_impl(env, target):
     arflags = cfg["ARFLAGS"]
     env.expect.that_bool(bool(arflags)).equals(True)
     env.expect.that_bool(any(["__PYCROSS_ARCHIVER_OUTPUT__" in f for f in arflags])).equals(False)
+    env.expect.that_bool("meson_properties" in cfg).equals(False)
 
 def _cc_config(target):
     for action in target.actions:

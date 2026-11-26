@@ -1,10 +1,7 @@
 """Implementation of the pep517_build rule."""
 
 load("//pycross/private:providers.bzl", "PycrossPackageInfo")
-load("//pycross/private/build:resource_sets.bzl", "get_resource_set")
-load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
-load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load(":common_attrs.bzl", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "defer_build_error")
+load(":common_attrs.bzl", "COMMON_BUILD_ATTRS", "COMMON_TOOLCHAINS", "REPAIR_BUILD_ATTRS", "defer_build_error", "run_wheel_build")
 
 def _pep517_build_impl(ctx):
     # Validate that all required build packages are present in build_deps.
@@ -22,33 +19,7 @@ def _pep517_build_impl(ctx):
                 "Make sure they are included in your lockfile.",
             ])
 
-    resources = get_resource_set(ctx.attr)
-    env = {}
-    if resources.parallelism > 0:
-        env["MAKEFLAGS"] = "-j{}".format(resources.parallelism)
-
-    build_result = register_pep517_action(
-        ctx,
-        builder = ctx.attr._builder,
-        env = env,
-        resource_set = resources.resource_set,
-    )
-
-    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-    repair_result = register_repair_action(
-        ctx,
-        input_wheel_dir = build_result.wheel_dir,
-        repair_tool = ctx.executable._repair_tool,
-        target_environment = target_environment,
-        repair_exclude_globs = ctx.attr.repair_exclude_globs,
-    )
-
-    return [
-        DefaultInfo(files = depset([repair_result.wheel_dir])),
-        OutputGroupInfo(
-            raw_wheel = depset([build_result.wheel_dir]),
-        ),
-    ]
+    return run_wheel_build(ctx, builder = ctx.attr._builder)
 
 pep517_build = rule(
     implementation = _pep517_build_impl,
@@ -63,8 +34,5 @@ pep517_build = rule(
             cfg = "exec",
         ),
     },
-    toolchains = [
-        "@rules_python//python:toolchain_type",
-        config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
-    ],
+    toolchains = COMMON_TOOLCHAINS,
 )

@@ -7,14 +7,22 @@ package(default_visibility = ["//visibility:public"])
 _EXEC_GLIBC = {"@rules_python//python/config_settings:py_linux_libc": "glibc"}
 
 py_library(
+    name = "cargo_manifest_lib",
+    srcs = ["cargo_manifest.py"],
+    imports = ["../.."],
+)
+
+py_library(
     name = "generate_cargo_lock_lib",
     srcs = ["generate_cargo_lock.py"],
     imports = ["../.."],
+    deps = [":cargo_manifest_lib"],
 )
 
 py_binary(
     name = "generate_cargo_lock",
     srcs = ["generate_cargo_lock.py"],
+    imports = ["../.."],
     deps = [":generate_cargo_lock_lib"],
 )
 
@@ -23,6 +31,7 @@ py_library(
     srcs = ["rust_common.py"],
     imports = ["../.."],
     deps = [
+        ":cargo_manifest_lib",
         "@rules_pycross//pycross/private/build/tools:utils",
     ],
 )
@@ -33,6 +42,7 @@ py_binary(
     config_settings = _EXEC_GLIBC,
     imports = ["../.."],
     deps = [
+        ":cargo_manifest_lib",
         ":rust_common_lib",
         "@rules_pycross//pycross/private/build/tools:utils",
     ],
@@ -44,6 +54,7 @@ py_binary(
     config_settings = _EXEC_GLIBC,
     imports = ["../.."],
     deps = [
+        ":cargo_manifest_lib",
         ":rust_common_lib",
         "@rules_pycross//pycross/private/build/tools:utils",
     ],

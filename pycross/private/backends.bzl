@@ -19,6 +19,7 @@ def _collect_registrations(modules, warn = _print_warn):
     backend_configs = {}  # rule name -> JSON config string
     sdist_hook_bzl = {}  # rule name -> custom sdist hook .bzl file
     sdist_hook_fn = {}  # rule name -> custom sdist hook function name
+    sdist_hook_files = {}  # rule name -> sdist file patterns extracted for the hook
     package_repo_hook_bzl = {}  # rule name -> custom package repo hook .bzl file
     package_repo_hook_fn = {}  # rule name -> custom package repo hook function name
     package_repo_hook_subdir = {}  # rule name -> thin repo alias subdir (e.g. "_cargo")
@@ -82,6 +83,10 @@ def _collect_registrations(modules, warn = _print_warn):
                 sdist_hook_fn[name] = tag.sdist_hook_fn
             else:
                 sdist_hook_fn.pop(name, None)
+            if tag.sdist_hook_files:
+                sdist_hook_files[name] = list(tag.sdist_hook_files)
+            else:
+                sdist_hook_files.pop(name, None)
             if tag.package_repo_hook_bzl:
                 package_repo_hook_bzl[name] = str(tag.package_repo_hook_bzl)
             else:
@@ -145,6 +150,7 @@ def _collect_registrations(modules, warn = _print_warn):
         backend_configs = backend_configs,
         sdist_hook_bzl = sdist_hook_bzl,
         sdist_hook_fn = sdist_hook_fn,
+        sdist_hook_files = sdist_hook_files,
         package_repo_hook_bzl = package_repo_hook_bzl,
         package_repo_hook_fn = package_repo_hook_fn,
         package_repo_hook_subdir = package_repo_hook_subdir,
@@ -160,6 +166,7 @@ def _backends_impl(module_ctx):
         backend_configs = registry.backend_configs,
         sdist_hook_bzl = registry.sdist_hook_bzl,
         sdist_hook_fn = registry.sdist_hook_fn,
+        sdist_hook_files = registry.sdist_hook_files,
         package_repo_hook_bzl = registry.package_repo_hook_bzl,
         package_repo_hook_fn = registry.package_repo_hook_fn,
         package_repo_hook_subdir = registry.package_repo_hook_subdir,
@@ -210,6 +217,12 @@ backends = module_extension(
                 "sdist_hook_fn": attr.string(
                     doc = "Optional function name in sdist_hook_bzl. Defaults to " +
                           "'<name>_sdist_hook' (replacing '_build' suffix).",
+                ),
+                "sdist_hook_files": attr.string_list(
+                    doc = "Optional file patterns (relative to the sdist archive root, " +
+                          "supporting a leading '**/' wildcard) extracted during sdist " +
+                          "inspection into result.hook_files_dir for the sdist hook to read " +
+                          "without re-extracting the sdist archive.",
                 ),
                 "package_repo_hook_bzl": attr.label(
                     doc = "Optional label of a .bzl file providing a hook for " +

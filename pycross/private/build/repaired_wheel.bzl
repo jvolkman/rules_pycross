@@ -3,6 +3,7 @@
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("//pycross/private/build:wheel_shared_libraries.bzl", "collect_wheel_shared_libraries")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
+load("//pycross/private/build/rules:common_attrs.bzl", "REPAIR_BUILD_ATTRS")
 
 def _pycross_repaired_wheel_impl(ctx):
     input_wheel_dir = ctx.files.wheel[0]
@@ -24,7 +25,7 @@ def _pycross_repaired_wheel_impl(ctx):
 
 pycross_repaired_wheel = rule(
     implementation = _pycross_repaired_wheel_impl,
-    attrs = {
+    attrs = REPAIR_BUILD_ATTRS | {
         "wheel": attr.label(
             doc = "The input wheel to repair.",
             mandatory = True,
@@ -35,21 +36,8 @@ pycross_repaired_wheel = rule(
             providers = [CcInfo],
             aspects = [collect_wheel_shared_libraries],
         ),
-        "target_environment": attr.label(
-            doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
-            default = Label("@rules_pycross//pycross/private:default_target_platform"),
-            allow_files = True,
-        ),
-        "repair_exclude_globs": attr.string_list(
-            doc = "Shared library globs to exclude from wheel repair; assumed provided at runtime.",
-        ),
         "whldir_name": attr.string(
             doc = "Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.",
-        ),
-        "_repair_tool": attr.label(
-            default = Label("//pycross/private/build/tools:repair_wheel_hook"),
-            executable = True,
-            cfg = "exec",
         ),
     },
 )

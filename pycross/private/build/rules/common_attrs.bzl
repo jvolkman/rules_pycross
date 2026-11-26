@@ -9,9 +9,11 @@ load(
     "PycrossPackageInfo",
     "PycrossPathToolInfo",
 )
-load("//pycross/private/build:resource_sets.bzl", "RESOURCE_SET_ATTRS")
+load("//pycross/private/build:resource_sets.bzl", "RESOURCE_SET_ATTRS", "get_resource_set")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build:wheel_shared_libraries.bzl", "collect_wheel_shared_libraries")
+load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
+load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 
 def resolve_path_tools(ctx):
     """Resolve path_tools attr into a list of tool executable structs.
@@ -176,6 +178,10 @@ CC_TOOLCHAIN_ATTRS = {
     "_cpu_x86_32": attr.label(default = "@platforms//cpu:x86_32"),
 }
 
+COMMON_TOOLCHAINS = [
+    Label("@rules_python//python:toolchain_type"),
+    config_common.toolchain_type(Label("//pycross:toolchain_type"), mandatory = False),
+]
 CC_TOOLCHAINS = ["@bazel_tools//tools/cpp:toolchain_type"]
 CC_FRAGMENTS = ["cpp"]
 
@@ -241,4 +247,78 @@ def defer_build_error(ctx, errors):
     return [
         DefaultInfo(files = depset([out])),
         OutputGroupInfo(raw_wheel = depset([out])),
+    ]
+
+def run_wheel_build(
+        ctx,
+        builder,
+        additional_build_deps = [],
+        layers = [],
+        tool_executables = [],
+        extra_files = {},
+        extra_inputs = [],
+        env = {},
+        parallelism_env_vars = (),
+        native_deps = None,
+        repair_deps = []):
+    """Runs the standard PEP 517 build and wheel repair tail for a backend rule.
+
+    Computes the action resource set, populates `MAKEFLAGS` and any backend-specific
+    `parallelism_env_vars` when parallelism is configured, registers the PEP 517 build
+    and wheel repair actions, and returns `[DefaultInfo, OutputGroupInfo(raw_wheel=...)]`.
+
+    Args:
+        ctx: The rule context (must declare `COMMON_BUILD_ATTRS` and `REPAIR_BUILD_ATTRS`).
+        builder: Target, the PEP 517 builder executable.
+        additional_build_deps: list[Target], extra build-time Python deps merged with `ctx.attr.build_deps`.
+        layers: list[struct], layer configs (e.g. from `extract_cc_layer()`).
+        tool_executables: list[struct(name, file)], executables to place on PATH.
+        extra_files: dict[str, File], files to inject into the sdist directory before building.
+        extra_inputs: list[File], extra inputs to the build action.
+        env: dict[str, str], extra programmatic environment variables for the build action.
+        parallelism_env_vars: sequence[str], additional env var names (besides `MAKEFLAGS`)
+            to populate with `str(resources.parallelism)` when parallelism > 0.
+        native_deps: optional list[Target], CcInfo deps for repair; defaults to `ctx.attr.native_deps` if present.
+        repair_deps: list[Target], optional PyInfo targets (e.g. `repairwheel` override) for repair.
+
+    Returns:
+        list of providers: `[DefaultInfo, OutputGroupInfo(raw_wheel = ...)]`.
+    """
+    resources = get_resource_set(ctx.attr)
+    build_env = dict(env)
+    if resources.parallelism > 0:
+        jobs = str(resources.parallelism)
+        build_env.setdefault("MAKEFLAGS", "-j{}".format(jobs))
+        for var_name in parallelism_env_vars:
+            build_env.setdefault(var_name, jobs)
+
+    build_result = register_pep517_action(
+        ctx,
+        builder = builder,
+        additional_build_deps = additional_build_deps,
+        layers = layers,
+        tool_executables = tool_executables,
+        extra_files = extra_files,
+        extra_inputs = extra_inputs,
+        env = build_env,
+        resource_set = resources.resource_set,
+    )
+
+    effective_native_deps = native_deps if native_deps != None else getattr(ctx.attr, "native_deps", [])
+    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
+    repair_result = register_repair_action(
+        ctx,
+        input_wheel_dir = build_result.wheel_dir,
+        native_deps = effective_native_deps,
+        repair_tool = ctx.executable._repair_tool,
+        target_environment = target_environment,
+        repair_exclude_globs = ctx.attr.repair_exclude_globs,
+        repair_deps = repair_deps,
+    )
+
+    return [
+        DefaultInfo(files = depset([repair_result.wheel_dir])),
+        OutputGroupInfo(
+            raw_wheel = depset([build_result.wheel_dir]),
+        ),
     ]

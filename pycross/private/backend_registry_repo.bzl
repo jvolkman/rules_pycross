@@ -11,7 +11,7 @@ def _default_hook_fn(rule_name, hook_suffix):
     base = rule_name[:-len("_build")] if rule_name.endswith("_build") else rule_name
     return base + hook_suffix
 
-def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_suffix, rule_names, subdir_map = None):
+def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_suffix, rule_names, subdir_map = None, hook_files_map = None):
     lines = [
         '"""Generated {} dispatch table. Do not edit."""'.format(doc_title),
         "",
@@ -45,6 +45,19 @@ def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_
             subdir = subdir_map.get(rule_name)
             if rule_name in load_aliases and subdir:
                 lines.append('    "{}": {},'.format(rule_name, json.encode(subdir)))
+        lines.extend([
+            "}",
+            "",
+        ])
+    if hook_files_map != None:
+        lines.extend([
+            "# Maps backend rule names to sdist file patterns extracted for their sdist hooks.",
+            "SDIST_HOOK_FILES = {",
+        ])
+        for rule_name in sorted(rule_names):
+            patterns = hook_files_map.get(rule_name)
+            if rule_name in load_aliases and patterns:
+                lines.append('    "{}": {},'.format(rule_name, json.encode(patterns)))
         lines.extend([
             "}",
             "",
@@ -99,6 +112,7 @@ def _backend_registry_repo_impl(rctx):
         rctx.attr.sdist_hook_fn,
         "_sdist_hook",
         rctx.attr.backend_configs.keys(),
+        hook_files_map = rctx.attr.sdist_hook_files,
     ))
     rctx.file("package_repo_dispatch.bzl", _render_hook_dispatch(
         "package repo hook",
@@ -155,6 +169,9 @@ backend_registry_repo = repository_rule(
         ),
         "sdist_hook_fn": attr.string_dict(
             doc = "Maps backend rule names to the function name in the sdist hook .bzl file.",
+        ),
+        "sdist_hook_files": attr.string_list_dict(
+            doc = "Maps backend rule names to sdist file patterns extracted for their sdist hooks.",
         ),
         "override_files": attr.string_list(
             doc = "Labels of JSON files containing backend overrides.",
