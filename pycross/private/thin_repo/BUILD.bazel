@@ -14,6 +14,7 @@ bzl_library(
     deps = [
         ":common",
         "//pycross/private:build_text",
+        "//pycross/private:lock_contract",
     ],
 )
 
@@ -24,6 +25,7 @@ bzl_library(
         ":common",
         ":selects",
         "//pycross/private:build_text",
+        "//pycross/private:lock_contract",
         "//pycross/private:util",
     ],
 )
@@ -36,6 +38,7 @@ bzl_library(
         ":common",
         ":selects",
         "//pycross/private:build_text",
+        "//pycross/private:lock_contract",
         "//pycross/private:util",
     ],
 )
@@ -46,7 +49,8 @@ bzl_library(
     deps = [
         ":selects",
         "//pycross/private:build_text",
-        "//pycross/private:util",
+        "//pycross/private:lock_contract",
+        "//pycross/private:variant_util",
     ],
 )
 
@@ -56,7 +60,9 @@ bzl_library(
     deps = [
         ":common",
         ":selects",
+        ":variants",
         "//pycross/private:build_text",
+        "//pycross/private:lock_contract",
         "//pycross/private:util",
     ],
 )
@@ -76,4 +82,5 @@ bzl_library(
 bzl_library(
     name = "transition",
     srcs = ["transition.bzl"],
+    deps = ["//pycross/private:util"],
 )

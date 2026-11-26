@@ -2,6 +2,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@toml.bzl//toml:toml.bzl", "decode")
+load(":lock_contract.bzl", "build_repo_name")
 
 def validate_transition_attrs(tag, tag_name):
     """Validates that transition attributes are mutually exclusive.
@@ -187,7 +188,7 @@ def register_workspace_repo(
         wildcard_testonly = parsed.wildcard_testonly,
         include_transitive = parsed.include_transitive,
         transitive_testonly = parsed.transitive_testonly,
-        is_build_tools_repo = repo_name == "{}__build".format(ws_name),
+        is_build_tools_repo = repo_name == build_repo_name(ws_name),
     )
 
 def parse_dependency_group_entries(raw_groups):
@@ -479,9 +480,9 @@ def process_workspaces(
 
     # Auto-generate the __build thin repo for this workspace.
     for ws_name, ws_info in workspaces.items():
-        build_repo_name = "{}__build".format(ws_name)
+        auto_build_repo = build_repo_name(ws_name)
 
-        if build_repo_name in lock_repos:
+        if auto_build_repo in lock_repos:
             continue
 
         register_workspace_repo(
@@ -491,7 +492,7 @@ def process_workspaces(
             root_direct_deps = [],  # Do not report as root direct dep
             ws_tag = ws_info.tag,
             ws_name = ws_name,
-            repo_name = build_repo_name,
+            repo_name = auto_build_repo,
             projects = ["*"],
             raw_dependency_groups = ["*", "transitive"],
             transition_attrs = dict(

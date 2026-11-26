@@ -1,7 +1,6 @@
 """Shared utilities"""
 
 load("@pypackaging.bzl", "pypackaging")
-load("@rules_python//python/api:api.bzl", "py_common")
 
 def sanitize_name(val):
     """Sanitize a string into a valid Bazel repository and target name identifier.
@@ -176,6 +175,58 @@ def base_package_key(pkg_key):
     parts = parse_package_key(pkg_key)
     return format_package_key(parts.name, parts.version, tag = parts.tag)
 
+def canonicalize_package_key(spec, allow_wildcard = False):
+    """Canonicalize a package key or spec into structured components.
+
+    Supports `'name'`, `'name[extra]'`, `'name@version'`, `'name[extra]@version'`,
+    and `'name([extra])@version~tag'`, plus `'*'` when `allow_wildcard = True`.
+
+    Args:
+        spec: Package key or spec string.
+        allow_wildcard: If True, `'*'` is accepted and returned as-is.
+
+    Returns:
+        A struct of `(canonical, name, extra, version, tag, has_version, has_tag)`.
+    """
+    if allow_wildcard and spec == "*":
+        return struct(
+            canonical = "*",
+            name = "*",
+            extra = "",
+            version = "",
+            tag = "",
+            has_version = False,
+            has_tag = False,
+        )
+    parts = parse_package_key(spec)
+    norm_name = pypackaging.utils.canonicalize_name(parts.name)
+    norm_extra = pypackaging.utils.canonicalize_name(parts.extra) if parts.extra else ""
+    if "@" in spec:
+        if not parts.version:
+            fail("Invalid package key '{}': version cannot be empty after '@'".format(spec))
+        if "~" in spec.split("@", 1)[1] and not parts.tag:
+            fail("Invalid package key '{}': source tag cannot be empty after '~'".format(spec))
+        canonical = format_package_key(norm_name, parts.version, extra = norm_extra, tag = parts.tag)
+        return struct(
+            canonical = canonical,
+            name = norm_name,
+            extra = norm_extra,
+            version = parts.version,
+            tag = parts.tag,
+            has_version = True,
+            has_tag = bool(parts.tag),
+        )
+    canonical = format_package_key(norm_name, extra = norm_extra)
+    return struct(
+        canonical = canonical,
+        name = norm_name,
+        extra = norm_extra,
+        version = "",
+        tag = "",
+        has_version = False,
+        has_tag = False,
+    )
+
 def base_packages_with_extras(packages):
     """Group extra package keys in `packages` by their base `name@version[~tag]` key.
 
@@ -273,270 +324,31 @@ def is_platform_specific(pkg):
         return True
     return is_wheel_platform_specific(pkg)
 
-def variant_item_qname(item):
-    """Return the internal name for a variant item.
+TRUE_FLAG_VALUES = ("True", "true", "1")
+_FALSE_FLAG_VALUES = ("False", "false", "0")
 
-    Names are package-qualified (e.g. `extra_my-app_cpu`, `package_my-app`) so they're unique
-    across a workspace lock. Users don't see these: each generated repo has its own
-    `_variants` flags (the item's `flag`, e.g. `extra_cpu`).
-    """
-    if item["kind"] == "project":
-        return "package_{}".format(item["package"])
-    return "{}_{}_{}".format(item["kind"], item["package"], item["name"])
-
-def excluded_variant_items(conflict_sets, selected):
-    """Return `{qname: True}` for every variant item conflicting with an item in `selected`.
-
-    Two distinct items conflict when they appear together in at least one set in
-    `conflict_sets`.
+def parse_flag_arg(flag):
+    """Parse a CLI-style `--<flag>[=<value>]` repo flag string.
 
     Args:
-        conflict_sets: Iterable of lists of variant item qnames (one list per
-            conflict set).
-        selected: Iterable (list or dict) of selected variant item qnames.
+        flag: Flag string starting with `--`.
 
     Returns:
-        Dict `{qname: True}` of every item that conflicts with at least one item
-        in `selected`.
+        A struct of `(label, value, has_value)`:
+          - `label`: The flag name/label after `--` (before `=`).
+          - `value`: The value after `=`, or `"True"` when no `=` is present.
+          - `has_value`: True if `=` was present in `flag`.
     """
-    excluded = {}
-    for qnames in conflict_sets:
-        for qname in selected:
-            if qname not in qnames:
-                continue
-            for other in qnames:
-                if other != qname:
-                    excluded[other] = True
-    return excluded
-
-_VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
-
-def marker_mentions_variant(marker, qname):
-    """Return True if `marker` contains a quoted `__variant_<qname>` token.
-
-    Args:
-        marker: PEP 508 marker string (may be `""`).
-        qname: Variant item qualified name.
-
-    Returns:
-        Bool indicating whether `'__variant_<qname>'` or `"__variant_<qname>"` appears in `marker`.
-    """
-    if not marker:
-        return False
-    tok = "__variant_{}".format(qname)
-    return "'{}'".format(tok) in marker or '"{}"'.format(tok) in marker
-
-def _extract_variant_token(item):
-    """Return `(normalized_token, is_positive)` for an `extra ==/!= '__variant_...'` item, or None.
-
-    Args:
-        item: Parsed marker comparison tuple `(lhs, op, rhs)`.
-
-    Returns:
-        `(token, positive)` tuple, or None if `item` does not test a variant token.
-    """
-    lhs, op, rhs = item
-    if op not in ("==", "!="):
-        return None
-    if lhs.type == "variable" and lhs.value == "extra" and rhs.type == "string":
-        value = rhs.value
-    elif rhs.type == "variable" and rhs.value == "extra" and lhs.type == "string":
-        value = lhs.value
-    else:
-        return None
-    if not value.startswith(_VARIANT_TOKEN_PREFIX):
-        return None
-    return (value, op == "==")
-
-def variant_conflict_pairs(conflict_sets):
-    """Build `{(token_a, token_b): True}` of mutually exclusive normalized variant tokens.
-
-    Args:
-        conflict_sets: Iterable of lists of variant qualified names.
-
-    Returns:
-        Dict of incompatible normalized variant token pairs.
-    """
-    pairs = {}
-    for qnames in conflict_sets:
-        norm = [pypackaging.utils.canonicalize_name("__variant_" + q) for q in qnames]
-        for a in norm:
-            for b in norm:
-                if a != b:
-                    pairs[(a, b)] = True
-    return pairs
-
-def _fold_variant_level(elements, true_tokens, false_tokens, conflict_pairs):
-    """Fold one parenthesized marker level into `"T"`, `"F"`, `"V"`, or `"N"`."""
-    groups = [[]]
-    for e in elements:
-        if e == "or":
-            groups.append([])
-        elif e != "and":
-            groups[-1].append(e)
-
-    results = []
-    for group in groups:
-        positive = {}
-        negative = {}
-        result = "T"
-        for e in group:
-            if e in ("T", "F", "V", "N"):
-                if e == "F":
-                    result = "F"
-                    break
-                if e == "V" or (e == "N" and result == "T"):
-                    result = e
-                continue
-            tok = _extract_variant_token(e)
-            if not tok:
-                if result == "T":
-                    result = "N"
-                continue
-            token, is_pos = tok
-            if token in true_tokens:
-                if not is_pos:
-                    result = "F"
-                    break
-                continue
-            if token in false_tokens:
-                if is_pos:
-                    result = "F"
-                    break
-                continue
-            (positive if is_pos else negative)[token] = True
-            result = "V"
-
-        if result != "F":
-            for token in positive:
-                if token in negative:
-                    result = "F"
-                    break
-                for other in positive:
-                    if (token, other) in conflict_pairs:
-                        result = "F"
-                        break
-                if result == "F":
-                    break
-        results.append(result)
-
-    if "T" in results:
-        return "T"
-    kept = [r for r in results if r != "F"]
-    if not kept:
-        return "F"
-    return "V" if "V" in kept else "N"
-
-def fold_variant_marker(marker, conflict_pairs = None, active_qnames = (), conflict_sets = None):
-    """Fold a PEP 508 marker over uv conflict variant tokens into `"T"`, `"F"`, `"V"`, or `"N"`.
-
-    Evaluates `__variant_<qname>` comparisons under optional fixed variant
-    selections (`active_qnames` and their rivals in `conflict_sets`) and folds
-    contradictions from `conflict_pairs`/`conflict_sets`.
-
-    Args:
-        marker: PEP 508 marker string (with uv conflict tokens rewritten to
-            `__variant_<qname>`).
-        conflict_pairs: Optional precomputed `{(token_a, token_b): True}` from
-            `variant_conflict_pairs`. Computed from `conflict_sets` if omitted.
-        active_qnames: Optional iterable of variant qualified names assumed
-            active simultaneously.
-        conflict_sets: Optional iterable of lists of variant qualified names
-            (used to derive rivals of `active_qnames`, and `conflict_pairs` when
-            not provided).
-
-    Returns:
-        - `"T"` if always true under the given assumptions.
-        - `"F"` if unsatisfiable.
-        - `"V"` if the result can still vary with an unfixed variant token.
-        - `"N"` if the result depends only on non-variant environment values.
-    """
-    if not marker:
-        return "T"
-    marker_lower = marker.lower()
-    if "__variant_" not in marker_lower and _VARIANT_TOKEN_PREFIX not in marker_lower:
-        return "N"
-
-    true_tokens = {}
-    false_tokens = {}
-    active = [q for q in active_qnames if q]
-    if active:
-        for q in active:
-            true_tokens[pypackaging.utils.canonicalize_name("__variant_" + q)] = True
-        for rival in excluded_variant_items(conflict_sets or [], active).keys():
-            false_tokens[pypackaging.utils.canonicalize_name("__variant_" + rival)] = True
-        for token in true_tokens:
-            if token in false_tokens:
-                return "F"
-
-    pairs = conflict_pairs if conflict_pairs != None else variant_conflict_pairs(conflict_sets or [])
-
-    tree = pypackaging.markers.parse(marker)
-    stack = [[tree, 0, []]]
-    for _ in range(2 * len(marker) + 1):
-        frame = stack[-1]
-        node = frame[0]
-        if frame[1] < len(node):
-            element = node[frame[1]]
-            frame[1] += 1
-            if type(element) == "list":
-                stack.append([element, 0, []])
-            else:
-                frame[2].append(element)
-            continue
-        stack.pop()
-        if stack and frame[2] and "or" not in frame[2]:
-            # Flatten parenthesized conjunctions (e.g. `(A) and (B)` emitted by
-            # combine_markers) so variant tokens are checked together.
-            stack[-1][2].extend(frame[2])
-            continue
-        folded = _fold_variant_level(frame[2], true_tokens, false_tokens, pairs) if frame[2] else "T"
-        if not stack:
-            return folded
-        stack[-1][2].append(folded)
-    fail("fold_variant_marker exceeded step bound: " + marker)
-
-def decode_variant_state(raw):
-    """Decode a canonical `//_lock:_state` JSON string into a dict of overrides.
-
-    Keys are `"p:<set>"` (pin), `"d:<set>"` (default), and `"u:<set>"` (usable
-    items space-separated, `""` for none; absent means `"*"`, i.e. all usable).
-
-    Args:
-        raw: Canonical JSON string from `//_lock:_state`, or `""`.
-
-    Returns:
-        Dict of `{key: value}`.
-    """
-    if not raw:
-        return {}
-    return json.decode(raw)
-
-def merge_variant_state(current_raw, overrides):
-    """Merge a repo transition's owned variant-state keys over incoming `_state`.
-
-    Unset keys in `overrides` pass through untouched from `current_raw` so
-    downstream repos (such as `<ws>__build` with its own flags or defaults)
-    inherit upstream pins. Default values (`""` for `p:`/`d:`, `"*"` for `u:`)
-    are omitted and keys are sorted so identical effective states always encode
-    to the same canonical string for Bazel configuration deduplication.
-
-    Args:
-        current_raw: Incoming `//_lock:_state` string (may be `""`).
-        overrides: Dict `{key: value}` owned by the transitioning repo.
-
-    Returns:
-        Canonical encoded `//_lock:_state` string (`""` when empty).
-    """
-    merged = dict(decode_variant_state(current_raw))
-    for k, v in overrides.items():
-        if (k.startswith("u:") and v == "*") or (not k.startswith("u:") and not v):
-            merged.pop(k, None)
-        else:
-            merged[k] = v
-    if not merged:
-        return ""
-    return json.encode({k: merged[k] for k in sorted(merged.keys())})
+    if not flag.startswith("--"):
+        fail("Invalid repo flag {}: expected '--<flag>[=<value>]'".format(repr(flag)))
+    label, sep, raw_value = flag[2:].partition("=")
+    if not label:
+        fail("Invalid repo flag {}: expected '--<flag>[=<value>]'".format(repr(flag)))
+    return struct(
+        label = label,
+        value = raw_value if sep else "True",
+        has_value = bool(sep),
+    )
 
 def coerce_transition_values(current, values):
     """Coerce raw repo transition values to the type of a setting's current value.
@@ -553,9 +365,9 @@ def coerce_transition_values(current, values):
         return values
     value = values[-1]
     if t == "bool":
-        if value in ("True", "true", "1"):
+        if value in TRUE_FLAG_VALUES:
             return True
-        if value in ("False", "false", "0"):
+        if value in _FALSE_FLAG_VALUES:
             return False
         fail("Invalid boolean flag value: %r" % value)
     if t == "int":
@@ -575,83 +387,6 @@ def split_setting_value(current, value):
     if type(current) == "list":
         return value.split(",") if value else []
     return [value]
-
-# Attrs that consuming rules must include for merge_py_providers to work.
-PY_COMMON_ATTRS = py_common.API_ATTRS
-
-def merge_py_providers(
-        ctx,
-        deps,
-        direct_sources = [],
-        direct_imports = [],
-        base_runfiles = None,
-        direct_venv_symlinks = [],
-        has_py2_only_sources = False,
-        has_py3_only_sources = False,
-        uses_shared_libraries = True):
-    """Merges PyInfo and DefaultInfo from deps with optional direct entries.
-
-    Uses rules_python's PyInfoBuilder to ensure all PyInfo fields (including
-    pyc files, pyi stubs, and venv symlinks) are properly merged.
-
-    The consuming rule must include PY_COMMON_ATTRS in its attrs dict.
-
-    Args:
-        ctx: The rule context (must have PY_COMMON_ATTRS in its rule attrs).
-        deps: List of Target objects providing PyInfo and DefaultInfo.
-        direct_sources: Files to add as direct entries to transitive_sources.
-        direct_imports: Strings to add as direct entries to imports.
-        base_runfiles: A Runfiles object (e.g. from ctx.runfiles) to merge with dep runfiles.
-        direct_venv_symlinks: VenvSymlinkEntry values to add directly.
-        has_py2_only_sources: Whether this target has PY2-only sources.
-        has_py3_only_sources: Whether this target has PY3-only sources.
-        uses_shared_libraries: Whether to set uses_shared_libraries on PyInfo.
-
-    Returns:
-        A struct with fields:
-          - py_info: A PyInfo provider.
-          - runfiles: The merged Runfiles object.
-    """
-    api = py_common.get(ctx)
-    builder = api.PyInfoBuilder()
-
-    # Merge all dep PyInfos as transitive.
-    builder.merge_targets(deps)
-
-    # Add our own direct content.
-    builder.transitive_sources.add(direct_sources)
-    builder.imports.add(direct_imports)
-    if direct_venv_symlinks:
-        builder.venv_symlinks.add(direct_venv_symlinks)
-
-    if has_py2_only_sources:
-        builder.set_has_py2_only_sources(True)
-    if has_py3_only_sources:
-        builder.set_has_py3_only_sources(True)
-    if uses_shared_libraries:
-        builder.set_uses_shared_libraries(True)
-
-    py_info = builder.build()
-
-    # Merge runfiles from all deps in a single merge_all call.
-    dep_runfiles = [
-        dep[DefaultInfo].default_runfiles
-        for dep in deps
-        if dep[DefaultInfo].default_runfiles
-    ]
-    if base_runfiles != None:
-        runfiles = base_runfiles.merge_all(dep_runfiles) if dep_runfiles else base_runfiles
-    elif not dep_runfiles:
-        runfiles = None
-    elif len(dep_runfiles) == 1:
-        runfiles = dep_runfiles[0]
-    else:
-        runfiles = dep_runfiles[0].merge_all(dep_runfiles[1:])
-
-    return struct(
-        py_info = py_info,
-        runfiles = runfiles,
-    )
 
 # Mapping of common URL percent-encoded characters.
 _URL_HEX_MAP = {

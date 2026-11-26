@@ -7,7 +7,10 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "run_package_repo_hooks_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "coerce_transition_values", "excluded_variant_items", "is_platform_specific", "marker_evaluator_name", "split_setting_value", "url_filename")
+load("//pycross/private:util.bzl", "coerce_transition_values", "is_platform_specific", "marker_evaluator_name", "split_setting_value", "url_filename")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:variant_util.bzl", "excluded_variant_items")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
@@ -1104,9 +1107,28 @@ def _test_transition_settings_impl(env, target):
     # Outside the transition, `is_<flag>` follows the flag pin, not the rival default.
     info = _overlapping_variant_info({0: ["extra_app_cpu", "extra_app_gpu"], 1: ["extra_app_cpu"]}, default = {1: "extra_app_cpu"})
     result = transition_settings(info, {_S0: "extra_app_gpu"}, "repo", True)
-    build = variants_build(info, "ws", "repo", pins_by_set = result.pins_by_set, excluded = result.excluded)
+    env.expect.that_dict(result.defaults_by_set).contains_exactly({})
+    build = variants_build(
+        info,
+        "ws",
+        "repo",
+        pins_by_set = result.pins_by_set,
+        defaults_by_set = result.defaults_by_set,
+        excluded = result.excluded,
+    )
     env.expect.that_str(build).contains('name = "_selected_extra_app_gpu"')
     env.expect.that_bool('name = "_selected_extra_app_cpu"' in build).equals(False)
+
+    # Non-excluded default is returned in defaults_by_set.
+    default_info = _overlapping_variant_info(
+        {0: ["extra_app_cpu", "extra_app_gpu"], 2: ["extra_app_x", "extra_app_y"]},
+        default = {0: "extra_app_cpu", 2: "extra_app_x"},
+    )
+    default_result = transition_settings(default_info, {}, "repo", False)
+    env.expect.that_dict(default_result.defaults_by_set).contains_exactly({
+        _S0: "extra_app_cpu",
+        _S2: "extra_app_x",
+    })
 
 def _test_transition_settings(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1585,9 +1607,47 @@ def _test_render_transition_bzl_and_maybe_build_impl(env, _target):
         variant_state_overrides = {"p:set": "extra_a"},
     )
     env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_library_proxy_rule")')
+    env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values")')
+    env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:variant_util.bzl", "merge_variant_state")')
     env.expect.that_str(bzl).contains("merge_variant_state(settings[_VARIANT_STATE_LABEL], _VARIANT_STATE_OVERRIDES)")
     env.expect.that_str(bzl).contains("pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition)")
     env.expect.that_str(bzl).contains("pycross_transitioning_file_proxy = make_file_proxy_rule(cfg = _repo_transition)")
+    env.expect.that_bool("_SETTING_VALUES" in bzl).equals(False)
+    env.expect.that_bool("split_setting_value" in bzl).equals(False)
+
+    # Variant-state-only transition omits _FLAG_VALUES, _SETTING_VALUES, and util.bzl load.
+    state_only = render_transition_bzl(
+        "pypi",
+        [],
+        {},
+        variant_state_label = "@ws//_lock:_state",
+        variant_state_overrides = {"d:set": "extra_a"},
+    )
+    env.expect.that_bool(":util.bzl" in state_only).equals(False)
+    env.expect.that_bool("_FLAG_VALUES" in state_only).equals(False)
+    env.expect.that_bool("_SETTING_VALUES" in state_only).equals(False)
+    env.expect.that_str(state_only).contains('load("@rules_pycross//pycross/private:variant_util.bzl", "merge_variant_state")')
+
+    # Settings-only transition emits _SETTING_VALUES + split_setting_value and omits _FLAG_VALUES/duplicate guard/variant_util.
+    settings_only = render_transition_bzl("pypi", [], {"@@//pkg:x": "v"})
+    env.expect.that_str(settings_only).contains('load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values", "split_setting_value")')
+    env.expect.that_str(settings_only).contains("_SETTING_VALUES = {")
+    env.expect.that_str(settings_only).contains("    result = {}")
+    env.expect.that_bool("_FLAG_VALUES" in settings_only).equals(False)
+    env.expect.that_bool("_CANONICAL_FLAG_LABELS" in settings_only).equals(False)
+    env.expect.that_bool("variant_util.bzl" in settings_only).equals(False)
+
+    # Both flags and settings emit both dicts, both util helpers, and the duplicate guard.
+    both = render_transition_bzl(
+        "pypi",
+        ["--@rules_python//python/config_settings:python_version=3.12"],
+        {"@@//pkg:custom": "val"},
+    )
+    env.expect.that_str(both).contains('load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values", "split_setting_value")')
+    env.expect.that_bool("variant_util.bzl" in both).equals(False)
+    env.expect.that_str(both).contains("_FLAG_VALUES = {")
+    env.expect.that_str(both).contains("_SETTING_VALUES = {")
+    env.expect.that_str(both).contains("_CANONICAL_FLAG_LABELS = {")
 
     maybe = render_maybe_build(
         {"pywin32_312": ("pywin32@312", "@ws//_lock:pywin32@312")},

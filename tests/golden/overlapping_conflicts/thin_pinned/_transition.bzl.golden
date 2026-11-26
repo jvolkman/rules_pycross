@@ -1,14 +1,11 @@
 """Generated transition rules for golden_overlapping_conflicts_pinned with pinned flag values."""
 
 load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_library_proxy_rule")
-load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values", "merge_variant_state", "split_setting_value")
+load("@rules_pycross//pycross/private:util.bzl", "coerce_transition_values")
+load("@rules_pycross//pycross/private:variant_util.bzl", "merge_variant_state")
 
 _FLAG_VALUES = {
     "@golden_overlapping_conflicts_pinned//_variants:group_g-b": ["True"],
-}
-
-_SETTING_VALUES = {
-
 }
 
 # Variant pins, defaults, and usable narrowing merged over incoming _state.
@@ -25,8 +22,6 @@ def _transition_impl(settings, attr):
         label: coerce_transition_values(settings[label], values)
         for label, values in _FLAG_VALUES.items()
     }
-    for label, value in _SETTING_VALUES.items():
-        result[label] = coerce_transition_values(settings[label], split_setting_value(settings[label], value))
     result[_VARIANT_STATE_LABEL] = merge_variant_state(settings[_VARIANT_STATE_LABEL], _VARIANT_STATE_OVERRIDES)
     if attr.platform:
         result["//command_line_option:platforms"] = [str(attr.platform)]

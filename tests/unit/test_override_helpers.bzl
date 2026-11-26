@@ -11,7 +11,7 @@ load("//pycross/private:format_extension.bzl", "canonicalize_package_tag_name_fo
 load("//pycross/private:lock_repo_creation.bzl", "compute_variant_pins_for_testing", "normalize_override_name_for_testing", "validate_override_packages_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:override_helpers.bzl", "collect_module_overrides_for_testing", "encode_build_system_attrs", "merge_backend_overrides")
+load("//pycross/private:override_helpers.bzl", "canonicalize_override_key", "collect_module_overrides_for_testing", "encode_build_system_attrs", "merge_backend_overrides")
 
 # buildifier: disable=unused-variable
 def _test_encode_build_system_attrs_impl(env, target):
@@ -246,10 +246,32 @@ def _test_normalize_override_name_impl(env, target):
     env.expect.that_str(normalize_override_name_for_testing("*", "b", "ws")).equals("*")
     env.expect.that_str(normalize_override_name_for_testing("Python_DateUtil", "b", "ws")).equals("python-dateutil")
     env.expect.that_str(normalize_override_name_for_testing("Python_DateUtil@2.9.0", "b", "ws")).equals("python-dateutil@2.9.0")
+    for bad in ("", "@1.0", "foo@", "*@1.0", "foo[extra]", "foo@1.0~"):
+        env.expect.that_bool(canonicalize_override_key(bad) == None).equals(True)
 
 def _test_normalize_override_name(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_normalize_override_name_impl)
+
+def _invalid_override_name_subject_impl(ctx):  # @unused
+    normalize_override_name_for_testing("foo@", "setuptools_build", "ws")
+    return []
+
+_invalid_override_name_subject = rule(implementation = _invalid_override_name_subject_impl)
+
+def _test_normalize_override_name_invalid_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("setuptools_build override 'foo@' (workspace 'ws'): expected a package name, 'name@version', or '*'"),
+    )
+
+def _test_normalize_override_name_invalid_fails(name):
+    util.helper_target(_invalid_override_name_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_normalize_override_name_invalid_fails_impl,
+        expect_failure = True,
+    )
 
 # ---- override package validation ----
 
@@ -683,6 +705,7 @@ def override_helpers_test_suite(name):
             _test_merge_versioned_precedence,
             _test_merge_versioned_only_matching_version,
             _test_normalize_override_name,
+            _test_normalize_override_name_invalid_fails,
             _test_validate_override_version_unknown,
         ],
     )

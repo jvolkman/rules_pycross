@@ -1,6 +1,7 @@
 """Wheel candidate resolution and `pycross_wheel_chooser` rendering for `_lock/lock.bzl`."""
 
 load("//pycross/private:build_text.bzl", "alias", "config_setting_group", "flag_setting", "select_expr")
+load("//pycross/private:lock_contract.bzl", "wheel_available_target_name", "wheel_target_name")
 load("//pycross/private:util.bzl", "is_universal_py3_wheel", "sanitize_name")
 load(":common.bzl", "ind", "wheel_target")
 
@@ -118,7 +119,7 @@ def render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = No
         len(resolved_candidates) == 1 and
         is_universal_py3_wheel(resolved_candidates[0][0]["filename"])
     ):
-        lines.extend(alias("_wheel_{}".format(pkg_key), resolved_candidates[0][1], indent = 1, use_native = True))
+        lines.extend(alias(wheel_target_name(pkg_key), resolved_candidates[0][1], indent = 1, use_native = True))
         return False
 
     filenames = [c["filename"] for c in candidates]
@@ -149,7 +150,7 @@ def render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = No
     ]
     no_match_target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
     lines.extend(alias(
-        "_wheel_{}".format(pkg_key),
+        wheel_target_name(pkg_key),
         select_expr(branches, default = no_match_target, indent = 2),
         indent = 1,
         use_native = True,
@@ -172,7 +173,7 @@ def render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = No
         pkg_key,
         [c["filename"] for c, _ in resolved_candidates],
         all_resolved,
-        "_wheel_available_{}".format(pkg_key),
+        wheel_available_target_name(pkg_key),
         require_target = True,
         loads = loads,
     )

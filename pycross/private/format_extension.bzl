@@ -11,7 +11,6 @@ for backend extensions.
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")
-load("@pypackaging.bzl", "pypackaging")
 load(":json_file_repo.bzl", "json_file_repo")
 load(
     ":lock_common.bzl",
@@ -19,9 +18,10 @@ load(
     "process_workspaces",
     "validate_transition_attrs",
 )
+load(":lock_contract.bzl", "build_repo_name")
 load(":lock_repo_creation.bzl", "create_repos")
 load(":lock_resolver.bzl", "resolve")
-load(":util.bzl", "format_package_key", "parse_package_key")
+load(":util.bzl", "canonicalize_package_key", "parse_flag_arg")
 
 # Shared attrs for workspace tags.
 WORKSPACE_COMMON_ATTRS = dict(
@@ -217,9 +217,8 @@ def _normalize_flag(flag, is_root):
     canonical `@@//` labels; flag labels are otherwise resolved from inside the
     generated repo.
     """
-    name, sep, value = flag[2:].partition("=")
-    if not flag.startswith("--") or not name:
-        fail("Invalid repo flag {}: expected '--<flag>[=<value>]'".format(repr(flag)))
+    parsed = parse_flag_arg(flag)
+    name = parsed.label
     if not name.startswith(("@", "/", ":")):
         name = "//command_line_option:" + name
     elif is_root and name.startswith(":"):
@@ -237,28 +236,17 @@ def _normalize_flag(flag, is_root):
         leaf = pkg.rpartition("/")[2]
         if leaf:
             name = name + ":" + leaf
-    return "--" + name + sep + value
+    return "--" + name + ("=" + parsed.value if parsed.has_value else "")
 
 def _canonicalize_package_tag_name(name):
     """Canonicalize a package() tag name ('*', 'name', 'name[extra]', 'name@ver', 'name[extra]@ver')."""
-    if name == "*":
-        return name
-    parts = parse_package_key(name)
-    norm_name = pypackaging.utils.canonicalize_name(parts.name)
-    norm_extra = pypackaging.utils.canonicalize_name(parts.extra) if parts.extra else ""
-    if "@" in name:
-        if not parts.version:
-            fail("Invalid package key '{}': version cannot be empty after '@'".format(name))
-        if "~" in name.split("@", 1)[1] and not parts.tag:
-            fail("Invalid package key '{}': source tag cannot be empty after '~'".format(name))
-        return format_package_key(norm_name, parts.version, extra = norm_extra, tag = parts.tag)
-    return format_package_key(norm_name, extra = norm_extra)
+    return canonicalize_package_key(name, allow_wildcard = True).canonical
 
 def _normalize_settings(settings, flags):
     """Stringify `settings` labels, rejecting built-in options and settings also set in `flags`."""
     flag_labels = {}
     for f in flags:
-        flag_label = f[2:].partition("=")[0]
+        flag_label = parse_flag_arg(f).label
         if flag_label.startswith("@"):
             flag_labels[Label(flag_label)] = True
     result = {}
@@ -324,7 +312,7 @@ def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, 
         # its variant-only pins get an unconditional fallback. Repos named in
         # `build_tools_repo` annotations are left alone: they're user repos that
         # may also serve runtime targets, where an unselected variant must fail.
-        ungated_fallback = lock_info.repo_name == "{}__build".format(lock_info.workspace),
+        ungated_fallback = lock_info.repo_name == build_repo_name(lock_info.workspace),
     )
 
     return {

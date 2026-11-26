@@ -8,10 +8,10 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "merge_variant_state")
+load("//pycross/private:variant_resolver.bzl", "variant_item_projection", "variant_set_projection", "variant_state")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:variant_resolver.bzl", "variant_item_projection", "variant_set_projection", "variant_state")
+load("//pycross/private:variant_util.bzl", "merge_variant_state")
 
 # ── Helpers ──────────────────────────────────────────────────────────
 

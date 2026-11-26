@@ -1,7 +1,14 @@
 """Availability conditions and `:maybe` / `__maybe` alias generation."""
 
 load("//pycross/private:build_text.bzl", "alias", "config_setting_group", "select_expr")
-load("//pycross/private:util.bzl", "base_package_key", "is_wheel_platform_specific", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load(
+    "//pycross/private:lock_contract.bzl",
+    "is_extras_proxy",
+    "lock_constraint_label",
+    "lock_marker_match_label",
+    "lock_wheel_available_label",
+)
+load("//pycross/private:util.bzl", "base_package_key", "is_wheel_platform_specific", "marker_evaluator_name", "sanitize_name")
 load(":common.bzl", "NO_VARIANT_PREFIX")
 load(":selects.bzl", "unselected_branch")
 
@@ -33,12 +40,11 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
         Config setting label string that matches when `lock_key` is available.
     """
     if packages == None:
-        return "@{}//_lock:_wheel_available_{}".format(workspace_repo, lock_key)
+        return lock_wheel_available_label(workspace_repo, lock_key)
 
     pkg = packages.get(lock_key, {})
-    parts = parse_package_key(lock_key)
-    is_extras_proxy = not pkg.get("wheel_candidates") and bool(parts.extra)
-    base_pkg_key = base_package_key(lock_key) if is_extras_proxy else None
+    extras_proxy = is_extras_proxy(lock_key, pkg)
+    base_pkg_key = base_package_key(lock_key) if extras_proxy else None
     base_pkg = packages.get(base_pkg_key, {}) if base_pkg_key else {}
 
     all_conditions = []
@@ -49,14 +55,14 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
             seen[cond] = True
             all_conditions.append(cond)
 
-    wheel_pkg = base_pkg if is_extras_proxy else pkg
-    wheel_lock_key = base_pkg_key if is_extras_proxy else lock_key
+    wheel_pkg = base_pkg if extras_proxy else pkg
+    wheel_lock_key = base_pkg_key if extras_proxy else lock_key
     if is_wheel_platform_specific(wheel_pkg):
-        _add_cond("@{}//_lock:_wheel_available_{}".format(workspace_repo, wheel_lock_key))
+        _add_cond(lock_wheel_available_label(workspace_repo, wheel_lock_key))
 
     key_san = sanitize_name(lock_key)
     marker_groups = []
-    if is_extras_proxy and base_pkg.get("availability_markers"):
+    if extras_proxy and base_pkg.get("availability_markers"):
         marker_groups.append(("base", base_pkg["availability_markers"]))
     if pkg.get("availability_markers"):
         marker_groups.append(("own", pkg["availability_markers"]))
@@ -70,13 +76,13 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
                 seen_evals[ev] = True
                 unique_evals.append(ev)
         if len(unique_evals) == 1:
-            _add_cond("@{}//_lock:{}_match".format(workspace_repo, unique_evals[0]))
+            _add_cond(lock_marker_match_label(workspace_repo, unique_evals[0]))
         elif len(unique_evals) > 1:
             group_name = "{}_markers_{}_{}".format(helper_prefix, tag, key_san)
             lines.extend(config_setting_group(
                 group_name,
                 "match_any",
-                ["@{}//_lock:{}_match".format(workspace_repo, ev) for ev in unique_evals],
+                [lock_marker_match_label(workspace_repo, ev) for ev in unique_evals],
             ))
             if used != None:
                 used["selects"] = True
@@ -85,7 +91,7 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
     if not all_conditions:
         # Unreachable for callers that filter on is_platform_specific(); kept as
         # a defensive fallback for unit tests passing a synthetic packages dict.
-        return "@{}//_lock:_wheel_available_{}".format(workspace_repo, lock_key)
+        return lock_wheel_available_label(workspace_repo, lock_key)
     if len(all_conditions) == 1:
         return all_conditions[0]
 
@@ -146,7 +152,7 @@ def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys,
         if constraint == "":
             branches.append(("//conditions:default", branch_target))
         else:
-            branches.append(("@{}//_lock:is_{}".format(workspace_repo, constraint), branch_target))
+            branches.append((lock_constraint_label(workspace_repo, constraint), branch_target))
 
     default_target = None
     unselected_groups = {}

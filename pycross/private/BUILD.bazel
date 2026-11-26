@@ -112,6 +112,7 @@ bzl_library(
     deps = [
         ":translator_common",
         ":util",
+        ":variant_util",
     ],
 )
 
@@ -151,9 +152,11 @@ bzl_library(
     srcs = ["package_repo.bzl"],
     deps = [
         ":build_text",
+        ":lock_contract",
         ":resolved_lock_renderer",
         ":util",
         ":variant_resolver",
+        ":variant_util",
         "@pycross_backends//:package_repo_dispatch",
         "@pypackaging.bzl//:pypackaging",
     ],
@@ -164,7 +167,8 @@ bzl_library(
     srcs = ["variant_resolver.bzl"],
     deps = [
         ":deferred_failure",
-        ":util",
+        ":lock_contract",
+        ":variant_util",
         "@bazel_skylib//rules:common_settings",
         "@rules_python//python:py_info_bzl",
     ],
@@ -191,6 +195,7 @@ bzl_library(
     deps = [
         ":deferred_failure",
         ":providers",
+        ":py_providers",
         ":rules_python_bzl",
         ":util",
         "@bazel_skylib//lib:paths",
@@ -203,7 +208,7 @@ bzl_library(
     name = "wheel_zipimport_library",
     srcs = ["wheel_zipimport_library.bzl"],
     deps = [
-        ":util",
+        ":py_providers",
         "@bazel_skylib//lib:paths",
         "@rules_python//python:py_info_bzl",
     ],
@@ -259,7 +264,7 @@ bzl_library(
     deps = [
         ":deferred_failure",
         ":providers",
-        ":util",
+        ":py_providers",
         "@rules_python//python:py_info_bzl",
     ],
 )
@@ -268,6 +273,7 @@ bzl_library(
     name = "thin_package_repo",
     srcs = ["thin_package_repo.bzl"],
     deps = [
+        ":lock_contract",
         ":util",
         "//pycross/private/thin_repo:availability",
         "//pycross/private/thin_repo:metadata",
@@ -322,7 +328,32 @@ bzl_library(
     name = "override_helpers",
     srcs = ["override_helpers.bzl"],
     deps = [
+        ":util",
         "@bazel_features//:features",
+    ],
+)
+
+bzl_library(
+    name = "py_providers",
+    srcs = ["py_providers.bzl"],
+    deps = [
+        "@rules_python//python/api:api_bzl",
+    ],
+)
+
+bzl_library(
+    name = "lock_contract",
+    srcs = ["lock_contract.bzl"],
+    deps = [
+        ":util",
+    ],
+)
+
+bzl_library(
+    name = "variant_util",
+    srcs = ["variant_util.bzl"],
+    deps = [
+        ":lock_contract",
         "@pypackaging.bzl//:pypackaging",
     ],
 )
@@ -332,7 +363,6 @@ bzl_library(
     srcs = ["util.bzl"],
     deps = [
         "@pypackaging.bzl//:pypackaging",
-        "@rules_python//python/api:api_bzl",
     ],
 )
 
@@ -410,6 +440,7 @@ bzl_library(
     srcs = ["lock_resolver.bzl"],
     deps = [
         ":util",
+        ":variant_util",
         "@pypackaging.bzl//:pypackaging",
     ],
 )
@@ -418,6 +449,7 @@ bzl_library(
     name = "lock_common",
     srcs = ["lock_common.bzl"],
     deps = [
+        ":lock_contract",
         "@bazel_skylib//lib:paths",
         "@toml.bzl//toml:toml",
     ],
@@ -428,11 +460,13 @@ bzl_library(
     srcs = ["lock_repo_creation.bzl"],
     deps = [
         ":git_file",
+        ":lock_contract",
         ":override_helpers",
         ":package_repo",
         ":pypi_file",
         ":thin_package_repo",
         ":util",
+        ":variant_util",
         ":wheel_file",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
         "@pycross_backends//:registry",
@@ -446,11 +480,11 @@ bzl_library(
     deps = [
         ":json_file_repo",
         ":lock_common",
+        ":lock_contract",
         ":lock_repo_creation",
         ":lock_resolver",
         ":util",
         "@bazel_features//:features",
-        "@pypackaging.bzl//:pypackaging",
     ],
 )
 

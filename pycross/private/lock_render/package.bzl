@@ -1,6 +1,18 @@
 """Per-package target rendering and extras aggregation for `_lock/lock.bzl`."""
 
 load("//pycross/private:build_text.bzl", "alias", "config_setting_group", "deps_plus_selects")
+load(
+    "//pycross/private:lock_contract.bzl",
+    "dist_info_target_name",
+    "is_extras_proxy",
+    "marker_match_target_name",
+    "raw_target_name",
+    "sdist_deps_target_name",
+    "sdist_repo_name",
+    "sdist_target_name",
+    "wheel_available_target_name",
+    "wheel_target_name",
+)
 load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 load(":common.bzl", "ind", "is_in_same_cycle", "render_str_list_attr", "wheel_target")
 load(":wheels.bzl", "render_marker_wheel_chooser")
@@ -75,7 +87,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads
     for dep_key in sorted(dep_evals.keys()):
         evals = sorted(dep_evals[dep_key].keys())
         if len(evals) == 1:
-            cond = ":{}_match".format(evals[0])
+            cond = ":" + marker_match_target_name(evals[0])
         else:
             evals_key = tuple(evals)
             if evals_key not in multi_groups:
@@ -87,7 +99,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads
                 lines.extend(config_setting_group(
                     group_name,
                     "match_any",
-                    [":{}_match".format(ev) for ev in evals],
+                    [":" + marker_match_target_name(ev) for ev in evals],
                     indent = 1,
                 ))
                 if loads != None:
@@ -122,7 +134,6 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     parts = parse_package_key(pkg_key)
     package_name = parts.name
     package_version = parts.version
-    extra = parts.extra
 
     has_marker_deps = bool(pkg.get("marker_dependencies"))
     has_wheel_candidates = bool(pkg.get("wheel_candidates"))
@@ -134,10 +145,10 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     if has_marker_deps:
         render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads = loads)
 
-    if not has_wheel_candidates and extra:
+    if is_extras_proxy(pkg_key, pkg):
         base_pkg_key = base_package_key(pkg_key)
-        proxy_name = "_raw_{}".format(pkg_key) if pkg.get("cycle_group") else pkg_key
-        base_actual = "_raw_{}".format(base_pkg_key) if is_in_same_cycle(base_pkg_key, pkg, packages) else base_pkg_key
+        proxy_name = raw_target_name(pkg_key) if pkg.get("cycle_group") else pkg_key
+        base_actual = raw_target_name(base_pkg_key) if is_in_same_cycle(base_pkg_key, pkg, packages) else base_pkg_key
 
         lines.extend([
             ind("pycross_library_proxy("),
@@ -151,7 +162,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
 
     # Sdist alias
     if sdist_label:
-        lines.extend(alias("_sdist_{}".format(pkg_key), sdist_label, indent = 1, use_native = True))
+        lines.extend(alias(sdist_target_name(pkg_key), sdist_label, indent = 1, use_native = True))
 
     # Compute the sdist build target (if available) for fallback when no wheel matches.
     sdist_target = None
@@ -161,8 +172,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     elif sdist_file and has_build_fallback(pkg):
         sdist_file_key = sdist_file.get("key")
         if sdist_file_key:
-            sdist_repo_name = "{}_sdist_{}".format(rctx_name, sanitize_name(pkg_key))
-            sdist_target = "@@{}//:wheel".format(sdist_repo_name)
+            pkg_sdist_repo = sdist_repo_name(rctx_name, pkg_key)
+            sdist_target = "@@{}//:wheel".format(pkg_sdist_repo)
             has_sdist_repo = True
 
     # Wheel chooser
@@ -172,15 +183,15 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     else:
         # No wheel candidates, alias directly to sdist_target or no_match_error
         target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
-        lines.extend(alias("_wheel_{}".format(pkg_key), target, indent = 1, use_native = True))
+        lines.extend(alias(wheel_target_name(pkg_key), target, indent = 1, use_native = True))
 
     if not wheel_gated and pkg.get("emit_unconditional_wheel_available"):
-        lines.extend(alias("_wheel_available_{}".format(pkg_key), "@rules_pycross//pycross/private:always_true", indent = 1, use_native = True))
+        lines.extend(alias(wheel_available_target_name(pkg_key), "@rules_pycross//pycross/private:always_true", indent = 1, use_native = True))
 
     # Library
     lib_name = pkg_key
     if pkg.get("cycle_group"):
-        lib_name = "_raw_{}".format(pkg_key)
+        lib_name = raw_target_name(pkg_key)
 
     reset = reset_plan.get(pkg_key) if reset_plan else None
     if reset and reset.ok:
@@ -197,7 +208,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     lines.extend([
         ind("package_name = {},".format(json.encode(package_name)), 2),
         ind("package_version = {},".format(json.encode(package_version)), 2),
-        ind("wheel = {},".format(json.encode(":_wheel_{}".format(pkg_key))), 2),
+        ind("wheel = {},".format(json.encode(":" + wheel_target_name(pkg_key))), 2),
     ])
 
     for attr_name in ("site_paths", "bin_paths", "data_paths", "include_paths"):
@@ -229,7 +240,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     # exec analysis doesn't pull in the entire cycle SCC and reachability evaluators)
     lines.extend([
         ind("pycross_dist_info("),
-        ind("name = {},".format(json.encode("_dist_info_{}".format(pkg_key))), 2),
+        ind("name = {},".format(json.encode(dist_info_target_name(pkg_key))), 2),
         ind("pkg = {},".format(json.encode(":" + lib_name)), 2),
         ind(")"),
         "",
@@ -241,7 +252,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     if has_sdist_repo and has_marker_deps:
         lines.extend([
             ind("pycross_library_proxy("),
-            ind("name = {},".format(json.encode("_sdist_deps_{}".format(pkg_key))), 2),
+            ind("name = {},".format(json.encode(sdist_deps_target_name(pkg_key))), 2),
             ind("deps = _{}_deps,".format(pkg_key_san), 2),
             ind(")"),
             "",

@@ -20,7 +20,7 @@ load(
     "PycrossPackageInfo",
     "PycrossUnsupportedWheelInfo",
 )
-load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
+load(":py_providers.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
 def _register_unsupported_proxy_failure(ctx):
     pkg_id = str(ctx.label)

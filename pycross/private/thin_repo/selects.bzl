@@ -1,6 +1,7 @@
 """Select expression and variant fallback helpers for thin package repos."""
 
 load("//pycross/private:build_text.bzl", "alias", "select_expr")
+load("//pycross/private:lock_contract.bzl", "lock_constraint_label", "lock_unselected_label")
 load(":common.bzl", "NO_MATCH_ERROR_TARGET", "NO_VARIANT_PREFIX", "aggregated_key")
 
 def variant_fallbacks(sets_by_constraint):
@@ -36,7 +37,7 @@ def unselected_condition(set_suffixes, workspace_repo, local_prefix = "//_varian
     """
     if len(set_suffixes) == 1:
         return struct(
-            condition = "@{}//_lock:_unselected_{}".format(workspace_repo, set_suffixes[0]),
+            condition = lock_unselected_label(workspace_repo, set_suffixes[0]),
             groups = {},
         )
     name = unselected_all_name(set_suffixes)
@@ -125,7 +126,7 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
         if constraint == "":
             branches.append(("//conditions:default", target_label))
         else:
-            branches.append(("@{}//_lock:is_{}".format(workspace_repo, constraint), target_label))
+            branches.append((lock_constraint_label(workspace_repo, constraint), target_label))
 
     # Add the uncovered-branch fallback (only if not already present via "").
     # When the select touches a conflict set, also add an explicit
