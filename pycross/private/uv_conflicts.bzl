@@ -10,13 +10,14 @@ load(
     ":translator_common.bzl",
     "canonicalize_name",
     "record_root_marker",
-    "resolution_marker_constraint_name",
 )
 load(
     ":util.bzl",
     "excluded_variant_items",
     "fold_variant_marker",
+    "marker_mentions_variant",
     "parse_package_key",
+    "resolution_marker_constraint_name",
     "sanitize_name",
     "variant_conflict_pairs",
     "variant_item_qname",
@@ -324,11 +325,7 @@ def _prune_plain_branches(branches, conflicts, repo_pins):
         guards = []
         drop = False
         for idx, qnames in enumerate(conflicts.set_qnames):
-            if not [
-                q
-                for q in qnames
-                if "'__variant_{}'".format(q) in expr or '"__variant_{}"'.format(q) in expr
-            ]:
+            if not [q for q in qnames if marker_mentions_variant(expr, q)]:
                 continue
             if not [q for q in qnames if q in variant_specs]:
                 continue

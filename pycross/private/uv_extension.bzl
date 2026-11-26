@@ -7,8 +7,7 @@ load(
     ":format_extension.bzl",
     "make_format_extension",
 )
-load(":lock_common.bzl", "discover_uv_all_members")
-load(":uv_lock_model.bzl", "repo_create_uv_model")
+load(":uv_lock_model.bzl", "discover_uv_all_members", "repo_create_uv_model")
 
 uv = make_format_extension(
     model_type = "uv",

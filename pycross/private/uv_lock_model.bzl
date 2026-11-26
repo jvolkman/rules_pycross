@@ -8,19 +8,22 @@ Handles UV-specific features: workspace members, conflicts/variants,
 resolution markers, git sources, and editable packages.
 """
 
+load(":lock_common.bzl", "read_toml_cached")
 load(
     ":translator_common.bzl",
-    "archive_extension",
     "build_lock_graph",
     "canonicalize_name",
-    "compute_requested_dependency_groups",
+    "compute_requested_groups_for_model",
     "expand_root_edges",
     "finalize_lock_graph",
+    "make_archive_file_entry",
+    "make_file_entry",
+    "make_git_file_entry",
     "read_project_and_lock",
-    "resolution_marker_constraint_name",
-    "sha256_from_string",
+    "strip_sha256_prefix",
+    "validate_multi_project_groups",
 )
-load(":util.bzl", "url_decode_filename", "url_filename")
+load(":util.bzl", "resolution_marker_constraint_name", "url_decode_filename", "url_filename")
 load(
     ":uv_conflicts.bzl",
     "apply_repo_variant_pins_and_defaults",
@@ -32,23 +35,13 @@ load(
 )
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
-    """Parse a UV lock file entry into a file dict.
-
-    Args:
-        file_info: A dict with "file", "filename", or "url" and "hash" keys.
-        package_name: The name of the package.
-        package_version: The version of the package.
-        registry: An optional string representing the index URL.
-
-    Returns:
-        A dict with name, sha256, package_name, package_version, and optionally urls/index.
-    """
+    """Parse a UV lock file entry into a file dict."""
     if "file" in file_info:
         filename = file_info["file"]
-        urls = []
+        urls = None
     elif "filename" in file_info:
         filename = file_info["filename"]
-        urls = []
+        urls = None
     elif "url" in file_info:
         url = file_info["url"]
         filename = url_filename(url)
@@ -58,21 +51,14 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
     else:
         fail("UV file entry has no 'file', 'filename', or 'url' member: {}".format(file_info))
 
-    file_hash = file_info["hash"]
-    if not file_hash.startswith("sha256:"):
-        fail("Expected sha256: prefix on hash: {}".format(file_hash))
-
-    result = {
-        "name": filename,
-        "sha256": file_hash[7:],
-        "package_name": package_name,
-        "package_version": package_version,
-    }
-    if urls:
-        result["urls"] = urls
-    if registry:
-        result["index"] = registry
-    return result
+    return make_file_entry(
+        filename,
+        strip_sha256_prefix(file_info["hash"]),
+        package_name,
+        package_version,
+        urls = urls,
+        index = registry,
+    )
 
 def _canonical_source(source):
     """Serialize a UV lock `source` table deterministically for identity matching."""
@@ -94,10 +80,12 @@ def _source_value(source):
 def _compute_source_tags(packages_list):
     """Assign deterministic `~<tag>` suffixes ONLY to `(name, version)` pairs with >1 distinct source."""
     sources_by_nv = {}  # (canonical_name, version) -> {canon_source: True}
+    pkg_identities = []  # parallel to packages_list: (canonical_name, canon_source)
     for lock_pkg in packages_list:
-        nv = (canonicalize_name(lock_pkg["name"]), lock_pkg["version"])
+        name = canonicalize_name(lock_pkg["name"])
         canon = _canonical_source(lock_pkg.get("source", {}))
-        sources_by_nv.setdefault(nv, {})[canon] = True
+        pkg_identities.append((name, canon))
+        sources_by_nv.setdefault((name, lock_pkg["version"]), {})[canon] = True
 
     source_tags = {}  # (canonical_name, version, canon_source) -> tag
     for (name, version), canon_sources in sources_by_nv.items():
@@ -115,7 +103,7 @@ def _compute_source_tags(packages_list):
                         break
             used_tags[tag] = True
             source_tags[(name, version, canon)] = tag
-    return source_tags
+    return source_tags, pkg_identities
 
 def _parse_uv_dependency(dep, token_replacements = ()):
     """Parse a UV lock dependency dict into dep dicts for `build_lock_graph`."""
@@ -152,48 +140,46 @@ def _parse_sdist_file(sdist, source, package_name, package_version, registry):
         return None
     if "url" not in sdist and "file" not in sdist and "url" in source:
         # URL-based source with subdirectory
-        url = source["url"]
-        file_hash = sdist["hash"]
-        if not file_hash.startswith("sha256:"):
-            fail("Expected sha256: prefix on hash")
-        filename = "{}-{}{}".format(package_name, package_version, archive_extension(url))
-        f = {
-            "name": filename,
-            "sha256": file_hash[7:],
-            "urls": [url],
-            "package_name": package_name,
-            "package_version": package_version,
-        }
-        if registry:
-            f["index"] = registry
-        return f
+        return make_archive_file_entry(
+            package_name,
+            package_version,
+            source["url"],
+            strip_sha256_prefix(sdist["hash"]),
+            index = registry,
+        )
     elif "git" not in source or "url" in sdist or "file" in sdist:
         return _parse_file_info(sdist, package_name, package_version, registry)
     return None
 
-def _parse_lock_packages(packages_list, token_replacements, source_tags):
-    """Parse `uv.lock` `[[package]]` entries into normalized package dicts."""
+def _parse_lock_packages(packages_list, token_replacements, source_tags, pkg_identities):
+    """Parse `uv.lock` `[[package]]` entries and scan `resolution-markers` forks in one pass."""
     packages = []
-    for lock_pkg in packages_list:
-        package_name = canonicalize_name(lock_pkg["name"])
+    fork_versions = {}  # {canonical_name: {(version, tag): [marker_expr, ...]}}
+
+    for lock_pkg, (package_name, canon_source) in zip(packages_list, pkg_identities):
         package_version = lock_pkg["version"]
+        source = lock_pkg.get("source", {})
+        source_tag = source_tags.get((package_name, package_version, canon_source), "")
+
+        res_markers = [
+            rewrite_conflict_markers(m, token_replacements)
+            for m in lock_pkg.get("resolution-markers", [])
+        ]
+        if res_markers:
+            fork_versions.setdefault(package_name, {}).setdefault((package_version, source_tag), []).extend(res_markers)
 
         deps = []
         for dep in lock_pkg.get("dependencies", []):
             deps.extend(_parse_uv_dependency(dep, token_replacements))
 
         files = []
-        source = lock_pkg.get("source", {})
-        canon_source = _canonical_source(source)
-        source_tag = source_tags.get((package_name, package_version, canon_source), "")
         source_display = _source_value(source)
         registry = source.get("registry")
 
         for w in lock_pkg.get("wheels", []):
             files.append(_parse_file_info(w, package_name, package_version, registry))
 
-        sdist = lock_pkg.get("sdist", {})
-        sdist_file = _parse_sdist_file(sdist, source, package_name, package_version, registry)
+        sdist_file = _parse_sdist_file(lock_pkg.get("sdist", {}), source, package_name, package_version, registry)
         if sdist_file:
             files.append(sdist_file)
 
@@ -210,18 +196,19 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags):
                     if param.startswith("subdirectory="):
                         source_dir = url_decode_filename(param[len("subdirectory="):])
             if commit:
-                files.append({
-                    "name": "{}-{}.tar.gz".format(package_name, package_version),
-                    "sha256": sha256_from_string(commit),
-                    "urls": ["git+" + git_url],
-                    "package_name": package_name,
-                    "package_version": package_version,
-                })
+                files.append(make_git_file_entry(
+                    package_name,
+                    package_version,
+                    git_url,
+                    commit,
+                    full_url = "git+" + git_url,
+                ))
 
-        is_local_editable = "editable" in source and type(source.get("editable")) == "string"
-        is_local_virtual = "virtual" in source and type(source.get("virtual")) == "string"
-        is_local_directory = "directory" in source
-        is_local = is_local_editable or is_local_virtual or is_local_directory
+        is_local = (
+            ("editable" in source and type(source.get("editable")) == "string") or
+            ("virtual" in source and type(source.get("virtual")) == "string") or
+            "directory" in source
+        )
 
         base_pkg = {
             "name": package_name,
@@ -263,23 +250,6 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags):
                 extra_pkg["source_dir"] = source_dir
             packages.append(extra_pkg)
 
-    return packages
-
-def _scan_fork_constraints(packages_list, token_replacements, source_tags):
-    """Pre-scan multi-version / multi-source `resolution-markers` forks across `packages_list`."""
-    fork_versions = {}  # {canonical_name: {(version, tag): [marker_expr, ...]}}
-    for lock_pkg in packages_list:
-        res_markers = [
-            rewrite_conflict_markers(m, token_replacements)
-            for m in lock_pkg.get("resolution-markers", [])
-        ]
-        if not res_markers:
-            continue
-        fname = canonicalize_name(lock_pkg["name"])
-        fversion = lock_pkg["version"]
-        ftag = source_tags.get((fname, fversion, _canonical_source(lock_pkg.get("source", {}))), "")
-        fork_versions.setdefault(fname, {}).setdefault((fversion, ftag), []).extend(res_markers)
-
     resolution_marker_exprs = {}
     fork_constraints = {}
     for fname, versions in fork_versions.items():
@@ -290,7 +260,8 @@ def _scan_fork_constraints(packages_list, token_replacements, source_tags):
             cname = resolution_marker_constraint_name(fname, fversion, ftag)
             fork_constraints.setdefault(fname, {})[(fversion, ftag)] = cname
             resolution_marker_exprs[cname] = combined
-    return fork_constraints, resolution_marker_exprs
+
+    return packages, fork_constraints, resolution_marker_exprs
 
 def _find_target_projects(packages_list, project_dict, projects_list):
     """Discover workspace members in `uv.lock` and resolve `projects_list`."""
@@ -351,16 +322,17 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
     projects_list = getattr(lock_model, "projects", [])
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    testonly_groups = getattr(lock_model, "testonly_groups", [])
-    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
-    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
     is_build_tools_repo = getattr(lock_model, "is_build_tools_repo", False)
 
     workspace_members, target_projects = _find_target_projects(packages_list, project_dict, projects_list)
     conflicts = parse_uv_conflicts(uv_conflicts, target_projects)
-    source_tags = _compute_source_tags(packages_list)
-    fork_constraints, resolution_marker_exprs = _scan_fork_constraints(packages_list, conflicts.token_replacements, source_tags)
-    packages = _parse_lock_packages(packages_list, conflicts.token_replacements, source_tags)
+    source_tags, pkg_identities = _compute_source_tags(packages_list)
+    packages, fork_constraints, resolution_marker_exprs = _parse_lock_packages(
+        packages_list,
+        conflicts.token_replacements,
+        source_tags,
+        pkg_identities,
+    )
 
     # In a repo spanning several projects, a requested extra/group applies to the
     # projects that declare it (like `uv --all-packages --group test`); it only
@@ -400,12 +372,9 @@ def translate_uv(project_dict, lock_dict, lock_model):
         for g in available_groups:
             groups_seen[g] = True
 
-        requested_groups_dict = compute_requested_dependency_groups(
-            dependency_groups = dependency_groups,
-            testonly_groups = testonly_groups,
-            non_testonly_groups = non_testonly_groups,
-            wildcard_testonly = wildcard_testonly,
-            available_groups = available_groups,
+        requested_groups_dict = compute_requested_groups_for_model(
+            lock_model,
+            available_groups,
             project_name = project_name,
             allow_missing = multi_project,
         )
@@ -433,29 +402,18 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
         for constraint, deps_list, is_testonly in group_batches:
             for dep in deps_list:
-                dep_name = canonicalize_name(dep["name"])
-                dep_version = dep.get("version", "")
-                dep_extras = dep.get("extra") or dep.get("extras", [])
-                dep_marker = rewrite_conflict_markers(dep.get("marker", ""), conflicts.token_replacements)
-                dep_source_id = _canonical_source(dep.get("source", {}))
-                specifier = "==={}".format(dep_version) if dep_version else ""
-
-                pin_names = ["{}[{}]".format(dep_name, canonicalize_name(e)) for e in dep_extras] if dep_extras else [dep_name]
-                for pin_name in pin_names:
+                for parsed in _parse_uv_dependency(dep, conflicts.token_replacements):
                     root_edges.append(struct(
-                        pin_name = pin_name,
-                        specifier = specifier,
+                        pin_name = parsed["name"],
+                        specifier = parsed["specifier"],
                         constraint = constraint,
                         is_testonly = is_testonly,
-                        marker = dep_marker,
-                        source_id = dep_source_id,
+                        marker = parsed["marker"],
+                        source_id = parsed["source_id"],
                     ))
 
     if multi_project:
-        for group in dependency_groups:
-            _, sep, name = group.partition(":")
-            if sep and name != "*" and group not in groups_seen:
-                fail("None of the projects {} has group '{}'.".format(sorted(target_projects), group))
+        validate_multi_project_groups(dependency_groups, groups_seen, target_projects)
 
     default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
     repo_pins = apply_repo_variant_pins_and_defaults(
@@ -496,6 +454,49 @@ def translate_uv(project_dict, lock_dict, lock_model):
         non_testonly_pins = resolved_pins.non_testonly_pins,
         root_dependency_markers = resolved_pins.root_dependency_markers,
     )
+
+def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
+    """Parse uv.lock and return workspace members (editable/virtual packages).
+
+    Args:
+        mctx: The module_ctx object.
+        lock_file_label: Label of the uv.lock file.
+        toml_cache: Optional dict caching decoded TOML files by label.
+
+    Returns:
+        A list of structs with 'name' and 'path' fields.
+    """
+    lock_data = read_toml_cached(mctx, lock_file_label, toml_cache)
+    if lock_data == None:
+        fail("Lock file not found: {}".format(lock_file_label))
+
+    # uv.lock uses "package" (newer) or "distribution" (older) for the package list.
+    packages_list = lock_data.get("package", lock_data.get("distribution", []))
+
+    members = []
+    for pkg in packages_list:
+        source = pkg.get("source", {})
+        if "editable" in source:
+            members.append(struct(
+                name = pkg["name"],
+                path = source["editable"],
+            ))
+        elif "virtual" in source:
+            # Only include virtual members that have actual dependencies.
+            # A virtual workspace root with no dependencies is just the workspace
+            # definition and shouldn't produce a lock repo.
+            has_deps = (
+                pkg.get("dependencies") or
+                pkg.get("optional-dependencies") or
+                pkg.get("dev-dependencies")
+            )
+            if has_deps:
+                members.append(struct(
+                    name = pkg["name"],
+                    path = source["virtual"],
+                ))
+
+    return members
 
 def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the UV translator in pure Starlark."""

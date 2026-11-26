@@ -7,8 +7,7 @@ load(
     ":format_extension.bzl",
     "make_format_extension",
 )
-load(":lock_common.bzl", "discover_pdm_all_members")
-load(":pdm_lock_model.bzl", "repo_create_pdm_model")
+load(":pdm_lock_model.bzl", "discover_pdm_all_members", "repo_create_pdm_model")
 
 pdm = make_format_extension(
     model_type = "pdm",

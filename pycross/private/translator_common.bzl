@@ -6,7 +6,7 @@ Used by PDM, Poetry, UV, and Pylock translators.
 
 load("@pypackaging.bzl", "pypackaging")
 load(":lock_common.bzl", "read_toml_cached", "sibling_project_file")
-load(":util.bzl", "base_package_key", "parse_package_key")
+load(":util.bzl", "base_package_key", "format_package_key", "parse_package_key", "resolution_marker_constraint_name")
 
 def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
@@ -46,25 +46,6 @@ def record_root_marker(root_dependency_markers, name, marker):
     if marker not in existing:
         root_dependency_markers[name] = existing + [marker]
 
-def resolution_marker_constraint_name(name, version, tag = ""):
-    """Generate a deterministic constraint name for a resolution-marker fork.
-
-    Used by both uv and poetry translators when a package has multiple
-    versions (or sources at the same version) resolved for different
-    environments.
-
-    Args:
-        name: Canonical package name.
-        version: Package version string.
-        tag: Optional disambiguating source tag (omitted when empty).
-
-    Returns:
-        A constraint name like "res_numpy_2_3_4" or "res_torch_2_9_1_a1b2c3d4".
-    """
-    ver = "{}_{}".format(version, tag) if tag else version
-    sanitized = (name + "_" + ver).replace("-", "_").replace(".", "_").replace("+", "_").replace("~", "_")
-    return "res_{}".format(sanitized)
-
 def sha256_from_string(s):
     """Generate a deterministic hex string from a string input.
 
@@ -92,6 +73,70 @@ def sha256_from_string(s):
             break
         result = result + s
     return result[:64]
+
+def strip_sha256_prefix(file_hash, required = True):
+    """Strip a `sha256:` prefix from `file_hash`.
+
+    Args:
+        file_hash: Hash string (e.g. `"sha256:abcd..."`).
+        required: If True, fail when the `sha256:` prefix is absent.
+
+    Returns:
+        Hex digest without prefix, or `""` when not required and absent.
+    """
+    if file_hash and file_hash.startswith("sha256:"):
+        return file_hash[len("sha256:"):]
+    if required:
+        fail("Expected sha256: prefix on hash: {}".format(file_hash))
+    return ""
+
+def make_file_entry(name, sha256, package_name, package_version, urls = None, index = None):
+    """Build a raw_lock file entry dict, omitting empty `urls` and falsy `index`.
+
+    Args:
+        name: Distribution filename.
+        sha256: Hex sha256 digest.
+        package_name: Canonicalized package name.
+        package_version: Package version string.
+        urls: Optional list of download URLs.
+        index: Optional package index URL.
+
+    Returns:
+        File entry dict for `raw_lock`.
+    """
+    entry = {
+        "name": name,
+        "sha256": sha256,
+        "package_name": package_name,
+        "package_version": package_version,
+    }
+    if urls:
+        entry["urls"] = urls
+    if index:
+        entry["index"] = index
+    return entry
+
+def make_git_file_entry(package_name, package_version, git_url, commit, full_url = None):
+    """Build a synthetic sdist file entry for a pinned git dependency (`full_url` overrides `git+<url>#<commit>`)."""
+    url = full_url if full_url != None else "git+{}#{}".format(git_url, commit)
+    return make_file_entry(
+        name = "{}-{}.tar.gz".format(package_name, package_version),
+        sha256 = sha256_from_string(commit),
+        package_name = package_name,
+        package_version = package_version,
+        urls = [url],
+    )
+
+def make_archive_file_entry(package_name, package_version, url, sha256, index = None):
+    """Build a synthetic sdist file entry for a direct-URL source archive."""
+    return make_file_entry(
+        name = "{}-{}{}".format(package_name, package_version, archive_extension(url)),
+        sha256 = sha256,
+        package_name = package_name,
+        package_version = package_version,
+        urls = [url],
+        index = index,
+    )
 
 def expand_pep735_group(dev_deps, group_name):
     """Expand a PEP 735 dependency group transitively, resolving `{include-group = ...}` entries.
@@ -146,33 +191,15 @@ def expand_pep735_group(dev_deps, group_name):
         fail("expand_pep735_group exceeded max iterations for group '{}'; this is a bug in pycross".format(group_name))
     return deps
 
-def _read_project_dicts(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
-    """Select and decode all matching pyproject.toml files as a list of dicts."""
-    sibling_label = sibling_project_file(lock_file)
-    if not extra_project_files:
-        return [read_toml_cached(rctx, sibling_label, toml_cache) or {}]
+def _default_project_dict(rctx, extra_project_files, sibling_label, toml_cache):
+    project_file = (
+        sibling_label if (not extra_project_files or sibling_label in extra_project_files) else extra_project_files[0]
+    )
+    return read_toml_cached(rctx, project_file, toml_cache) or {}
 
-    projects = getattr(lock_model, "projects", [])
-    if not projects or "*" in projects:
-        # Order root/sibling file first (for requires-python and workspace metadata),
-        # followed by all other member pyproject.toml files.
-        ordered = []
-        seen = {}
-        if sibling_label in extra_project_files:
-            ordered.append(sibling_label)
-            seen[sibling_label] = True
-        for f in extra_project_files:
-            if f not in seen:
-                ordered.append(f)
-                seen[f] = True
-        dicts = []
-        for f in ordered:
-            p_dict = read_toml_cached(rctx, f, toml_cache)
-            if p_dict != None:
-                dicts.append(p_dict)
-        return dicts or [{}]
-
-    target_names = {canonicalize_name(p): True for p in projects}
+def _match_project_dicts(rctx, extra_project_files, target_projects, toml_cache, stop_on_first = False):
+    """Decode and return `(matched_dicts, matched_names)` for projects in `target_projects`."""
+    target_names = {canonicalize_name(p): True for p in target_projects}
     matched = []
     matched_names = {}
     for f in extra_project_files:
@@ -183,14 +210,44 @@ def _read_project_dicts(rctx, extra_project_files, lock_file, lock_model, toml_c
         if p_name and canonicalize_name(p_name) in target_names:
             matched.append(p_dict)
             matched_names[canonicalize_name(p_name)] = True
+            if stop_on_first:
+                break
+    return matched, matched_names
+
+def _read_project_dicts(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
+    """Select and decode all matching pyproject.toml files as a list of dicts."""
+    sibling_label = sibling_project_file(lock_file)
+    if not extra_project_files:
+        return [read_toml_cached(rctx, sibling_label, toml_cache) or {}]
+
+    projects = getattr(lock_model, "projects", [])
+    if not projects or "*" in projects:
+        # Order root/sibling file first (for requires-python and workspace metadata),
+        # followed by all other member pyproject.toml files.
+        ordered = ([sibling_label] if sibling_label in extra_project_files else []) + [
+            f
+            for f in extra_project_files
+            if f != sibling_label
+        ]
+        dicts = []
+        seen = {}
+        for f in ordered:
+            if f in seen:
+                continue
+            seen[f] = True
+            p_dict = read_toml_cached(rctx, f, toml_cache)
+            if p_dict != None:
+                dicts.append(p_dict)
+        return dicts or [{}]
+
+    matched, matched_names = _match_project_dicts(rctx, extra_project_files, projects, toml_cache)
     if matched:
         missing = [p for p in projects if canonicalize_name(p) not in matched_names]
         if missing:
             fail("Project(s) {} not found in workspace pyproject.toml files".format(missing))
         return matched
 
-    project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
-    return [read_toml_cached(rctx, project_file, toml_cache) or {}]
+    return [_default_project_dict(rctx, extra_project_files, sibling_label, toml_cache)]
 
 def _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Select and decode the relevant pyproject.toml as a dict.
@@ -200,22 +257,12 @@ def _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_ca
     workspace-level `default-groups`).
     """
     sibling_label = sibling_project_file(lock_file)
-    if not extra_project_files:
-        return read_toml_cached(rctx, sibling_label, toml_cache) or {}
-
     projects = getattr(lock_model, "projects", [])
-    if len(projects) == 1 and projects[0] != "*":
-        target_name = canonicalize_name(projects[0])
-        for f in extra_project_files:
-            p_dict = read_toml_cached(rctx, f, toml_cache)
-            if p_dict == None:
-                continue
-            p_name = p_dict.get("project", {}).get("name")
-            if p_name and canonicalize_name(p_name) == target_name:
-                return p_dict
-
-    project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
-    return read_toml_cached(rctx, project_file, toml_cache) or {}
+    if extra_project_files and len(projects) == 1 and projects[0] != "*":
+        matched, _ = _match_project_dicts(rctx, extra_project_files, projects, toml_cache, stop_on_first = True)
+        if matched:
+            return matched[0]
+    return _default_project_dict(rctx, extra_project_files, sibling_label, toml_cache)
 
 def _read_lock_dict(rctx, lock_file, lock_label_hint, toml_cache = None):
     lock_dict = read_toml_cached(rctx, lock_file, toml_cache)
@@ -257,35 +304,62 @@ def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock
     project_dict = _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_cache)
     return project_dict, _read_lock_dict(rctx, lock_file, lock_label_hint, toml_cache)
 
-def detect_package_marker_forks(packages, pinned_package_specs):
-    """Detect resolution-marker forks (same package name with multiple marked versions) and update pins.
+def detect_package_marker_forks(
+        packages,
+        pins,
+        markers_by_pkg = None,
+        pin_value_fn = None,
+        allow_unmarked_fallback = False):
+    """Detect resolution-marker forks (same package name with multiple versions) and update pins.
 
     Args:
-        packages: List of translated package dicts.
-        pinned_package_specs: Dict of pin_name -> specifier, mutated in place for forked packages.
+        packages: Iterable of translated package dicts.
+        pins: Dict of `pin_name -> value`, mutated in place for forked packages.
+        markers_by_pkg: Optional `{name: {version: marker_expr}}` lookup overriding
+            `pkg.get("markers", "")`.
+        pin_value_fn: Optional `fn(pin_name, version)` producing each conditional
+            pin value; defaults to `lambda _pin_name, version: "===" + version`.
+        allow_unmarked_fallback: If True, keep one unmarked version under `""`
+            (the default branch) when at least one sibling version has a marker.
 
     Returns:
         Dict of constraint_name -> PEP 508 marker expression string.
     """
-    resolution_marker_exprs = {}
     fork_versions = {}  # {name: {version: marker_expr}}
     for pkg in packages:
-        marker = pkg.get("markers", "")
-        if not marker:
+        fname = pkg["name"]
+        fver = pkg["version"]
+        if markers_by_pkg != None:
+            marker = markers_by_pkg.get(fname, {}).get(fver, "")
+        else:
+            marker = pkg.get("markers", "")
+        if not marker and not allow_unmarked_fallback:
             continue
-        fork_versions.setdefault(pkg["name"], {})[pkg["version"]] = marker
+        fork_versions.setdefault(fname, {})[fver] = marker
 
+    resolution_marker_exprs = {}
     for fname, versions in fork_versions.items():
-        if len(versions) <= 1:
+        if len(versions) <= 1 or not any(versions.values()):
             continue
-        conditional_pins = {}
-        for fversion, marker_expr in versions.items():
+        version_constraints = {}
+        seen_unmarked = False
+        for fversion, marker_expr in sorted(versions.items()):
+            if not marker_expr:
+                if seen_unmarked:
+                    continue
+                seen_unmarked = True
+                version_constraints[fversion] = ""
+                continue
             cname = resolution_marker_constraint_name(fname, fversion)
-            conditional_pins[cname] = "===" + fversion
+            version_constraints[fversion] = cname
             resolution_marker_exprs[cname] = marker_expr
-        for pin_name in list(pinned_package_specs.keys()):
+
+        for pin_name in list(pins.keys()):
             if pin_name == fname or pin_name.startswith(fname + "["):
-                pinned_package_specs[pin_name] = conditional_pins
+                pins[pin_name] = {
+                    cname: pin_value_fn(pin_name, fversion) if pin_value_fn else "===" + fversion
+                    for fversion, cname in version_constraints.items()
+                }
 
     return resolution_marker_exprs
 
@@ -323,18 +397,6 @@ def parse_pep508_requirement(req_str):
         specifier = specifier_str,
         marker = parsed.marker_str or "",
     )
-
-def _dependency_name_str(name, extra = ""):
-    """Format a dependency name with optional extra."""
-    if extra:
-        return "{}[{}]".format(name, extra)
-    return name
-
-def _package_key_str(name, version, tag = ""):
-    """Format a package key string (with optional `~tag` source qualifier)."""
-    if tag:
-        return "{}@{}~{}".format(name, version, tag)
-    return "{}@{}".format(name, version)
 
 def _parse_specifier_parts(specifier_str):
     """Pre-parse a specifier string (possibly with `||` unions) once for repeated checks.
@@ -423,7 +485,7 @@ def _resolve_candidates(
     matches = []
     for cand in candidates:
         if req_extra:
-            cand_key = _package_key_str(cand["name"], cand["version"], cand.get("tag", ""))
+            cand_key = format_package_key(cand["name"], cand["version"], tag = cand.get("tag", ""))
             if req_extra not in cand_extras_by_key.get(cand_key, {}):
                 continue
         if not _parsed_specifier_contains_version(parsed_spec, cand["version"]):
@@ -441,6 +503,56 @@ def _resolve_candidates(
         if break_on_first and not is_forked:
             break
     return matches
+
+def _resolve_with_extra_fallback(
+        packages_by_name,
+        name,
+        parsed_spec,
+        marker,
+        resolution_marker_exprs,
+        req_extra = "",
+        cand_extras_by_key = None,
+        break_on_first = True,
+        dep_source_id = ""):
+    """Resolve candidates for `name`, falling back from `base[extra]` to `base`.
+
+    Precondition: a bracketed `name` (`base[extra]`) implies `req_extra` is empty/None.
+
+    Returns:
+        A `(matches, resolved_name)` tuple where `resolved_name` is `name` on a
+        direct match or `base` when the fallback to the base package was used.
+    """
+    candidates = packages_by_name.get(name, [])
+    if candidates:
+        matches = _resolve_candidates(
+            candidates,
+            parsed_spec,
+            marker,
+            resolution_marker_exprs,
+            req_extra = req_extra,
+            cand_extras_by_key = cand_extras_by_key,
+            break_on_first = break_on_first,
+            dep_source_id = dep_source_id,
+        )
+        if matches:
+            return matches, name
+
+    if "[" in name and not req_extra:
+        base_name = name.split("[")[0]
+        base_candidates = packages_by_name.get(base_name, [])
+        if base_candidates:
+            matches = _resolve_candidates(
+                base_candidates,
+                parsed_spec,
+                marker,
+                resolution_marker_exprs,
+                break_on_first = break_on_first,
+                dep_source_id = dep_source_id,
+            )
+            return matches, base_name
+        return [], base_name
+
+    return [], name
 
 def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependencies = True):
     """Deduplicate packages, index by name, and resolve inter-package dependencies.
@@ -463,7 +575,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
     # Deduplicate: merge packages with same key
     distinct_packages = {}
     for pkg in packages:
-        pkg_key = _package_key_str(pkg["name"], pkg["version"], pkg.get("tag", ""))
+        pkg_key = format_package_key(pkg["name"], pkg["version"], tag = pkg.get("tag", ""))
         if pkg_key not in distinct_packages:
             distinct_packages[pkg_key] = pkg
             continue
@@ -533,7 +645,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
     # Resolve dependencies
     resolved_deps = {}  # pkg_key -> list of resolved dep dicts
     for pkg in all_packages:
-        pkg_key = _package_key_str(pkg["name"], pkg["version"], pkg.get("tag", ""))
+        pkg_key = format_package_key(pkg["name"], pkg["version"], tag = pkg.get("tag", ""))
         pkg_resolved = []
 
         for dep in pkg["dependencies"]:
@@ -543,18 +655,16 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
             dep_source_id = dep.get("source_id", "")
             dep_extras = dep.get("extras", [None]) or [None]
 
-            candidates = packages_by_name.get(dep_name, [])
-            resolved_dep_name = dep_name
-            if not candidates and "[" in dep_name:
-                resolved_dep_name = dep_name.split("[")[0]
-                candidates = packages_by_name.get(resolved_dep_name, [])
-            parsed_spec = _parse_specifier_parts(dep_specifier) if candidates else None
+            has_candidates = bool(packages_by_name.get(dep_name)) or (
+                "[" in dep_name and bool(packages_by_name.get(dep_name.split("[")[0]))
+            )
+            parsed_spec = _parse_specifier_parts(dep_specifier) if has_candidates else None
 
             for req_extra in dep_extras:
                 norm_req_extra = canonicalize_name(req_extra) if req_extra else ""
-                eff_dep_name = resolved_dep_name
-                matches = _resolve_candidates(
-                    candidates,
+                matches, eff_dep_name = _resolve_with_extra_fallback(
+                    packages_by_name,
+                    dep_name,
                     parsed_spec,
                     dep_marker,
                     resolution_marker_exprs,
@@ -563,20 +673,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
                     break_on_first = bool(dep_specifier),
                     dep_source_id = dep_source_id,
                 )
-                if not matches and "[" in eff_dep_name and not norm_req_extra:
-                    base_name = eff_dep_name.split("[")[0]
-                    base_candidates = packages_by_name.get(base_name, [])
-                    base_spec = _parse_specifier_parts(dep_specifier) if base_candidates else None
-                    matches = _resolve_candidates(
-                        base_candidates,
-                        base_spec,
-                        dep_marker,
-                        resolution_marker_exprs,
-                        break_on_first = bool(dep_specifier),
-                        dep_source_id = dep_source_id,
-                    )
-                    eff_dep_name = base_name
-                display_name = _dependency_name_str(eff_dep_name, norm_req_extra)
+                display_name = format_package_key(eff_dep_name, extra = norm_req_extra)
                 for cand, edge_marker in matches:
                     entry = {
                         "name": display_name,
@@ -584,7 +681,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
                         "marker": edge_marker,
                     }
                     if cand.get("tag"):
-                        entry["key"] = _package_key_str(display_name, cand["version"], cand["tag"])
+                        entry["key"] = format_package_key(display_name, cand["version"], tag = cand["tag"])
                     pkg_resolved.append(entry)
                 if not matches and strict_dependencies:
                     fail("Found no packages to satisfy dependency (name={}, spec={})".format(dep_name, dep_specifier))
@@ -638,35 +735,19 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
         marker = edge.marker
         source_id = getattr(edge, "source_id", "")
 
-        pin_packages = packages_by_name.get(pin_name)
-        key_name = None
-        if pin_packages == None and "[" in pin_name:
-            # No separate name[extra] package (e.g. Poetry or empty extra): pin
-            # the base version; lock_resolver synthesizes name[extra] if needed.
-            pin_packages = packages_by_name.get(pin_name.split("[")[0])
-            key_name = pin_name
-        pin_packages = pin_packages or []
-        parsed_spec = _parse_specifier_parts(specifier) if pin_packages else None
-        matches = _resolve_candidates(
-            pin_packages,
+        has_candidates = bool(packages_by_name.get(pin_name)) or (
+            "[" in pin_name and bool(packages_by_name.get(pin_name.split("[")[0]))
+        )
+        parsed_spec = _parse_specifier_parts(specifier) if has_candidates else None
+        matches, _ = _resolve_with_extra_fallback(
+            packages_by_name,
+            pin_name,
             parsed_spec,
             marker,
             resolution_marker_exprs,
             break_on_first = True,
             dep_source_id = source_id,
         )
-        if not matches and key_name == None and "[" in pin_name:
-            base_packages = packages_by_name.get(pin_name.split("[")[0]) or []
-            base_spec = _parse_specifier_parts(specifier) if base_packages else None
-            matches = _resolve_candidates(
-                base_packages,
-                base_spec,
-                marker,
-                resolution_marker_exprs,
-                break_on_first = True,
-                dep_source_id = source_id,
-            )
-            key_name = pin_name
         if not matches and strict_dependencies:
             fail("Found no packages to satisfy pin (name={}, spec={})".format(pin_name, specifier))
         for cand, edge_marker in matches:
@@ -675,7 +756,10 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
                 pin_marker = fold_pin_marker(constraint, pin_marker)
                 if pin_marker == None:
                     continue
-            pkg_key = _package_key_str(key_name or cand["name"], cand["version"], cand.get("tag", ""))
+
+            # Keep `pin_name` even on base fallback so lock_resolver synthesizes
+            # `name[extra]` when no separate extra package exists.
+            pkg_key = format_package_key(pin_name, cand["version"], tag = cand.get("tag", ""))
             queue.append((pin_name, pkg_key, constraint, is_testonly, pin_marker, edge_marker, False, ()))
 
     expanded = []
@@ -712,7 +796,7 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
         for dep in resolved_deps.get(local_key, []):
             dep_base_name = dep["name"].split("[")[0]
             dep_pin_name = dep["name"]
-            dep_key = dep.get("key") or _package_key_str(dep_pin_name, dep["version"])
+            dep_key = dep.get("key") or format_package_key(dep_pin_name, dep["version"])
             if dep_key not in distinct_packages:
                 dep_pin_name = dep_base_name
                 dep_key = base_package_key(dep_key)
@@ -727,6 +811,52 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
     if head < len(queue):
         fail("Local package expansion exceeded step bound")
     return expanded
+
+def format_raw_lock(
+        packages,
+        pins,
+        testonly_pins = None,
+        variants = None,
+        resolution_marker_exprs = None,
+        root_dependency_markers = None):
+    """Serialize translated lock data into the canonical `raw_lock.json` dict.
+
+    Args:
+        packages: Dict mapping package key -> raw package dict.
+        pins: Dict mapping pin name -> pkg_key string or `{constraint: pkg_key}`.
+        testonly_pins: Optional list of testonly pin names.
+        variants: Optional list of variant set dicts.
+        resolution_marker_exprs: Optional dict of constraint name -> marker expression or compound dict.
+        root_dependency_markers: Optional dict of pin name -> marker list (or None, omitted).
+
+    Returns:
+        A dict in raw_lock.json format.
+    """
+    simplified_pins = {}
+    for name, pin in pins.items():
+        if type(pin) == "dict" and sorted(pin.keys()) == [""]:
+            simplified_pins[name] = pin[""]
+        else:
+            simplified_pins[name] = pin
+
+    result = {
+        "packages": packages,
+        "pins": simplified_pins,
+        "testonly_pins": testonly_pins or [],
+    }
+    if variants:
+        result["variants"] = variants
+    if resolution_marker_exprs:
+        result["resolution_marker_exprs"] = resolution_marker_exprs
+
+    filtered_markers = {
+        name: markers
+        for name, markers in (root_dependency_markers or {}).items()
+        if markers != None
+    }
+    if filtered_markers:
+        result["root_dependency_markers"] = filtered_markers
+    return result
 
 def finalize_lock_graph(
         graph,
@@ -759,10 +889,6 @@ def finalize_lock_graph(
     """
     distinct_packages = graph.distinct_packages
     resolved_deps = graph.resolved_deps
-    if variants == None:
-        variants = []
-    if resolution_marker_exprs == None:
-        resolution_marker_exprs = {}
 
     testonly_set = {name: True for name in (testonly_pins or [])}
     expanded_testonly = {name: True for name in (expanded_testonly_pins or [])}
@@ -799,7 +925,7 @@ def finalize_lock_graph(
             for dep in resolved_deps.get(cur, []):
                 dep_base = dep["name"].split("[")[0]
                 runtime_reachable[dep_base] = True
-                raw_dep_key = dep.get("key") or _package_key_str(dep["name"], dep["version"])
+                raw_dep_key = dep.get("key") or format_package_key(dep["name"], dep["version"])
                 for dep_key in (raw_dep_key, base_package_key(raw_dep_key)):
                     if dep_key in distinct_packages and dep_key not in visited:
                         visited[dep_key] = True
@@ -824,12 +950,12 @@ def finalize_lock_graph(
         if pkg.get("is_local", False):
             continue
 
-        pkg_key = _package_key_str(pkg["name"], pkg["version"], pkg.get("tag", ""))
+        pkg_key = format_package_key(pkg["name"], pkg["version"], tag = pkg.get("tag", ""))
         deps = resolved_deps.get(pkg_key, [])
         deps_without_self = [
             d
             for d in deps
-            if base_package_key(d.get("key") or _package_key_str(d["name"], d["version"])) != pkg_key
+            if base_package_key(d.get("key") or format_package_key(d["name"], d["version"])) != pkg_key
         ]
         deps_sorted = sorted(deps_without_self, key = lambda d: (d["name"], d["version"], d.get("key", "")))
         files_sorted = sorted(pkg["files"], key = lambda f: f["name"])
@@ -846,34 +972,14 @@ def finalize_lock_graph(
             raw_package["source"] = pkg["source"]
         lock_packages[pkg_key] = raw_package
 
-    # Simplify pins: if a pin has only one constraint with key "", flatten it.
-    simplified_pins = {}
-    for name, constraints in pinned_keys.items():
-        keys = sorted(constraints.keys())
-        if keys == [""]:
-            simplified_pins[name] = constraints[""]
-        else:
-            simplified_pins[name] = constraints
-
-    result = {
-        "packages": lock_packages,
-        "pins": simplified_pins,
-        "testonly_pins": final_testonly_pins,
-    }
-    if variants:
-        result["variants"] = variants
-    if resolution_marker_exprs:
-        result["resolution_marker_exprs"] = resolution_marker_exprs
-
-    filtered_markers = {
-        name: markers
-        for name, markers in (root_dependency_markers or {}).items()
-        if markers != None
-    }
-    if filtered_markers:
-        result["root_dependency_markers"] = filtered_markers
-
-    return result
+    return format_raw_lock(
+        lock_packages,
+        pinned_keys,
+        testonly_pins = final_testonly_pins,
+        variants = variants,
+        resolution_marker_exprs = resolution_marker_exprs,
+        root_dependency_markers = root_dependency_markers,
+    )
 
 def resolve_lock_graph(packages, pinned_package_specs, strict_dependencies = True, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None):
     """Resolves a dependency graph of packages.
@@ -1064,6 +1170,72 @@ def compute_requested_dependency_groups(
             requested[target] = is_testonly
 
     return requested
+
+def compute_requested_groups_for_model(lock_model, available_groups, project_name = None, allow_missing = False):
+    """Compute requested dependency groups using attributes from `lock_model`."""
+    return compute_requested_dependency_groups(
+        dependency_groups = getattr(lock_model, "dependency_groups", ["default"]),
+        testonly_groups = getattr(lock_model, "testonly_groups", []),
+        non_testonly_groups = getattr(lock_model, "non_testonly_groups", []),
+        wildcard_testonly = getattr(lock_model, "wildcard_testonly", False),
+        available_groups = available_groups,
+        project_name = project_name,
+        allow_missing = allow_missing,
+    )
+
+def validate_multi_project_groups(dependency_groups, groups_seen, target_projects):
+    """Fail if any explicitly requested group was not declared by any target project.
+
+    Args:
+        dependency_groups: Requested dependency group specs from `lock_model`.
+        groups_seen: Dict/iterable of group keys declared across target projects.
+        target_projects: Iterable of project names for the error message.
+    """
+    for group in dependency_groups:
+        _, sep, name = group.partition(":")
+        if sep and name != "*" and group not in groups_seen:
+            fail("None of the projects {} has group '{}'.".format(sorted(target_projects), group))
+
+def collect_pep621_requirements(project_dict, requested_groups_dict, dev_deps = None):
+    """Collect `(parsed_req, is_testonly)` pairs for requested PEP 621 / PEP 735 groups.
+
+    Args:
+        project_dict: Parsed pyproject.toml dict.
+        requested_groups_dict: Dict mapping requested group key -> `is_testonly` bool.
+        dev_deps: Optional dict of dev dependency groups (defaults to `[dependency-groups]`).
+
+    Returns:
+        List of `(parsed_req, is_testonly)` tuples.
+    """
+    project_section = project_dict.get("project", {})
+    optional_deps = project_section.get("optional-dependencies", {})
+    if dev_deps == None:
+        dev_deps = project_dict.get("dependency-groups", {})
+
+    requirements = []
+    if "default" in requested_groups_dict:
+        is_testonly = requested_groups_dict["default"]
+        for dep_str in project_section.get("dependencies", []):
+            requirements.append((parse_pep508_requirement(dep_str), is_testonly))
+
+    for target_name, entries in optional_deps.items():
+        key = "optional:{}".format(target_name)
+        if key not in requested_groups_dict:
+            continue
+        is_testonly = requested_groups_dict[key]
+        for dep_str in entries:
+            if type(dep_str) == "string":
+                requirements.append((parse_pep508_requirement(dep_str), is_testonly))
+
+    for target_name in dev_deps.keys():
+        key = "group:{}".format(target_name)
+        if key not in requested_groups_dict:
+            continue
+        is_testonly = requested_groups_dict[key]
+        for dep_str in expand_pep735_group(dev_deps, target_name):
+            requirements.append((parse_pep508_requirement(dep_str), is_testonly))
+
+    return requirements
 
 # Visible for testing
 read_project_dict_for_testing = _read_project_dict

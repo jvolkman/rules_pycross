@@ -80,16 +80,23 @@ def extract_pep508_name(spec):
     """
     return pypackaging.requirements.parse(spec).name
 
-def key_name(key):
-    """Extract the package name part from a lockfile package key.
+def resolution_marker_constraint_name(name, version, tag = ""):
+    """Generate a deterministic constraint name for a resolution-marker fork.
+
+    Used when a package has multiple versions (or sources at the same version)
+    resolved for different environments.
 
     Args:
-        key: The package key string.
+        name: Canonical package name.
+        version: Package version string.
+        tag: Optional disambiguating source tag (omitted when empty).
 
     Returns:
-        The package name part.
+        A constraint name like "res_numpy_2_3_4" or "res_torch_2_9_1_a1b2c3d4".
     """
-    return key.split("@", 1)[0]
+    ver = "{}_{}".format(version, tag) if tag else version
+    sanitized = (name + "_" + ver).replace("-", "_").replace(".", "_").replace("+", "_").replace("~", "_")
+    return "res_{}".format(sanitized)
 
 def format_package_key(name, version = "", extra = "", tag = ""):
     """Format a package key from its components.
@@ -303,6 +310,21 @@ def excluded_variant_items(conflict_sets, selected):
     return excluded
 
 _VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
+
+def marker_mentions_variant(marker, qname):
+    """Return True if `marker` contains a quoted `__variant_<qname>` token.
+
+    Args:
+        marker: PEP 508 marker string (may be `""`).
+        qname: Variant item qualified name.
+
+    Returns:
+        Bool indicating whether `'__variant_<qname>'` or `"__variant_<qname>"` appears in `marker`.
+    """
+    if not marker:
+        return False
+    tok = "__variant_{}".format(qname)
+    return "'{}'".format(tok) in marker or '"{}"'.format(tok) in marker
 
 def _extract_variant_token(item):
     """Return `(normalized_token, is_positive)` for an `extra ==/!= '__variant_...'` item, or None.

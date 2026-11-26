@@ -5,34 +5,29 @@ Parses pdm.lock and pyproject.toml files, then produces the raw_lock.json
 structure consumed by lock_resolver.bzl.
 """
 
+load(":lock_common.bzl", "read_toml_cached")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
-    "compute_requested_dependency_groups",
+    "collect_pep621_requirements",
+    "compute_requested_groups_for_model",
     "detect_package_marker_forks",
-    "expand_pep735_group",
+    "make_file_entry",
+    "make_git_file_entry",
     "parse_pep508_requirement",
     "read_projects_and_lock",
     "record_root_marker",
     "resolve_lock_graph",
-    "sha256_from_string",
+    "strip_sha256_prefix",
+    "validate_multi_project_groups",
 )
 load(":util.bzl", "url_filename")
 
 def _parse_file_info(file_info, package_name, package_version):
-    """Parse a PDM lock file entry into a file dict.
-
-    Args:
-        file_info: A dict with "file" or "url" and "hash" keys.
-        package_name: The name of the package.
-        package_version: The version of the package.
-
-    Returns:
-        A dict with name, sha256, package_name, package_version, and optionally urls.
-    """
+    """Parse a PDM lock file entry into a file dict."""
     if "file" in file_info:
         filename = file_info["file"]
-        urls = []
+        urls = None
     elif "url" in file_info:
         url = file_info["url"]
         filename = url_filename(url)
@@ -40,19 +35,13 @@ def _parse_file_info(file_info, package_name, package_version):
     else:
         fail("PDM file entry has no 'file' or 'url' member")
 
-    file_hash = file_info["hash"]
-    if not file_hash.startswith("sha256:"):
-        fail("Expected sha256: prefix on hash: {}".format(file_hash))
-
-    result = {
-        "name": filename,
-        "sha256": file_hash[7:],
-        "package_name": package_name,
-        "package_version": package_version,
-    }
-    if urls:
-        result["urls"] = urls
-    return result
+    return make_file_entry(
+        filename,
+        strip_sha256_prefix(file_info["hash"]),
+        package_name,
+        package_version,
+        urls = urls,
+    )
 
 def _merge_pin_spec(existing_spec, new_spec, existing_marked, new_marked):
     """Merge two root pin specifiers for the same package."""
@@ -95,11 +84,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
 
     project_dicts = project_dict if type(project_dict) == "list" else [project_dict]
     multi_project = len(project_dicts) > 1
-
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    testonly_groups = getattr(lock_model, "testonly_groups", [])
-    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
-    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
     # Collect requirements based on group selection across all selected projects.
     requirements = []
@@ -112,7 +97,6 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         if project_name:
             project_names.append(project_name)
 
-        default_deps = project_section.get("dependencies", [])
         optional_deps = project_section.get("optional-dependencies", {})
 
         # Development dependencies: dependency-groups + legacy tool.pdm.dev-dependencies
@@ -137,43 +121,16 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         for g in available_groups:
             groups_seen[g] = True
 
-        requested_groups_dict = compute_requested_dependency_groups(
-            dependency_groups = dependency_groups,
-            testonly_groups = testonly_groups,
-            non_testonly_groups = non_testonly_groups,
-            wildcard_testonly = wildcard_testonly,
-            available_groups = available_groups,
+        requested_groups_dict = compute_requested_groups_for_model(
+            lock_model,
+            available_groups,
             project_name = project_name,
             allow_missing = multi_project,
         )
-
-        if "default" in requested_groups_dict:
-            default_is_testonly = requested_groups_dict["default"]
-            for dep_str in default_deps:
-                requirements.append((parse_pep508_requirement(dep_str), default_is_testonly))
-
-        for target_name in optional_deps.keys():
-            key = "optional:{}".format(target_name)
-            if key not in requested_groups_dict:
-                continue
-            is_testonly = requested_groups_dict[key]
-            for dep_str in optional_deps[target_name]:
-                if type(dep_str) == "string":
-                    requirements.append((parse_pep508_requirement(dep_str), is_testonly))
-
-        for target_name in dev_deps.keys():
-            key = "group:{}".format(target_name)
-            if key not in requested_groups_dict:
-                continue
-            is_testonly = requested_groups_dict[key]
-            for dep_str in expand_pep735_group(dev_deps, target_name):
-                requirements.append((parse_pep508_requirement(dep_str), is_testonly))
+        requirements.extend(collect_pep621_requirements(p_dict, requested_groups_dict, dev_deps = dev_deps))
 
     if multi_project:
-        for group in dependency_groups:
-            _, sep, name = group.partition(":")
-            if sep and name != "*" and group not in groups_seen:
-                fail("None of the projects {} has group '{}'.".format(sorted(project_names), group))
+        validate_multi_project_groups(dependency_groups, groups_seen, project_names)
 
     # Build pinned specs from requirements
     pinned_package_specs = {}
@@ -244,22 +201,14 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             })
 
         # Parse files
-        files = []
-        for f in lock_pkg.get("files", []):
-            files.append(_parse_file_info(f, name, version))
+        files = [_parse_file_info(f, name, version) for f in lock_pkg.get("files", [])]
 
         # Git dependencies have no files; fetch the pinned revision instead.
         if "git" in lock_pkg and not files:
             revision = lock_pkg.get("revision")
             if not revision:
                 fail("PDM git package {}=={} has no revision".format(name, version))
-            files.append({
-                "name": "{}-{}.tar.gz".format(name, version),
-                "sha256": sha256_from_string(revision),
-                "urls": ["git+{}#{}".format(lock_pkg["git"], revision)],
-                "package_name": name,
-                "package_version": version,
-            })
+            files.append(make_git_file_entry(name, version, lock_pkg["git"], revision))
 
         is_local = "path" in lock_pkg and "files" not in lock_pkg
 
@@ -286,6 +235,32 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         testonly_pins = testonly_pin_names,
         root_dependency_markers = root_dependency_markers,
     )
+
+def discover_pdm_all_members(mctx, lock_file_label, toml_cache = None):
+    """Parse pdm.lock and return workspace members (editable local packages).
+
+    Args:
+        mctx: The module_ctx object.
+        lock_file_label: Label of the pdm.lock file.
+        toml_cache: Optional dict caching decoded TOML files by label.
+
+    Returns:
+        A list of structs with 'name' and 'path' fields.
+    """
+    lock_data = read_toml_cached(mctx, lock_file_label, toml_cache)
+    if lock_data == None:
+        fail("Lock file not found: {}".format(lock_file_label))
+
+    members = []
+    for pkg in lock_data.get("package", []):
+        # PDM marks workspace members with editable = true and a path.
+        if pkg.get("editable") and "path" in pkg:
+            members.append(struct(
+                name = pkg["name"],
+                path = pkg["path"],
+            ))
+
+    return members
 
 def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the PDM translator in pure Starlark."""

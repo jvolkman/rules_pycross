@@ -100,6 +100,7 @@ bzl_library(
     name = "pdm_lock_model",
     srcs = ["pdm_lock_model.bzl"],
     deps = [
+        ":lock_common",
         ":translator_common",
         ":util",
     ],
@@ -118,6 +119,7 @@ bzl_library(
     name = "uv_lock_model",
     srcs = ["uv_lock_model.bzl"],
     deps = [
+        ":lock_common",
         ":translator_common",
         ":util",
         ":uv_conflicts",
@@ -457,7 +459,6 @@ bzl_library(
     srcs = ["uv_extension.bzl"],
     deps = [
         ":format_extension",
-        ":lock_common",
         ":uv_lock_model",
     ],
 )
@@ -467,7 +468,6 @@ bzl_library(
     srcs = ["pdm_extension.bzl"],
     deps = [
         ":format_extension",
-        ":lock_common",
         ":pdm_lock_model",
     ],
 )
@@ -477,7 +477,6 @@ bzl_library(
     srcs = ["poetry_extension.bzl"],
     deps = [
         ":format_extension",
-        ":lock_common",
         ":poetry_lock_model",
     ],
 )
@@ -487,7 +486,6 @@ bzl_library(
     srcs = ["pylock_extension.bzl"],
     deps = [
         ":format_extension",
-        ":lock_common",
         ":pylock_lock_model",
     ],
 )

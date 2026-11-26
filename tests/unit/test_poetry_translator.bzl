@@ -775,6 +775,35 @@ def _test_poetry_forked_transitive_dep(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_forked_transitive_dep_impl)
 
+# --- test_poetry_mixed_dev_group_order ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_mixed_dev_group_order_impl(env, target):
+    """Per-group interleaved order: legacy tool.poetry.group.g1 runs before PEP 735 group g2."""
+    project = {
+        "dependency-groups": {
+            "g2": ["foo==2.0.0"],
+        },
+        "tool": {"poetry": {
+            "group": {
+                "g1": {"dependencies": {"foo": "==1.0.0"}},
+            },
+        }},
+    }
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("foo", "1.0.0", files = [_whl("foo-1.0.0-py3-none-any.whl", "1")]),
+            _pkg("foo", "2.0.0", files = [_whl("foo-2.0.0-py3-none-any.whl", "2")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model(dependency_groups = ["group:g1", "group:g2"]))
+    env.expect.that_str(result["pins"]["foo"]).equals("foo@2.0.0")
+
+def _test_poetry_mixed_dev_group_order(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_mixed_dev_group_order_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -801,5 +830,6 @@ def poetry_translator_test_suite(name):
             _test_poetry_transitive_include_group_and_extras,
             _test_poetry_url_decoded_filename_and_unnormalized_version,
             _test_poetry_forked_transitive_dep,
+            _test_poetry_mixed_dev_group_order,
         ],
     )

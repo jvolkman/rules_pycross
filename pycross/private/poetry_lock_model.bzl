@@ -14,15 +14,16 @@ load("@pypackaging.bzl", "pypackaging")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
+    "collect_pep621_requirements",
     "combine_markers",
-    "compute_requested_dependency_groups",
+    "compute_requested_groups_for_model",
     "detect_package_marker_forks",
-    "expand_pep735_group",
-    "parse_pep508_requirement",
+    "make_file_entry",
+    "make_git_file_entry",
     "read_project_and_lock",
     "record_root_marker",
     "resolve_lock_graph",
-    "sha256_from_string",
+    "strip_sha256_prefix",
 )
 load(":util.bzl", "url_decode_filename")
 
@@ -286,12 +287,6 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     poetry_groups = poetry_section.get("group", {})
     poetry_extras = poetry_section.get("extras", {})
 
-    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-
-    testonly_groups = getattr(lock_model, "testonly_groups", [])
-    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
-    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
-
     testonly_reqs = {}
     non_testonly_reqs = {}
     root_dependency_markers = {}
@@ -315,17 +310,19 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     continue
             record_root_marker(root_dependency_markers, name, marker)
 
-    project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
+    def track_pep621(groups_subset):
+        for req, is_testonly in collect_pep621_requirements(project_dict, groups_subset):
+            if req.name != "python":
+                track_pin(req.name, req.specifier, is_testonly, req.marker, req.extras)
+
+    project_optional_deps = project_section.get("optional-dependencies", {})
     pep735_groups = project_dict.get("dependency-groups", {})
 
     available_optional_groups = list({k: True for k in list(project_optional_deps.keys()) + list(poetry_extras.keys())}.keys())
     available_dev_groups = list({k: True for k in list(poetry_groups.keys()) + list(pep735_groups.keys())}.keys())
 
-    requested_groups_dict = compute_requested_dependency_groups(
-        dependency_groups = dependency_groups,
-        testonly_groups = testonly_groups,
-        non_testonly_groups = non_testonly_groups,
-        wildcard_testonly = wildcard_testonly,
+    requested_groups_dict = compute_requested_groups_for_model(
+        lock_model,
         available_groups = (
             ["default"] +
             ["optional:" + g for g in available_optional_groups] +
@@ -336,13 +333,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     if "default" in requested_groups_dict:
         default_is_testonly = requested_groups_dict["default"]
-        if has_project_deps:
-            # PEP 508 format from [project.dependencies]
-            for dep_str in project_deps:
-                req = parse_pep508_requirement(dep_str)
-                if req.name == "python":
-                    continue
-                track_pin(req.name, req.specifier, default_is_testonly, req.marker, req.extras)
+        track_pep621({"default": default_is_testonly})
         if poetry_deps:
             # Also merge [tool.poetry.dependencies] if present
             for pin, pin_info in poetry_deps.items():
@@ -374,68 +365,42 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         if key not in requested_groups_dict:
             continue
         is_testonly = requested_groups_dict[key]
-        if group_name in project_optional_deps:
-            for dep_str in project_optional_deps[group_name]:
-                req = parse_pep508_requirement(dep_str)
-                if req.name == "python":
-                    continue
-                track_pin(req.name, req.specifier, is_testonly, req.marker, req.extras)
-        if group_name in poetry_extras:
-            for dep_name in poetry_extras[group_name]:
-                pin = canonicalize_name(dep_name)
-                if pin == "python":
-                    continue
-                if pin in canonical_poetry_deps:
-                    _parse_poetry_pin(
-                        pin,
-                        canonical_poetry_deps[pin],
-                        pinned_package_specs,
-                        track_pin = lambda p, spec, marker, extras: track_pin(p, spec, is_testonly, marker, extras),
-                        allow_optional = True,
-                    )
-                else:
-                    existing_spec = pinned_package_specs.get(pin, {}).get("", "")
-                    track_pin(pin, existing_spec, is_testonly, preserve_empty_marker = pin in root_dependency_markers)
+        track_pep621({key: is_testonly})
+        for dep_name in poetry_extras.get(group_name, []):
+            pin = canonicalize_name(dep_name)
+            if pin == "python":
+                continue
+            if pin in canonical_poetry_deps:
+                _parse_poetry_pin(
+                    pin,
+                    canonical_poetry_deps[pin],
+                    pinned_package_specs,
+                    track_pin = lambda p, spec, marker, extras: track_pin(p, spec, is_testonly, marker, extras),
+                    allow_optional = True,
+                )
+            else:
+                existing_spec = pinned_package_specs.get(pin, {}).get("", "")
+                track_pin(pin, existing_spec, is_testonly, preserve_empty_marker = pin in root_dependency_markers)
 
+    # Poetry merges PEP 735 and legacy groups (union, not fallback).
     for group_name in available_dev_groups:
         key = "group:{}".format(group_name)
         if key not in requested_groups_dict:
             continue
         is_testonly = requested_groups_dict[key]
-
-        # Poetry merges PEP 735 and legacy groups (union, not fallback).
-        if group_name in pep735_groups:
-            for dep_str in expand_pep735_group(pep735_groups, group_name):
-                req = parse_pep508_requirement(dep_str)
-                if req.name == "python":
-                    continue
-                track_pin(canonicalize_name(req.name), req.specifier, is_testonly, req.marker, req.extras)
-
-        if group_name in poetry_groups:
-            g = poetry_groups[group_name]
-            for pin, pin_info in g.get("dependencies", {}).items():
-                pin = canonicalize_name(pin)
-                if pin == "python":
-                    continue
-                _parse_poetry_pin(
-                    pin,
-                    pin_info,
-                    pinned_package_specs,
-                    track_pin = lambda p, spec, marker, extras: track_pin(p, spec, is_testonly, marker, extras),
-                )
+        track_pep621({key: is_testonly})
+        for pin, pin_info in poetry_groups.get(group_name, {}).get("dependencies", {}).items():
+            pin = canonicalize_name(pin)
+            if pin == "python":
+                continue
+            _parse_poetry_pin(
+                pin,
+                pin_info,
+                pinned_package_specs,
+                track_pin = lambda p, spec, marker, extras: track_pin(p, spec, is_testonly, marker, extras),
+            )
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
-
-    # Parse file info helper
-    def parse_file_info(file_info, registry = None):
-        filename = url_decode_filename(file_info["file"])
-        file_hash = file_info["hash"]
-        if not file_hash.startswith("sha256:"):
-            fail("Expected sha256: prefix on hash: {}".format(file_hash))
-        res = {"name": filename, "sha256": file_hash[7:]}
-        if registry:
-            res["index"] = registry
-        return res
 
     # Build package list
     packages = []
@@ -477,39 +442,32 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
         # Determine download URLs for URL or Git sources
         source_urls = []
+        git_url = ""
+        commit = ""
         if source_type == "url" and source.get("url"):
             source_urls = [source["url"]]
         elif source_type == "git":
             git_url = source.get("url", "")
-            commit = source.get("resolved_reference", "")
-            if not commit:
-                commit = source.get("reference", "")
+            commit = source.get("resolved_reference", "") or source.get("reference", "")
             if git_url and commit:
                 source_urls = ["git+{}#{}".format(git_url, commit)]
 
         # Parse files (inline in Poetry 2.0+)
-        files = [parse_file_info(f, registry) for f in lock_pkg.get("files", [])]
+        files = [
+            make_file_entry(
+                url_decode_filename(f["file"]),
+                strip_sha256_prefix(f["hash"]),
+                package_name,
+                package_version,
+                urls = source_urls,
+                index = registry,
+            )
+            for f in lock_pkg.get("files", [])
+        ]
 
         # Handle git synthetic file if no files found
-        if source_type == "git" and not files and source_urls:
-            commit = source_urls[0].split("#")[-1]
-            synthetic_hash = sha256_from_string(commit)
-            filename = "{}-{}.tar.gz".format(package_name, package_version)
-            files = [{
-                "name": filename,
-                "sha256": synthetic_hash,
-            }]
-
-        # Add package name, version, and source URLs to files
-        updated_files = []
-        for f in files:
-            updated_f = dict(f)
-            updated_f["package_name"] = package_name
-            updated_f["package_version"] = package_version
-            if source_urls:
-                updated_f["urls"] = source_urls
-            updated_files.append(updated_f)
-        files = updated_files
+        if source_type == "git" and not files and git_url and commit:
+            files = [make_git_file_entry(package_name, package_version, git_url, commit)]
 
         # Read package-level markers (Poetry 2.1+)
         package_markers = lock_pkg.get("markers", "")

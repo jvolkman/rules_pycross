@@ -17,7 +17,7 @@ load("//pycross/private:translator_common.bzl", "read_project_dict_for_testing")
 load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "fold_variant_marker", "format_package_key", "parse_package_key")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:uv_lock_model.bzl", "translate_uv")
+load("//pycross/private:uv_lock_model.bzl", "discover_uv_all_members", "translate_uv")
 
 def _lock_model(
         projects = ["*"],
@@ -2564,6 +2564,43 @@ def _test_uv_multi_source_same_version(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_multi_source_same_version_impl)
 
+# buildifier: disable=unused-variable
+def _test_discover_uv_all_members_impl(env, target):
+    """Editable members and virtual members with deps are discovered; dependency-free virtual roots are skipped."""
+    lock_toml = "\n".join([
+        "version = 1",
+        "[[package]]",
+        'name = "ws-root"',
+        'version = "0.1.0"',
+        'source = { virtual = "." }',
+        "[[package]]",
+        'name = "app-a"',
+        'version = "0.1.0"',
+        'source = { editable = "apps/a" }',
+        "[[package]]",
+        'name = "virt-b"',
+        'version = "0.1.0"',
+        'source = { virtual = "apps/b" }',
+        'dependencies = [{ name = "six" }]',
+        "[[package]]",
+        'name = "six"',
+        'version = "1.17.0"',
+        'source = { registry = "https://pypi.org/simple" }',
+    ])
+    mctx = struct(
+        path = lambda _lbl: struct(exists = True),
+        read = lambda _path: lock_toml,
+    )
+    members = discover_uv_all_members(mctx, Label("//:uv.lock"))
+    env.expect.that_collection([(m.name, m.path) for m in members]).contains_exactly([
+        ("app-a", "apps/a"),
+        ("virt-b", "apps/b"),
+    ]).in_order()
+
+def _test_discover_uv_all_members(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_discover_uv_all_members_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -2621,5 +2658,6 @@ def uv_translator_test_suite(name):
             _test_uv_testonly_local_member_expansion,
             _test_uv_local_member_edge_cases,
             _test_uv_multi_source_same_version,
+            _test_discover_uv_all_members,
         ],
     )
