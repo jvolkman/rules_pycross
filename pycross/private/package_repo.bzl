@@ -236,13 +236,11 @@ def _normalize_workspace_variants(variant_sets):
     all_flags = {}  # flag_label -> [unique qnames]
     member_flag_maps = {}  # member -> {flag -> [unique qnames]}
     qname_to_resolvers = {}  # qname -> [resolver_name, ...]
-    resolver_qnames = {}  # ":<resolver_name>" -> sorted [qname, ...]
     for vset in variant_sets:
         sorted_qnames = sorted(vset["qnames"])
         set_suffix = variant_set_suffix(sorted_qnames)
         sets_by_suffix[set_suffix] = sorted_qnames
         resolver_name = "_resolver_" + set_suffix
-        resolver_qnames[":" + resolver_name] = sorted_qnames
         for qname in sorted_qnames:
             resolvers = qname_to_resolvers.setdefault(qname, [])
             if resolver_name not in resolvers:
@@ -264,7 +262,6 @@ def _normalize_workspace_variants(variant_sets):
         all_flags = all_flags,
         member_flag_maps = member_flag_maps,
         qname_to_resolvers = qname_to_resolvers,
-        resolver_qnames = resolver_qnames,
     )
 
 def _render_lock_build(variant_items, normalized_variants, member_variant_flags, qname_to_resolvers = None):
@@ -447,7 +444,7 @@ def _package_repo_impl(rctx):
         lock,
         rctx.attr.repo_map,
         rctx.name,
-        variant_resolvers = normalized_variants.resolver_qnames,
+        has_variants = bool(normalized_variants.sets_by_suffix),
         reset_conflict_sets = normalized_variants.sets_by_suffix.values(),
     )
     rctx.file("_lock/lock.bzl", lock_result.content)

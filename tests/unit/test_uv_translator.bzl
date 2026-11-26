@@ -1761,7 +1761,7 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     env.expect.that_int(len(torch_avail)).equals(3)
     env.expect.that_bool(any(["extra == '__variant_group_native-torch-probe_cpu'" in m for m in torch_avail])).equals(True)
 
-    # 3. Render lock.bzl and verify variants = [":_resolver_group_native-torch-probe_cpu_group_native-torch-probe_cuda"] on evaluators.
+    # 3. Render lock.bzl and verify variants = [":_variant_state"] on evaluators.
     repo_map = {k: "@repo//" + k + ":file" for k in resolved.remote_files.keys()}
     rendered_lock = render_lock_bzl(
         {
@@ -1771,7 +1771,7 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
         },
         repo_map,
         "ws",
-        variant_resolvers = [":_resolver_group_native-torch-probe_cpu_group_native-torch-probe_cuda"],
+        has_variants = True,
     )
 
     for extra_name in ["cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"]:
@@ -1783,7 +1783,7 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     ]
     for block in eval_blocks:
         if "__variant_" in block.split('expr = "')[1].split('",')[0]:
-            env.expect.that_str(block).contains('variants = [":_resolver_group_native-torch-probe_cpu_group_native-torch-probe_cuda"]')
+            env.expect.that_str(block).contains('variants = [":_variant_state"]')
         else:
             env.expect.that_bool("variants =" in block).equals(False)
 

@@ -24,15 +24,15 @@ load("//pycross/private/lock_render:reset_plan.bzl", "compute_reset_plan", "conf
 
 render_reset_bzl = _render_reset_bzl
 
-def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", variant_resolvers = None, reset_conflict_sets = None):
+def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = False, reset_conflict_sets = None):
     """Renders a lock.bzl file along with generation metadata.
 
     Args:
         lock: The parsed lock.json dict.
         repo_map: A dict mapping file keys to repo labels.
         rctx_name: The name of the package repository.
-        variant_resolvers: Optional list of variant_resolver target labels, or
-            dict mapping resolver label -> list of item qualified names.
+        has_variants: Whether the workspace defines a `:_variant_state` target
+            in `_lock/BUILD.bazel`.
         reset_conflict_sets: The workspace's conflict sets (lists of qualified
             names). When given, packages that don't depend on the variant
             settings install with them reset (see render_reset_bzl).
@@ -69,18 +69,18 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", variant_resolvers 
 
     # 1. Marker evaluators for dependency markers (deduped)
     unique_markers = collect_unique_markers(packages)
-    render_marker_evaluators(body_lines, unique_markers, variant_resolvers = variant_resolvers)
+    render_marker_evaluators(body_lines, unique_markers, has_variants = has_variants)
 
     # 1b. Resolution-marker evaluators for pin forks
     resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
-    render_resolution_marker_evaluators(body_lines, resolution_marker_exprs, variant_resolvers = variant_resolvers, loads = loads)
+    render_resolution_marker_evaluators(body_lines, resolution_marker_exprs, has_variants = has_variants, loads = loads)
 
     # 2. Per-member cycle deps (marker-aware, planned at repo-rule time)
     render_marker_cycle_member_deps(
         body_lines,
         cycle_groups,
         packages,
-        variant_resolvers = variant_resolvers,
+        has_variants = has_variants,
         unique_markers = unique_markers,
         loads = loads,
     )
@@ -133,15 +133,15 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", variant_resolvers 
         has_reset = has_reset,
     )
 
-def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, reset_conflict_sets = None):
+def render_lock_bzl(lock, repo_map, rctx_name = "", has_variants = False, reset_conflict_sets = None):
     """Renders a lock.bzl file from a resolved lock structure.
 
     Args:
         lock: The parsed lock.json dict.
         repo_map: A dict mapping file keys to repo labels.
         rctx_name: The name of the package repository.
-        variant_resolvers: Optional list of variant_resolver target labels, or
-            dict mapping resolver label -> list of item qualified names.
+        has_variants: Whether the workspace defines a `:_variant_state` target
+            in `_lock/BUILD.bazel`.
         reset_conflict_sets: The workspace's conflict sets (lists of qualified
             names). When given, packages that don't depend on the variant
             settings install with them reset (see render_reset_bzl).
@@ -153,6 +153,6 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         lock,
         repo_map,
         rctx_name = rctx_name,
-        variant_resolvers = variant_resolvers,
+        has_variants = has_variants,
         reset_conflict_sets = reset_conflict_sets,
     ).content

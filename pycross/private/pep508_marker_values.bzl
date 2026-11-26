@@ -11,6 +11,7 @@ Python toolchain on every rule instance.
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@pypackaging.bzl", "pypackaging")
+load(":providers.bzl", "VariantStateInfo")
 
 # Maps @platforms//os constraint values to PEP 508 sys_platform values.
 # Synced with rules_python's pep508_env.bzl sys_platform_select_map.
@@ -161,7 +162,7 @@ def marker_value_attrs():
         "extra": attr.string(default = ""),
         "variants": attr.label_list(
             default = [],
-            providers = [config_common.FeatureFlagInfo],
+            providers = [[VariantStateInfo], [config_common.FeatureFlagInfo]],
         ),
         "_pep508_env": attr.label(
             default = Label("//pycross/private/markers:env"),
@@ -215,12 +216,19 @@ def with_extra(markers_env, extra):
     return env
 
 def _resolve_extra(ctx):
-    active_variants = []
+    active = {}
     for v in getattr(ctx.attr, "variants", []):
-        val = flag_value(v)
-        if val:
-            active_variants.append("__variant_" + val)
-    return ([ctx.attr.extra] + active_variants) if active_variants else ctx.attr.extra
+        if VariantStateInfo in v:
+            for item in v[VariantStateInfo].active_items.keys():
+                if item:
+                    active[item] = True
+        else:
+            val = flag_value(v)
+            if val:
+                active[val] = True
+    if not active:
+        return ctx.attr.extra
+    return [ctx.attr.extra] + ["__variant_" + item for item in sorted(active.keys())]
 
 def collect_markers(ctx):
     """Collects PEP 508 marker values from `Pep508EnvInfo` and any rule overrides.

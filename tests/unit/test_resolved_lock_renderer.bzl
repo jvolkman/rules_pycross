@@ -871,7 +871,7 @@ def _test_epoch_sdist_repo_name(name):
 
 # buildifier: disable=unused-variable
 def _test_conflict_state_rendering_impl(env, target):
-    """Verify variants is emitted only on __variant_-referencing evaluators when variant_resolvers is provided."""
+    """Verify variants is emitted only on __variant_-referencing evaluators when has_variants is True."""
     t_cuda = "__variant_group_cuda"
     conflict_marker = "sys_platform == 'linux' and extra == '{}'".format(t_cuda)
     plain_extra_marker = "extra == 'cudart'"
@@ -967,7 +967,7 @@ def _test_conflict_state_rendering_impl(env, target):
         lock,
         repo_map,
         rctx_name = "my_rctx",
-        variant_resolvers = [":_resolver_group_cpu_group_cuda"],
+        has_variants = True,
     )
     res_without_variants = render_lock_bzl(
         lock,
@@ -975,16 +975,16 @@ def _test_conflict_state_rendering_impl(env, target):
         rctx_name = "my_rctx",
     )
 
-    # Without variant_resolvers, variants is never emitted.
-    env.expect.that_int(res_without_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(0)
+    # Without has_variants, variants is never emitted.
+    env.expect.that_int(res_without_variants.count('variants = [":_variant_state"]')).equals(0)
 
-    # With variant_resolvers, variants = [":_resolver_group_cpu_group_cuda"] appears on:
+    # With has_variants, variants = [":_variant_state"] appears on:
     # - _marker_eval_* for availability_markers (extra="") (1)
     # - _marker_eval_* for cuda-toolkit[cudart] (extra="cudart") (1)
     # - _res_eval_res_fork_conflict (1)
     # - the multi-hop pycross_cycle_dep_needed evaluator (_cycle_needed_cyca_1_0_cycc_1_0) (1)
     # and NOT on plain_marker, plain_extra_marker, or res_fork_plain!
-    env.expect.that_int(res_with_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(4)
+    env.expect.that_int(res_with_variants.count('variants = [":_variant_state"]')).equals(4)
 
 def _test_conflict_state_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1457,7 +1457,7 @@ def _test_reset_bzl(name):
 
 # buildifier: disable=unused-variable
 def _test_scoped_variants_and_grouped_deps_impl(env, target):
-    """Verify per-evaluator variant scoping, grouped conditional deps, and universal/multi-wheel fast paths."""
+    """Verify direct _variant_state wiring, grouped conditional deps, and universal/multi-wheel fast paths."""
     lock = {
         "cycle_groups": {
             "cycle_group_g1": ["cyca@1.0", "cycb@1.0"],
@@ -1542,10 +1542,7 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
         lock,
         repo_map,
         rctx_name = "ws__pkgs",
-        variant_resolvers = {
-            ":_resolver_group_app_cpu_group_app_gpu": ["group_app_cpu", "group_app_gpu"],
-            ":_resolver_extra_other_x_extra_other_y": ["extra_other_x", "extra_other_y"],
-        },
+        has_variants = True,
     )
 
     # dep_a and dep_b share the same sys_platform == 'win32' marker -> single select().
@@ -1560,28 +1557,26 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
     env.expect.that_str(res).contains('name = "_wheel_available_dep_c@1.0"')
     env.expect.that_bool("selects.config_setting_group(" in res).equals(False)
 
-    # Each variant evaluator receives ONLY the resolver whose items appear in its marker.
+    # Every variant-referencing evaluator receives the single :_variant_state target;
+    # non-variant evaluators omit variants.
     eval_blocks = [
         b.split("\n    )")[0]
         for b in res.split("pycross_pep508_evaluator(\n")[1:]
     ]
     for block in eval_blocks:
         expr = block.split('expr = "')[1].split('",')[0]
-        if "__variant_group_app_gpu" in expr:
-            env.expect.that_str(block).contains('variants = [":_resolver_group_app_cpu_group_app_gpu"]')
-            env.expect.that_bool("_resolver_extra_other_x_extra_other_y" in block).equals(False)
-        elif "__variant_extra_other_x" in expr:
-            env.expect.that_str(block).contains('variants = [":_resolver_extra_other_x_extra_other_y"]')
-            env.expect.that_bool("_resolver_group_app_cpu_group_app_gpu" in block).equals(False)
+        if "__variant_" in expr:
+            env.expect.that_str(block).contains('variants = [":_variant_state"]')
+        else:
+            env.expect.that_bool("variants =" in block).equals(False)
 
     # 1-hop variant cycle (cycle_group_g1) reuses _marker_eval_*_match with no _EDGES_JSON or _cycle_needed_.
     env.expect.that_bool("_CYCLE_GROUP_G1_EDGES" in res).equals(False)
     env.expect.that_bool("_cycle_needed_cyca" in res).equals(False)
 
-    # Multi-hop variant cycle (cycle_group_g2) emits pycross_cycle_dep_needed with ONLY group_app_gpu's resolver.
+    # Multi-hop variant cycle (cycle_group_g2) emits pycross_cycle_dep_needed with :_variant_state.
     cyc_block = res.split('pycross_cycle_dep_needed(\n        name = "_cycle_needed_mha_1_0_mhc_1_0",')[1].split("\n    )")[0]
-    env.expect.that_str(cyc_block).contains('variants = [":_resolver_group_app_cpu_group_app_gpu"]')
-    env.expect.that_bool("_resolver_extra_other_x_extra_other_y" in cyc_block).equals(False)
+    env.expect.that_str(cyc_block).contains('variants = [":_variant_state"]')
 
 def _test_scoped_variants_and_grouped_deps(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

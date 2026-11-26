@@ -228,7 +228,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     ])
 
     # Note: if this package is in a cycle group, the public target is created
-    # by the pycross_cycle_member_marker_deps macro call (rendered separately).
+    # by lock_render/cycles.bzl (rendered separately).
     # The pycross_wheel_library above is named _raw_<pkg_key> in that case.
 
     # dist_info (point directly at _raw_<pkg> for cycle members so console script
