@@ -152,11 +152,13 @@ def is_extras_proxy(pkg_key, pkg):
 
     Args:
         pkg_key: Package key in the lock.
-        pkg: Package dict from the lock.
+        pkg: Package dict from the lock (or slimmed thin-repo package dict).
 
     Returns:
         Bool indicating whether `pkg_key` is an extras proxy delegating to its base package.
     """
+    if "extras_proxy" in pkg:
+        return pkg["extras_proxy"]
     return not pkg.get("wheel_candidates") and bool(parse_package_key(pkg_key).extra)
 
 def whldir_name(pkg_key):

@@ -11,7 +11,6 @@ for backend extensions.
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")
-load(":json_file_repo.bzl", "json_file_repo")
 load(
     ":lock_common.bzl",
     "process_workspaces",
@@ -401,41 +400,22 @@ def make_format_extension(
 
         # Run translators + resolver inline for each lock repo.
         resolved_locks = {}
-        resolved_locks_json = {}
-        all_locks = {}
 
         for ws_name, ws in workspaces.items():
             ws_annotations = workspace_packages.get(ws_name)
             for repo in ws.repos:
-                resolved_data = _resolve_lock_inline(
+                resolved_locks[repo.name] = _resolve_lock_inline(
                     module_ctx,
                     repo,
                     ws_annotations,
                     repo_create_model_fn,
                     toml_cache = toml_cache,
                 )
-                resolved_locks[repo.name] = resolved_data
-
-                # package_repo and thin_package_repo don't read remote_files; omit it
-                # from the serialized JSON and reuse the encoded string for both.
-                repo_lock_data = {k: v for k, v in resolved_data.items() if k != "remote_files"}
-                encoded_lock = json.encode(repo_lock_data)
-                resolved_locks_json[repo.name] = encoded_lock
-
-                # Write the resolved lock JSON to a repo.
-                lock_repo_name = "{}_lock_json".format(repo.name)
-                json_file_repo(
-                    name = lock_repo_name,
-                    content = encoded_lock,
-                )
-                all_locks[repo.name] = "@{}//:data.json".format(lock_repo_name)
 
         create_repos(
             module_ctx = module_ctx,
             workspaces = workspaces,
-            all_locks = all_locks,
             resolved_locks = resolved_locks,
-            resolved_locks_json = resolved_locks_json,
         )
 
         if bazel_features.external_deps.extension_metadata_has_reproducible:

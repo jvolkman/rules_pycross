@@ -16,7 +16,7 @@ def requirement(pkg):
 
 # All pinned requirements, excluding testonly ones
 all_requirements = [
-    "@@golden_sdist_reset__build//merged_pkg:maybe",
+    "@@golden_sdist_reset__build//merged_pkg",
     "@@golden_sdist_reset__build//pure_leaf",
 ]
 

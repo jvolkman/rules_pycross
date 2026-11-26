@@ -26,8 +26,8 @@ alias(
     name = "data",
     actual = ":pkg",
 )
-pycross_transitioning_library_proxy(
-    name = "maybe",
-    actual = "//__actual/merged_pkg:maybe",
+pycross_transitioning_file_proxy(
+    name = "sdist",
+    actual = "@golden_sdist_reset__pkgs//_sdist:merged-pkg@1.0.0",
 )
 

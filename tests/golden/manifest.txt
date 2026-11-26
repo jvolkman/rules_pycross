@@ -86,8 +86,6 @@ sdist_reset/pkgs/_lock/reset.bzl.golden
 sdist_reset/pkgs/_sdist/BUILD.bazel.golden
 sdist_reset/pkgs/_wheel/BUILD.bazel.golden
 sdist_reset/thin_build/BUILD.bazel.golden
-sdist_reset/thin_build/__actual/merged_pkg/BUILD.bazel.golden
-sdist_reset/thin_build/__maybe/BUILD.bazel.golden
 sdist_reset/thin_build/_transition.bzl.golden
 sdist_reset/thin_build/_variants/BUILD.bazel.golden
 sdist_reset/thin_build/merged_pkg/BUILD.bazel.golden

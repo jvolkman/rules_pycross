@@ -144,11 +144,6 @@ def targets():
         }),
     )
 
-    native.alias(
-        name = "_wheel_available_merged-pkg@1.0.0",
-        actual = "@rules_pycross//pycross/private:always_true",
-    )
-
     pycross_resettable_wheel_library(
         name = "merged-pkg@1.0.0",
         reset_gate = ":_wheel_cs_merged-pkg@1.0.0_merged_pkg_1_0_0_cp312_cp312_manylinux_2_17_x86_64_whl",

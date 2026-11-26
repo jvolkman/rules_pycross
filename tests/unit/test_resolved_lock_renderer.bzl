@@ -1734,23 +1734,15 @@ def _test_wheel_available_always_emitted_impl(env, target):
                 ],
                 "availability_markers": ["sys_platform == 'linux'"],
             },
-            "merged_sdist@1.0": {
-                "wheel_candidates": [
-                    _whl("ms1", "merged_sdist-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
-                ],
-                "sdist_file": {"key": "ms_sdist"},
-                "emit_unconditional_wheel_available": True,
-            },
         },
     }
     res = render_lock_bzl(
         lock,
-        {"nm1": "@r//nm:w1", "nm2": "@r//nm:w2", "wm1": "@r//wm:w1", "ms1": "@r//ms:w1", "ms_sdist": "@r//ms:sdist"},
+        {"nm1": "@r//nm:w1", "nm2": "@r//nm:w2", "wm1": "@r//wm:w1"},
         "ws__pkgs",
     )
     env.expect.that_str(res).contains('name = "_wheel_available_nomarker@1.0",')
     env.expect.that_str(res).contains('name = "_wheel_available_withmarker@1.0",')
-    env.expect.that_str(res).contains('name = "_wheel_available_merged_sdist@1.0",\n        actual = "@rules_pycross//pycross/private:always_true",')
     env.expect.that_bool('"_available_' in res).equals(False)
     env.expect.that_bool('"_marker_available_' in res).equals(False)
 
