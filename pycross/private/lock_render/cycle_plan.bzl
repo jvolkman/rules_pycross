@@ -191,7 +191,7 @@ def select_canonical_source(member, unconditional_deps, edges):
 
     return member
 
-def single_incoming_marker(member, unconditional_deps, group_members, edges):
+def single_incoming_marker(member, unconditional_deps, group_members, edges, marker_extra_cache = None):
     """Returns the single (marker, effective_extra) gating `group_members` from U(member), or None.
 
     Let U(member) = {member} | set(unconditional_deps) and G = set(group_members).
@@ -209,6 +209,8 @@ def single_incoming_marker(member, unconditional_deps, group_members, edges):
         unconditional_deps: List of member keys unconditionally reachable from `member`.
         group_members: List of member keys in the reachability group.
         edges: Dict edge map: {node: [{"dep": key, "marker": expr}, ...], ...}.
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
 
     Returns:
         A 2-tuple `(marker_str, effective_extra)`, or None if reachability cannot be
@@ -232,7 +234,7 @@ def single_incoming_marker(member, unconditional_deps, group_members, edges):
             if not m:
                 return None
             src_extra = parse_package_key(src).extra
-            src_extra = src_extra if (src_extra and marker_uses_extra(m)) else ""
+            src_extra = src_extra if (src_extra and marker_uses_extra(m, cache = marker_extra_cache)) else ""
             edge_gate = (m, src_extra)
             if gate == None:
                 gate = edge_gate
@@ -241,12 +243,14 @@ def single_incoming_marker(member, unconditional_deps, group_members, edges):
 
     return gate
 
-def plan_cycle_member_deps(member, edges):
+def plan_cycle_member_deps(member, edges, marker_extra_cache = None):
     """Computes the unconditional deps and conditional group plan for `member`.
 
     Args:
         member: The package key of this cycle member.
         edges: Dict edge map: {node: [{"dep": key, "marker": expr}, ...], ...}.
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
 
     Returns:
         A struct with:
@@ -295,11 +299,12 @@ def plan_cycle_member_deps(member, edges):
             unconditional_deps,
             group_members,
             edges,
+            marker_extra_cache = marker_extra_cache,
         )
         single_marker = single_gate[0] if single_gate else None
         single_extra = single_gate[1] if single_gate else ""
         eval_match_name = (
-            marker_evaluator_name(single_marker, single_extra) + "_match" if single_gate else None
+            marker_evaluator_name(single_marker, single_extra, extra_cache = marker_extra_cache) + "_match" if single_gate else None
         )
         pair_name = "_cycle_needed_{}_{}".format(
             sanitize_name(source),

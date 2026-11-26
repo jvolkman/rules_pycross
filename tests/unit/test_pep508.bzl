@@ -530,6 +530,51 @@ def _test_marker_uses_extra_impl(env, _target):
         marker_evaluator_name("extra == 'dev'", ""),
     )
 
+    # Memoization cache stores parsed results only for markers containing "extra".
+    cache = {}
+    env.expect.that_bool(marker_uses_extra("extra == 'dev'", cache = cache)).equals(True)
+    env.expect.that_bool(marker_uses_extra("'foo' in extras", cache = cache)).equals(False)
+    env.expect.that_bool(marker_uses_extra("platform_version == 'extra'", cache = cache)).equals(False)
+    env.expect.that_bool(marker_uses_extra("sys_platform == 'linux'", cache = cache)).equals(False)
+    env.expect.that_bool(marker_uses_extra("", cache = cache)).equals(False)
+    env.expect.that_dict(cache).contains_exactly({
+        "extra == 'dev'": True,
+        "'foo' in extras": False,
+        "platform_version == 'extra'": False,
+    })
+
+    # Pre-populated cache entries return directly without calling pypackaging.markers.parse.
+    sentinel_true = "invalid syntax extra ==="
+    sentinel_false = "also invalid extra ==="
+    cache[sentinel_true] = True
+    cache[sentinel_false] = False
+    env.expect.that_bool(marker_uses_extra(sentinel_true, cache = cache)).equals(True)
+    env.expect.that_bool(marker_uses_extra(sentinel_false, cache = cache)).equals(False)
+
+    # marker_evaluator_name populates and reuses extra_cache with identical output.
+    eval_cache = {}
+    env.expect.that_str(marker_evaluator_name("extra == 'dev'", "dev", extra_cache = eval_cache)).equals(
+        marker_evaluator_name("extra == 'dev'", "dev"),
+    )
+    env.expect.that_str(marker_evaluator_name("'foo' in extras", "dev", extra_cache = eval_cache)).equals(
+        marker_evaluator_name("'foo' in extras", "dev"),
+    )
+    env.expect.that_str(marker_evaluator_name("sys_platform == 'linux'", "dev", extra_cache = eval_cache)).equals(
+        marker_evaluator_name("sys_platform == 'linux'", "dev"),
+    )
+    env.expect.that_dict(eval_cache).contains_exactly({
+        "extra == 'dev'": True,
+        "'foo' in extras": False,
+    })
+    eval_cache[sentinel_true] = True
+    eval_cache[sentinel_false] = False
+    env.expect.that_str(marker_evaluator_name(sentinel_true, "dev", extra_cache = eval_cache)).not_equals(
+        marker_evaluator_name(sentinel_true, "", extra_cache = eval_cache),
+    )
+    env.expect.that_str(marker_evaluator_name(sentinel_false, "dev", extra_cache = eval_cache)).equals(
+        marker_evaluator_name(sentinel_false, "", extra_cache = eval_cache),
+    )
+
 def _test_marker_uses_extra(name):
     util.helper_target(native.filegroup, name = name + "_subject")
     analysis_test(

@@ -7,13 +7,15 @@ load(":common.bzl", "ind")
 
 VARIANT_STATE_ATTR = 'variants = [":_variant_state"],'
 
-def collect_unique_markers(packages):
+def collect_unique_markers(packages, marker_extra_cache = None):
     """Collect all unique `(marker, extra)` pairs across packages.
 
     The extra is derived from the package key (e.g. `'foo[test]@1.0'` -> `'test'`).
 
     Args:
         packages: Lock packages dict keyed by package key.
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
 
     Returns:
         List of unique `(marker_string, extra_value)` tuples.
@@ -28,7 +30,7 @@ def collect_unique_markers(packages):
 
             # Optimization: if the marker doesn't reference `extra`, share a
             # single evaluator by setting extra to "".
-            effective_extra = extra if (extra and marker_uses_extra(marker)) else ""
+            effective_extra = extra if (extra and marker_uses_extra(marker, cache = marker_extra_cache)) else ""
             markers[(marker, effective_extra)] = True
 
         # Availability markers come from root project dependency edges, which
@@ -54,16 +56,18 @@ def _render_evaluator_and_setting(lines, eval_name, expr, setting_name, extra = 
     ])
     lines.extend(flag_setting(setting_name, ":" + eval_name, "true", indent = 1, use_native = True))
 
-def render_marker_evaluators(lines, unique_markers, has_variants = False):
+def render_marker_evaluators(lines, unique_markers, has_variants = False, marker_extra_cache = None):
     """Render deduped pycross_pep508_evaluator and config_setting targets.
 
     Args:
         lines: Output lines list.
         unique_markers: Iterable of (marker_str, extra) tuples.
         has_variants: Whether the workspace defines a `:_variant_state` target.
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
     """
     for marker_str, extra in sorted(unique_markers):
-        eval_name = marker_evaluator_name(marker_str, extra)
+        eval_name = marker_evaluator_name(marker_str, extra, extra_cache = marker_extra_cache)
         _render_evaluator_and_setting(
             lines,
             eval_name,

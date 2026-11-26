@@ -54,11 +54,19 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
     }
 
     loads = {}
+    marker_extra_cache = {}
     reset_plan = None
     gate_lines = []
     if reset_conflict_sets:
         reset_loads = {}
-        reset_plan = compute_reset_plan(packages, repo_map, conflict_pairs(reset_conflict_sets), gate_lines, loads = reset_loads)
+        reset_plan = compute_reset_plan(
+            packages,
+            repo_map,
+            conflict_pairs(reset_conflict_sets),
+            gate_lines,
+            loads = reset_loads,
+            marker_extra_cache = marker_extra_cache,
+        )
         if not [p for p in reset_plan.values() if p.ok]:
             reset_plan = None
             gate_lines = []
@@ -68,8 +76,13 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
     body_lines = []
 
     # 1. Marker evaluators for dependency markers (deduped)
-    unique_markers = collect_unique_markers(packages)
-    render_marker_evaluators(body_lines, unique_markers, has_variants = has_variants)
+    unique_markers = collect_unique_markers(packages, marker_extra_cache = marker_extra_cache)
+    render_marker_evaluators(
+        body_lines,
+        unique_markers,
+        has_variants = has_variants,
+        marker_extra_cache = marker_extra_cache,
+    )
 
     # 1b. Resolution-marker evaluators for pin forks
     resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
@@ -83,6 +96,7 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
         has_variants = has_variants,
         unique_markers = unique_markers,
         loads = loads,
+        marker_extra_cache = marker_extra_cache,
     )
 
     # 2b. Variant reset gates
@@ -90,7 +104,17 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
 
     # 3. Packages
     for pkg_key, pkg in sorted(packages.items()):
-        render_marker_package(body_lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = reset_plan, loads = loads)
+        render_marker_package(
+            body_lines,
+            pkg_key,
+            pkg,
+            packages,
+            repo_map,
+            rctx_name,
+            reset_plan = reset_plan,
+            loads = loads,
+            marker_extra_cache = marker_extra_cache,
+        )
 
     # 4. Extras aggregates ([_all_] targets)
     render_extras_aggregates(body_lines, packages)

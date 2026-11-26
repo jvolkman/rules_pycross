@@ -44,7 +44,7 @@ def render_extras_aggregates(lines, packages):
             "",
         ])
 
-def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads = None):
+def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads = None, marker_extra_cache = None):
     """Render deps using marker-based `select()` instead of environment-based selects.
 
     Args:
@@ -54,6 +54,8 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads
         pkg: Package dict.
         packages: All lock packages dict.
         loads: Optional dict tracking emitted helper loads (`"selects"`).
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
     """
     marker_deps = pkg.get("marker_dependencies", [])
     extra = parse_package_key(pkg_key).extra
@@ -75,7 +77,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads
         dep_key = md["key"]
         if dep_key in unconditional:
             continue
-        eval_name = marker_evaluator_name(md["marker"], extra)
+        eval_name = marker_evaluator_name(md["marker"], extra, extra_cache = marker_extra_cache)
         dep_evals.setdefault(dep_key, {})[eval_name] = True
 
     # Group single-evaluator deps by evaluator; deps reachable under multiple
@@ -116,7 +118,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads
     ))
     lines.append("")
 
-def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = None, loads = None):
+def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = None, loads = None, marker_extra_cache = None):
     """Renders all targets for a single package using marker-based deps and wheel selection.
 
     Args:
@@ -128,6 +130,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
         rctx_name: Canonical repository name of the `package_repo`.
         reset_plan: Optional dict mapping `pkg_key -> struct(ok, gate)`.
         loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
     """
     pkg_key_san = sanitize_name(pkg_key)
     parts = parse_package_key(pkg_key)
@@ -142,7 +146,15 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
 
     # Runtime deps
     if has_marker_deps:
-        render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads = loads)
+        render_marker_package_deps(
+            lines,
+            pkg_key,
+            pkg_key_san,
+            pkg,
+            packages,
+            loads = loads,
+            marker_extra_cache = marker_extra_cache,
+        )
 
     if is_extras_proxy(pkg_key, pkg):
         base_pkg_key = base_package_key(pkg_key)
