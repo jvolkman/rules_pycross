@@ -208,7 +208,6 @@ def register_workspace_repo(
         root_direct_deps,
         ws_tag,
         ws_name,
-        model_type,
         repo_name,
         projects,
         raw_dependency_groups,
@@ -227,7 +226,6 @@ def register_workspace_repo(
         root_direct_deps: List to store root direct dependencies.
         ws_tag: The workspace tag.
         ws_name: The workspace name.
-        model_type: The lock model type.
         repo_name: The repo name for this member.
         projects: List of projects included in this repo.
         raw_dependency_groups: Raw dependency group strings from user config
@@ -257,7 +255,6 @@ def register_workspace_repo(
     parsed = parse_dependency_group_entries(raw_dependency_groups)
 
     lock_model_structs[repo_name] = struct(
-        model_type = model_type,
         extra_project_files = [str(f) for f in extra_project_files],
         lock_file = str(ws_tag.lock_file),
         projects = projects,
@@ -346,7 +343,6 @@ def process_repo(
         ws_tag,
         ws_name,
         tag_info,
-        model_type,
         extra_project_files,
         root_direct_dev_deps = None):
     """Processes a single repo tag.
@@ -359,7 +355,6 @@ def process_repo(
         ws_tag: The workspace tag.
         ws_name: The workspace name.
         tag_info: The repo tag info.
-        model_type: The lock model type.
         extra_project_files: List of extra pyproject.toml files.
         root_direct_dev_deps: Optional list to store root direct dev dependencies.
     """
@@ -396,7 +391,6 @@ def process_repo(
         root_direct_deps,
         ws_tag,
         ws_name,
-        model_type,
         tag.repo,
         tag.projects,
         raw_groups,
@@ -415,7 +409,6 @@ def process_workspaces(
         workspace_tags,
         member_tags,
         discover_members_fn,
-        model_type,
         root_direct_deps,
         toml_cache = None,
         root_direct_dev_deps = None):
@@ -429,7 +422,6 @@ def process_workspaces(
         workspace_tags: List of workspace tags.
         member_tags: List of member tags.
         discover_members_fn: Function to discover members.
-        model_type: The lock model type.
         root_direct_deps: List to store root direct dependencies.
         toml_cache: Optional dict caching decoded TOML files by label.
         root_direct_dev_deps: Optional list to store root direct dev dependencies.
@@ -558,7 +550,6 @@ def process_workspaces(
             ws_info.tag,
             ws_name,
             new_tag_info,
-            model_type,
             workspace_extra_project_files[ws_name],
             root_direct_dev_deps = root_direct_dev_deps,
         )
@@ -577,7 +568,6 @@ def process_workspaces(
             root_direct_deps = [],  # Do not report as root direct dep
             ws_tag = ws_info.tag,
             ws_name = ws_name,
-            model_type = model_type,
             repo_name = build_repo_name,
             projects = ["*"],
             raw_dependency_groups = ["*", "transitive"],

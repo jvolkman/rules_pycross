@@ -572,7 +572,6 @@
         }
       ],
       "name": "regex",
-      "python_versions": ">=3.8",
       "version": "2024.11.6"
     },
     "setuptools@75.6.0": {
@@ -598,7 +597,6 @@
         }
       ],
       "name": "setuptools",
-      "python_versions": ">=3.9",
       "version": "75.6.0"
     },
     "wheel@0.45.1": {
@@ -624,7 +622,6 @@
         }
       ],
       "name": "wheel",
-      "python_versions": ">=3.8",
       "version": "0.45.1"
     }
   },
@@ -633,6 +630,5 @@
     "setuptools": "setuptools@75.6.0",
     "wheel": "wheel@0.45.1"
   },
-  "python_versions": ">=3.9, <3.13",
   "testonly_pins": []
 }

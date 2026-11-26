@@ -74,40 +74,6 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
         result["index"] = registry
     return result
 
-def _resolve_package_requires_python(markers):
-    """Extract python version specifiers from resolution markers.
-
-    Args:
-        markers: List of marker strings from resolution-markers.
-
-    Returns:
-        List of specifier strings.
-    """
-    specifiers = []
-    for marker in markers:
-        # Simple extraction of python_full_version constraints
-        # e.g. "python_full_version >= '3.8'" -> ">= 3.8"
-        if "python_full_version" not in marker:
-            continue
-
-        # Parse out the operator and version
-        parts = marker.strip().split("python_full_version")
-        if len(parts) != 2:
-            continue
-        rest = parts[1].strip()
-
-        # Extract operator
-        op = ""
-        for c in rest.elems():
-            if c in "<>=!":
-                op += c
-            elif op:
-                break
-        version_part = rest[len(op):].strip().strip("'\"")
-        if op and version_part:
-            specifiers.append("{} {}".format(op, version_part))
-    return specifiers
-
 def _canonical_source(source):
     """Serialize a UV lock `source` table deterministically for identity matching."""
     if not source:
@@ -211,12 +177,6 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags):
     for lock_pkg in packages_list:
         package_name = canonicalize_name(lock_pkg["name"])
         package_version = lock_pkg["version"]
-        resolution_markers = [
-            rewrite_conflict_markers(m, token_replacements)
-            for m in lock_pkg.get("resolution-markers", [])
-        ]
-        python_version_specifiers = _resolve_package_requires_python(resolution_markers)
-        package_extras = lock_pkg.get("extras", [])
 
         deps = []
         for dep in lock_pkg.get("dependencies", []):
@@ -261,19 +221,14 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags):
         is_local_editable = "editable" in source and type(source.get("editable")) == "string"
         is_local_virtual = "virtual" in source and type(source.get("virtual")) == "string"
         is_local_directory = "directory" in source
-        is_local_sdist = type(sdist) == "dict" and "path" in sdist and "url" not in sdist
-        is_local = is_local_sdist or is_local_editable or is_local_virtual or is_local_directory
-
-        pkg_python_versions = python_version_specifiers[0] if python_version_specifiers else ""
+        is_local = is_local_editable or is_local_virtual or is_local_directory
 
         base_pkg = {
             "name": package_name,
             "version": package_version,
-            "python_versions": pkg_python_versions,
             "dependencies": deps,
             "files": files,
             "is_local": is_local,
-            "extras": [e.lower() for e in package_extras],
             "tag": source_tag,
             "source_id": canon_source,
             "source": source_display,
@@ -297,11 +252,9 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags):
             extra_pkg = {
                 "name": "{}[{}]".format(package_name, canonicalize_name(extra_name)),
                 "version": package_version,
-                "python_versions": pkg_python_versions,
                 "dependencies": extra_parsed_deps,
                 "files": [],
                 "is_local": is_local,
-                "extras": [],
                 "tag": source_tag,
                 "source_id": canon_source,
                 "source": source_display,
@@ -393,7 +346,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # backwards-compat for https://github.com/astral-sh/uv/pull/5861
     distributions_list = lock_dict.get("distribution", [])
     packages_list = lock_dict.get("package", distributions_list)
-    requires_python = lock_dict.get("requires-python", "")
     uv_conflicts = lock_dict.get("conflicts", [])
     uv_default_groups = project_dict.get("tool", {}).get("uv", {}).get("default-groups", [])
 
@@ -537,7 +489,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
     return finalize_lock_graph(
         graph,
         resolved_pins.pinned_keys,
-        requires_python = requires_python,
         variants = conflicts.variant_sets,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = resolved_pins.testonly_pins,

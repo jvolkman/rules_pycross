@@ -243,9 +243,6 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
 
     pkg_key_no_extra = base_package_key(pkg_key)
     pkg_name_ver = "{}@{}".format(pkg_name, pkg_version)
-    for filename, f in context.remote_wheels.get(pkg_name_ver, {}).items():
-        package_sources[filename] = {"file": f}
-
     for filename, label in context.local_wheels.get(pkg_name_ver, {}).items():
         package_sources[filename] = {"label": label}
 
@@ -335,7 +332,6 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
     build_mode = ann.build_mode if ann else "auto"
     always_build = build_mode == "always"
     build_target = ann.build_target if ann else None
-    uses_sdist = always_build or (context.always_include_sdist and sdist_file != None) or not wheel_candidates
 
     if not pkg_extra and not wheel_candidates and sdist_file == None and not build_target:
         fail("Package {} has no compatible wheels and no sdist found.".format(pkg_key))
@@ -351,7 +347,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         fail("Package {} has build_mode = \"always\" but no sdist to build from.".format(pkg_key))
 
     # Markers under which the root projects request this exact pin; see
-    # _record_root_marker in uv_lock_model.bzl for the semantics.
+    # record_root_marker in translator_common.bzl for the semantics.
     root_pin_name = pkg_name
     if pkg_extra:
         root_pin_name = "{}[{}]".format(pkg_name, pkg_extra)
@@ -378,7 +374,6 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "wheel_library_tags": ann.wheel_library_tags if ann else [],
         "precompile": ann.precompile if ann else "",
         "wheel_candidates": wheel_candidates,
-        "uses_sdist": uses_sdist,
         "availability_markers": availability_markers,
     }
     if pkg.get("source_dir"):
@@ -414,7 +409,6 @@ def _synthesize_extra_package(next_package_key, lock_model_packages, synthesized
     raw_pkg = {
         "name": parts.name,
         "version": parts.version,
-        "python_versions": base_package.get("python_versions", ""),
         "dependencies": synthesized_deps,
         "files": [],
     }
@@ -658,8 +652,6 @@ def _add_ungated_fallbacks(pins, lock_model_data):
 def resolve(
         lock_model_data,
         local_wheels = None,
-        remote_wheels = None,
-        always_include_sdist = False,
         annotations_data = None,
         default_extra_build_tools_args = None,
         include_transitive = False,
@@ -670,8 +662,6 @@ def resolve(
     Args:
         lock_model_data: The lock model data.
         local_wheels: Dictionary of local wheels.
-        remote_wheels: Dictionary of remote wheels.
-        always_include_sdist: Whether to always include sdist.
         annotations_data: Annotations data.
         default_extra_build_tools_args: Default extra build tools args.
         include_transitive: Whether to include transitive dependencies.
@@ -684,11 +674,8 @@ def resolve(
         Dictionary of resolved packages.
     """
     local_wheels = local_wheels or {}
-    remote_wheels = remote_wheels or {}
     if type(local_wheels) != "dict":
         fail("local_wheels must be a dict (filename -> label), got {}".format(type(local_wheels)))
-    if type(remote_wheels) != "dict":
-        fail("remote_wheels must be a dict (url -> sha256), got {}".format(type(remote_wheels)))
     default_extra_build_tools_args = default_extra_build_tools_args or []
     local_wheels_by_pkg = {}
     for filename, label in local_wheels.items():
@@ -700,25 +687,8 @@ def resolve(
             local_wheels_by_pkg[pkg_key] = {}
         local_wheels_by_pkg[pkg_key][filename] = label
 
-    remote_wheels_by_pkg = {}
-    for url, sha256 in remote_wheels.items():
-        filename = url.split("/")[-1]
-        parsed = pypackaging.utils.parse_wheel_filename(filename)
-        name = parsed.name
-        version = pypackaging.version.to_string(parsed.version)
-        pkg_key = "{}@{}".format(name, version)
-        if pkg_key not in remote_wheels_by_pkg:
-            remote_wheels_by_pkg[pkg_key] = {}
-        remote_wheels_by_pkg[pkg_key][filename] = {
-            "name": filename,
-            "sha256": sha256,
-            "urls": [url],
-        }
-
     context = struct(
         local_wheels = local_wheels_by_pkg,
-        remote_wheels = remote_wheels_by_pkg,
-        always_include_sdist = always_include_sdist,
         root_dependency_markers = lock_model_data.get("root_dependency_markers", {}),
     )
 

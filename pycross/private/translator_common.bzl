@@ -447,7 +447,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
 
     Args:
         packages: List of package dicts (`name`, `version`, `dependencies`,
-            `files`, `python_versions`, optional `is_local`, `extras`, `markers`,
+            `files`, optional `is_local`, `extras`, `markers`,
             `source_dir`, `tag`, `source_id`, `source`).
         resolution_marker_exprs: Optional dict mapping constraint names to PEP
             508 marker expressions (used for resolution-marker fork expansion).
@@ -731,7 +731,6 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
 def finalize_lock_graph(
         graph,
         pinned_keys,
-        requires_python,
         variants = None,
         resolution_marker_exprs = None,
         testonly_pins = None,
@@ -743,7 +742,6 @@ def finalize_lock_graph(
     Args:
         graph: Struct returned by `build_lock_graph`.
         pinned_keys: Dict mapping pin name -> `{constraint: pkg_key}`.
-        requires_python: The requires-python specifier string.
         variants: Optional list of variant set dicts.
         resolution_marker_exprs: Optional dict mapping constraint names to marker
             expressions or compound dicts.
@@ -839,7 +837,6 @@ def finalize_lock_graph(
         raw_package = {
             "name": pkg["name"],
             "version": pkg["version"],
-            "python_versions": pkg.get("python_versions", ""),
             "dependencies": deps_sorted,
             "files": files_sorted,
         }
@@ -861,7 +858,6 @@ def finalize_lock_graph(
     result = {
         "packages": lock_packages,
         "pins": simplified_pins,
-        "python_versions": requires_python,
         "testonly_pins": final_testonly_pins,
     }
     if variants:
@@ -879,23 +875,7 @@ def finalize_lock_graph(
 
     return result
 
-def _resolve_local_dep_constraint(constraint, dep_base_name, dep_version, resolution_marker_exprs, dep_tag = ""):
-    """Combine a local package pin's constraint with any resolution-marker fork on its dependency."""
-    cname = resolution_marker_constraint_name(dep_base_name, dep_version, dep_tag)
-    if cname not in resolution_marker_exprs or constraint == cname:
-        return constraint
-    if not constraint:
-        return cname
-    if type(resolution_marker_exprs.get(constraint)) == "string":
-        return constraint
-    dep_constraint = "{}_{}".format(constraint, cname)
-    resolution_marker_exprs[dep_constraint] = {
-        "variant": constraint,
-        "marker": cname,
-    }
-    return dep_constraint
-
-def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None):
+def resolve_lock_graph(packages, pinned_package_specs, strict_dependencies = True, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None):
     """Resolves a dependency graph of packages.
 
     Ports translator_utils.py resolve_lock_graph() to Starlark.
@@ -905,7 +885,6 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         - version: version string
         - dependencies: list of dicts {name, specifier, marker, extras}
         - files: list of dicts {name, sha256, urls?}
-        - python_versions: requires-python specifier string
         - is_local: bool (optional, default False)
         - extras: list of extra names (optional)
 
@@ -915,9 +894,7 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     Args:
         packages: List of package dicts.
         pinned_package_specs: Dict mapping pin name to {constraint: specifier}.
-        requires_python: The requires-python specifier string.
         strict_dependencies: If True, fail on unresolved deps.
-        variants: List of variant set dicts (optional).
         resolution_marker_exprs: Dict mapping constraint names to PEP 508
             marker expressions (optional). Used for resolution-marker forks.
         testonly_pins: List of pin names that are exclusively reachable from testonly groups.
@@ -972,15 +949,11 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     for edge in expanded_edges:
         base = edge.pin_name.split("[")[0]
         constraint = edge.constraint
-        if edge.from_local:
+        if edge.from_local and not constraint:
             edge_parts = parse_package_key(edge.pkg_key)
-            constraint = _resolve_local_dep_constraint(
-                constraint,
-                base,
-                edge_parts.version,
-                resolution_marker_exprs,
-                dep_tag = edge_parts.tag,
-            )
+            cname = resolution_marker_constraint_name(base, edge_parts.version, edge_parts.tag)
+            if cname in resolution_marker_exprs:
+                constraint = cname
         pinned_keys.setdefault(edge.pin_name, {})[constraint] = edge.pkg_key
 
         record_root_marker(final_root_markers, edge.pin_name, edge.avail_marker)
@@ -1000,8 +973,6 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     return finalize_lock_graph(
         graph,
         pinned_keys,
-        requires_python = requires_python,
-        variants = variants,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = direct_testonly.keys(),
         expanded_testonly_pins = expanded_testonly.keys(),

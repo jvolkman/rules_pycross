@@ -23,7 +23,6 @@
         }
       ],
       "name": "asttokens",
-      "python_versions": ">=3.8",
       "version": "3.0.0"
     },
     "colorama@0.4.6": {
@@ -49,7 +48,6 @@
         }
       ],
       "name": "colorama",
-      "python_versions": "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7",
       "version": "0.4.6"
     },
     "decorator@5.1.1": {
@@ -75,7 +73,6 @@
         }
       ],
       "name": "decorator",
-      "python_versions": ">=3.5",
       "version": "5.1.1"
     },
     "exceptiongroup@1.2.2": {
@@ -101,7 +98,6 @@
         }
       ],
       "name": "exceptiongroup",
-      "python_versions": ">=3.7",
       "version": "1.2.2"
     },
     "executing@2.1.0": {
@@ -127,7 +123,6 @@
         }
       ],
       "name": "executing",
-      "python_versions": ">=3.8",
       "version": "2.1.0"
     },
     "ipython@8.18.1": {
@@ -209,7 +204,6 @@
         }
       ],
       "name": "ipython",
-      "python_versions": ">=3.9",
       "version": "8.18.1"
     },
     "jedi@0.19.2": {
@@ -241,7 +235,6 @@
         }
       ],
       "name": "jedi",
-      "python_versions": ">=3.6",
       "version": "0.19.2"
     },
     "matplotlib-inline@0.1.7": {
@@ -273,7 +266,6 @@
         }
       ],
       "name": "matplotlib-inline",
-      "python_versions": ">=3.8",
       "version": "0.1.7"
     },
     "parso@0.8.4": {
@@ -299,7 +291,6 @@
         }
       ],
       "name": "parso",
-      "python_versions": ">=3.6",
       "version": "0.8.4"
     },
     "pexpect@4.9.0": {
@@ -331,7 +322,6 @@
         }
       ],
       "name": "pexpect",
-      "python_versions": "",
       "version": "4.9.0"
     },
     "prompt-toolkit@3.0.48": {
@@ -363,7 +353,6 @@
         }
       ],
       "name": "prompt-toolkit",
-      "python_versions": ">=3.7.0",
       "version": "3.0.48"
     },
     "ptyprocess@0.7.0": {
@@ -389,7 +378,6 @@
         }
       ],
       "name": "ptyprocess",
-      "python_versions": "",
       "version": "0.7.0"
     },
     "pure-eval@0.2.3": {
@@ -415,7 +403,6 @@
         }
       ],
       "name": "pure-eval",
-      "python_versions": "",
       "version": "0.2.3"
     },
     "pygments@2.18.0": {
@@ -441,7 +428,6 @@
         }
       ],
       "name": "pygments",
-      "python_versions": ">=3.8",
       "version": "2.18.0"
     },
     "regex@2024.11.6": {
@@ -1016,7 +1002,6 @@
         }
       ],
       "name": "regex",
-      "python_versions": ">=3.8",
       "version": "2024.11.6"
     },
     "stack-data@0.6.3": {
@@ -1058,7 +1043,6 @@
         }
       ],
       "name": "stack-data",
-      "python_versions": "",
       "version": "0.6.3"
     },
     "traitlets@5.14.3": {
@@ -1084,7 +1068,6 @@
         }
       ],
       "name": "traitlets",
-      "python_versions": ">=3.8",
       "version": "5.14.3"
     },
     "typing-extensions@4.12.2": {
@@ -1110,7 +1093,6 @@
         }
       ],
       "name": "typing-extensions",
-      "python_versions": ">=3.8",
       "version": "4.12.2"
     },
     "wcwidth@0.2.13": {
@@ -1136,7 +1118,6 @@
         }
       ],
       "name": "wcwidth",
-      "python_versions": "",
       "version": "0.2.13"
     }
   },
@@ -1144,6 +1125,5 @@
     "ipython": "ipython@8.18.1",
     "regex": "regex@2024.11.6"
   },
-  "python_versions": ">=3.9, <3.13",
   "testonly_pins": []
 }

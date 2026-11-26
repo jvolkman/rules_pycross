@@ -338,7 +338,6 @@ def _test_local_chain_cycle_testonly_and_dep_merge_impl(env, target):
             "explicit-dev": {"": "==1.0.0"},
             "appdep": {"": "==1.0.0"},
         },
-        requires_python = ">=3.10",
         strict_dependencies = True,
         testonly_pins = ["lib-a", "shared-local", "test-helper", "click", "explicit-dev"],
     )

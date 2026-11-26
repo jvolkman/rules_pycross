@@ -434,24 +434,6 @@ def _test_uv_dependencies_with_extra(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_dependencies_with_extra_impl)
 
-# --- test_requires_python_propagation ---
-
-# buildifier: disable=unused-variable
-def _test_uv_requires_python_propagation_impl(env, target):
-    project = _project(deps = ["a==1.0"])
-    lock = _lock([
-        _vpkg("my-app", deps = [_dep("a")]),
-        _pkg("a", "1.0", wheels = [_whl("a-1.0-py3-none-any.whl", "a")], markers = ["python_full_version >= '3.10'"]),
-    ], requires_python = ">=3.8")
-    result = translate_uv(project, lock, _lock_model())
-    env.expect.that_str(result.get("python_versions", "")).equals(">=3.8")
-    pkg_a = result["packages"]["a@1.0"]
-    env.expect.that_str(pkg_a.get("python_versions", "")).equals(">= 3.10")
-
-def _test_uv_requires_python_propagation(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_uv_requires_python_propagation_impl)
-
 # --- test_unconditional_pins_are_bare ---
 
 # buildifier: disable=unused-variable
@@ -2604,7 +2586,6 @@ def uv_translator_test_suite(name):
             _test_uv_group_variants,
             _test_uv_no_variants,
             _test_uv_dependencies_with_extra,
-            _test_uv_requires_python_propagation,
             _test_uv_unconditional_pins_are_bare,
             _test_uv_resolution_marker_fork_conditional_pins,
             _test_uv_resolution_marker_single_version_no_fork,

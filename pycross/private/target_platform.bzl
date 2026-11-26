@@ -1,6 +1,7 @@
 """Supported tags rule and provider."""
 
 load("@pypackaging.bzl", "pypackaging")
+load(":lock_attrs.bzl", "DEFAULT_GLIBC_VERSION", "DEFAULT_MACOS_VERSION", "DEFAULT_MUSL_VERSION")
 load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "flag_value", "marker_value_attrs")
 
 PycrossTargetPlatformInfo = provider(
@@ -65,13 +66,13 @@ def _pycross_target_platform_impl(ctx):
             if ctx.attr.libc == "glibc":
                 # Defensive fallback; should not be needed since the string_flag
                 # default is populated from configure_toolchains().
-                max_glibc = flag_value(ctx.attr._glibc_version) or "2.28"
+                max_glibc = flag_value(ctx.attr._glibc_version) or DEFAULT_GLIBC_VERSION
                 version = max_glibc.split(".")
                 minor = version[1] if len(version) > 1 else "17"
                 platforms.append("manylinux_{}_{}_{}".format(version[0], minor, arch))
             elif ctx.attr.libc == "musl":
                 # Defensive fallback; see comment above.
-                max_musl = flag_value(ctx.attr._musl_version) or "1.2"
+                max_musl = flag_value(ctx.attr._musl_version) or DEFAULT_MUSL_VERSION
                 version = max_musl.split(".")
                 minor = version[1] if len(version) > 1 else "2"
                 platforms.append("musllinux_{}_{}_{}".format(version[0], minor, arch))
@@ -79,7 +80,7 @@ def _pycross_target_platform_impl(ctx):
                 platforms.append("linux_" + arch)
         elif sys_platform == "darwin":
             # Defensive fallback chain; flag default comes from configure_toolchains().
-            macos_ver = flag_value(ctx.attr._macos_version) or markers["platform_version"] or "15.0"
+            macos_ver = flag_value(ctx.attr._macos_version) or markers["platform_version"] or DEFAULT_MACOS_VERSION
             version = macos_ver.split(".")
             major = version[0]
             minor = version[1] if len(version) > 1 else "0"

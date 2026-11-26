@@ -3,12 +3,6 @@
 load("@pypackaging.bzl", "pypackaging")
 load("@rules_python//python/api:api.bzl", "py_common")
 
-# The http library seems to depend on cache.bzl as of Bazel 7
-REPO_HTTP_DEPS = [
-    "@bazel_tools//tools/build_defs/repo:http.bzl",
-    "@bazel_tools//tools/build_defs/repo:cache.bzl",
-]
-
 def sanitize_name(val):
     """Sanitize a string into a valid Bazel repository and target name identifier.
 
@@ -310,7 +304,7 @@ def excluded_variant_items(conflict_sets, selected):
 
 _VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
 
-def extract_variant_token(item):
+def _extract_variant_token(item):
     """Return `(normalized_token, is_positive)` for an `extra ==/!= '__variant_...'` item, or None.
 
     Args:
@@ -372,7 +366,7 @@ def _fold_variant_level(elements, true_tokens, false_tokens, conflict_pairs):
                 if e == "V" or (e == "N" and result == "T"):
                     result = e
                 continue
-            tok = extract_variant_token(e)
+            tok = _extract_variant_token(e)
             if not tok:
                 if result == "T":
                     result = "N"

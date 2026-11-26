@@ -16,11 +16,10 @@ def _make_dep(name, version, marker = "", key = None):
         d["key"] = key
     return d
 
-def _make_pkg(name, version, files, deps = None, python_versions = ">=3.8", source = None):
+def _make_pkg(name, version, files, deps = None, source = None):
     pkg = {
         "name": name,
         "version": version,
-        "python_versions": python_versions,
         "dependencies": deps or [],
         "files": files,
     }
@@ -1130,7 +1129,6 @@ def _test_wheel_preferred_over_sdist_impl(env, target):
 
     env.expect.that_collection(pkg["wheel_candidates"]).has_size(1)
     env.expect.that_str(pkg["wheel_candidates"][0]["filename"]).equals("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
-    env.expect.that_bool(pkg["uses_sdist"]).equals(False)
 
 def _test_wheel_preferred_over_sdist(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1162,34 +1160,6 @@ def _test_all_wheels_become_candidates_impl(env, target):
 def _test_all_wheels_become_candidates(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_all_wheels_become_candidates_impl)
-
-# buildifier: disable=unused-variable
-def _test_always_include_sdist_flag_impl(env, target):
-    lock_model_data = {
-        "packages": {
-            "foo@1.0": _make_pkg(
-                "foo",
-                "1.0",
-                [
-                    _make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
-                    _make_file("foo-1.0.tar.gz"),
-                ],
-            ),
-        },
-        "pins": {
-            "foo": "foo@1.0",
-        },
-    }
-    res = resolve(lock_model_data, always_include_sdist = True)
-    pkg = res.packages["foo@1.0"]
-
-    env.expect.that_collection(pkg["wheel_candidates"]).has_size(1)
-    env.expect.that_bool(pkg["uses_sdist"]).equals(True)
-    env.expect.that_str(pkg["sdist_file"]["key"]).contains("foo-1.0.tar.gz")
-
-def _test_always_include_sdist_flag(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_always_include_sdist_flag_impl)
 
 # buildifier: disable=unused-variable
 def _test_wheel_only_no_sdist_impl(env, target):
@@ -1462,27 +1432,6 @@ def _test_local_wheel_override(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_local_wheel_override_impl)
 
 # buildifier: disable=unused-variable
-def _test_remote_wheel_override_impl(env, target):
-    lock_model_data = {
-        "packages": {
-            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")]),
-        },
-        "pins": {"foo": "foo@1.0"},
-    }
-    remote_wheels = {"https://remote.com/foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl": "remote_sha"}
-
-    res = resolve(lock_model_data, remote_wheels = remote_wheels)
-    pkg = res.packages["foo@1.0"]
-
-    env.expect.that_collection(pkg["wheel_candidates"]).has_size(1)
-    expected_key = "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl/remote_s/edfe9b3e"
-    env.expect.that_str(pkg["wheel_candidates"][0]["file_reference"]["key"]).equals(expected_key)
-
-def _test_remote_wheel_override(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_remote_wheel_override_impl)
-
-# buildifier: disable=unused-variable
 def _test_always_build_annotation_impl(env, target):
     lock_model_data = {
         "packages": {
@@ -1503,10 +1452,9 @@ def _test_always_build_annotation_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, annotations_data = annotations_data, always_include_sdist = False)
+    res = resolve(lock_model_data, annotations_data = annotations_data)
     pkg = res.packages["foo@1.0"]
 
-    env.expect.that_bool(pkg["uses_sdist"]).equals(True)
     env.expect.that_bool(pkg["sdist_file"] != None).equals(True)
     env.expect.that_str(pkg["sdist_file"]["key"]).contains("foo-1.0.tar.gz")
 
@@ -1630,7 +1578,6 @@ def _test_sdist_only_package_impl(env, target):
     res = resolve(lock_model_data)
     pkg = res.packages["mylib@1.0"]
 
-    env.expect.that_bool(pkg["uses_sdist"]).equals(True)
     env.expect.that_collection(pkg["wheel_candidates"]).has_size(0)
     env.expect.that_bool(pkg["sdist_file"] != None).equals(True)
 
@@ -1802,13 +1749,12 @@ def _test_build_mode_never_keeps_wheels_impl(env, target):
     }
     annotations_data = {"foo": {"build_mode": "never"}}
 
-    res = resolve(lock_model_data, annotations_data = annotations_data, always_include_sdist = False)
+    res = resolve(lock_model_data, annotations_data = annotations_data)
     pkg = res.packages["foo@1.0"]
 
     # "never" is enforced when sdist repos are created; the resolver just records it.
     env.expect.that_str(pkg["build_mode"]).equals("never")
     env.expect.that_collection(pkg["wheel_candidates"]).has_size(1)
-    env.expect.that_bool(pkg["uses_sdist"]).equals(False)
 
 def _test_build_mode_never_keeps_wheels(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1835,10 +1781,10 @@ def _test_wildcard_always_build_end_to_end_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, annotations_data = annotations_data, always_include_sdist = False)
+    res = resolve(lock_model_data, annotations_data = annotations_data)
     pkg = res.packages["foo@1.0"]
 
-    env.expect.that_bool(pkg["uses_sdist"]).equals(True)
+    env.expect.that_collection(pkg["wheel_candidates"]).has_size(0)
     env.expect.that_bool(pkg["sdist_file"] != None).equals(True)
     env.expect.that_str(pkg["sdist_file"]["key"]).contains("foo-1.0.tar.gz")
 
@@ -1877,16 +1823,15 @@ def _test_wildcard_with_specific_override_end_to_end_impl(env, target):
         "foo": {"build_mode": "auto"},
     }
 
-    res = resolve(lock_model_data, annotations_data = annotations_data, always_include_sdist = False)
+    res = resolve(lock_model_data, annotations_data = annotations_data)
 
     foo_pkg = res.packages["foo@1.0"]
     bar_pkg = res.packages["bar@2.0"]
 
     env.expect.that_collection(foo_pkg["wheel_candidates"]).has_size(1)
     env.expect.that_str(foo_pkg["wheel_candidates"][0]["filename"]).equals("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
-    env.expect.that_bool(foo_pkg["uses_sdist"]).equals(False)
 
-    env.expect.that_bool(bar_pkg["uses_sdist"]).equals(True)
+    env.expect.that_collection(bar_pkg["wheel_candidates"]).has_size(0)
     env.expect.that_bool(bar_pkg["sdist_file"] != None).equals(True)
     env.expect.that_str(bar_pkg["sdist_file"]["key"]).contains("bar-2.0.tar.gz")
 
@@ -2548,7 +2493,6 @@ def lock_resolver_test_suite(name):
             _test_wheel_candidates_with_build_tags,
             _test_wheel_preferred_over_sdist,
             _test_all_wheels_become_candidates,
-            _test_always_include_sdist_flag,
             _test_wheel_only_no_sdist,
             _test_pure_python_wheel_is_candidate,
             _test_multi_platform_wheels_all_candidates,
@@ -2560,7 +2504,6 @@ def lock_resolver_test_suite(name):
             _test_extra_build_tools,
             _test_build_deps_not_duplicated,
             _test_local_wheel_override,
-            _test_remote_wheel_override,
             _test_always_build_annotation,
             _test_build_target_override,
             _test_install_exclude_globs,
