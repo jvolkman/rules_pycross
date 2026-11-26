@@ -10,7 +10,6 @@ load(
     "sdist_deps_target_name",
     "sdist_repo_name",
     "sdist_target_name",
-    "wheel_available_target_name",
     "wheel_target_name",
 )
 load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
@@ -177,16 +176,12 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
             has_sdist_repo = True
 
     # Wheel chooser
-    wheel_gated = False
     if has_wheel_candidates:
-        wheel_gated = render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = sdist_target, loads = loads)
+        render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = sdist_target, loads = loads)
     else:
         # No wheel candidates, alias directly to sdist_target or no_match_error
         target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
         lines.extend(alias(wheel_target_name(pkg_key), target, indent = 1, use_native = True))
-
-    if not wheel_gated and pkg.get("emit_unconditional_wheel_available"):
-        lines.extend(alias(wheel_available_target_name(pkg_key), "@rules_pycross//pycross/private:always_true", indent = 1, use_native = True))
 
     # Library
     lib_name = pkg_key

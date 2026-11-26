@@ -301,11 +301,13 @@ def is_wheel_platform_specific(pkg):
     and no universal py3-none-any candidate.
 
     Args:
-        pkg: A resolved package dict.
+        pkg: A resolved package dict (or slimmed thin-repo package dict).
 
     Returns:
         True if wheel selection may fail on some target platform.
     """
+    if "wheel_platform_specific" in pkg:
+        return pkg["wheel_platform_specific"]
     candidates = pkg.get("wheel_candidates", [])
     if not candidates or has_build_fallback(pkg):
         return False

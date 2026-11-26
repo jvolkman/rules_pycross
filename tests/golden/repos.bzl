@@ -1,7 +1,7 @@
 """Dev-only module extension generating golden snapshots of package_repo and thin_package_repo outputs."""
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "package_repo")
+load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
@@ -128,8 +128,8 @@ def _register_case(
     """Instantiate package_repo + thin_package_repo(s) for one golden case."""
     pkgs_repo = "golden_{}__pkgs".format(case_name)
     merged_repo_map = {}
-    member_lock_files = {}
-    member_lock_data = {}
+    member_locks = []
+    member_locks_by_name = {}
 
     for member in members:
         member_name = member["repo_name"]
@@ -137,20 +137,23 @@ def _register_case(
         raw = module_ctx.read(module_ctx.path(Label(lock_label_str)))
         lock_data = json.decode(raw)
         merged_repo_map.update(_build_repo_map(lock_data))
-        member_lock_files[member_name] = lock_label_str
-        member_lock_data[member_name] = raw
+        member_locks.append((member_name, lock_data))
+        member_locks_by_name[member_name] = lock_data
+
+    merged_lock = merge_workspace_locks(
+        member_locks,
+        skip_variant_members = skip_variant_members,
+    )
+    merged_packages = merged_lock["packages"]
 
     pkg_attrs = dict(
         name = pkgs_repo,
         build_repo = build_repo or "golden_{}__build".format(case_name),
         repo_map = merged_repo_map,
-        member_lock_files = member_lock_files,
-        member_lock_data = member_lock_data,
+        lock_data = json.encode(merged_lock),
     )
     if backend_configs:
         pkg_attrs["backend_configs"] = backend_configs
-    if skip_variant_members:
-        pkg_attrs["skip_variant_members"] = skip_variant_members
     package_repo(**pkg_attrs)
 
     pkgs_prefix = "{}/pkgs".format(case_name)
@@ -161,7 +164,7 @@ def _register_case(
         member_name = member["repo_name"]
         thin_attrs = dict(
             name = member_name,
-            resolved_lock_file = Label(member["lock_file"]),
+            lock_data = json.encode(slim_member_lock(member_locks_by_name[member_name], merged_packages)),
             workspace_repo = pkgs_repo,
             member_name = member_name,
         )

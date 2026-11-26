@@ -25,8 +25,7 @@ load(":util.bzl", "base_packages_with_extras", "parse_package_key")
 
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
-    lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
-    lock = json.decode(rctx.read(lock_json_path))
+    lock = json.decode(rctx.attr.lock_data)
     packages = lock["packages"]
     pins = lock["pins"]
     testonly_pins_set = {p: True for p in lock.get("testonly_pins", [])}
@@ -234,7 +233,10 @@ def _thin_package_repo_impl(rctx):
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
-        "resolved_lock_file": attr.label(mandatory = True),
+        "lock_data": attr.string(
+            doc = "JSON-encoded slimmed per-member lock manifest from slim_member_lock().",
+            mandatory = True,
+        ),
         "workspace_repo": attr.string(
             mandatory = True,
             doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",

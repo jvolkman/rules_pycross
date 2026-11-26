@@ -10,13 +10,22 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "merge_dependencies_for_testing")
+load("//pycross/private:lock_contract.bzl", "is_extras_proxy")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "slim_member_lock")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing", "select_hook_extract_patterns_for_testing")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "is_wheel_platform_specific")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_file.bzl", "render_wheel_file_build_for_testing")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/thin_repo:availability.bzl", "availability_condition")
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -250,41 +259,93 @@ def _test_wheel_file_build_metadata_paths(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_file_build_metadata_paths_impl)
 
-# ── Test: package_repo _merge_dependencies merges all path fields ────
+# ── Test: merge_workspace_locks and slim_member_lock ────────────────
 
 # buildifier: disable=unused-variable
 def _test_merge_dependencies_paths_impl(env, target):
-    """merge_dependencies_for_testing must merge site_paths, bin_paths, data_paths, include_paths."""
-    entry_a = ("member_a", {"site_paths": ["foo"]})
-    entry_b = ("member_b", {
-        "bin_paths": ["foo-bin"],
-        "data_paths": ["foo-data"],
-        "include_paths": ["foo-inc"],
-        "availability_markers": ["sys_platform == 'linux'"],
-    })
-    entry_c = ("member_c", {
-        "availability_markers": ["sys_platform == 'darwin'", "sys_platform == 'linux'"],
-    })
-    merged = merge_dependencies_for_testing(entry_a[1], [entry_a, entry_b, entry_c])
-    env.expect.that_collection(merged.get("site_paths", [])).contains_exactly(["foo"])
-    env.expect.that_collection(merged.get("bin_paths", [])).contains_exactly(["foo-bin"])
-    env.expect.that_collection(merged.get("data_paths", [])).contains_exactly(["foo-data"])
-    env.expect.that_collection(merged.get("include_paths", [])).contains_exactly(["foo-inc"])
-    env.expect.that_collection(merged.get("availability_markers", [])).contains_exactly([
+    """merge_workspace_locks merges path/marker/artifact fields once and slim_member_lock keeps thin repos in sync."""
+    lock_a = {
+        "packages": {
+            "foo@1.0": {
+                "site_paths": ["foo"],
+                "wheel_candidates": [{"filename": "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+                "availability_markers": ["sys_platform == 'linux'"],
+            },
+            "foo[extra]@1.0": {
+                "cycle_group": "cycle_0",
+                "marker_dependencies": [{"key": "dep@1.0"}],
+            },
+            "foo[x]@1.0": {
+                "wheel_candidates": [{"filename": "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+            },
+            "plat@1.0": {
+                "wheel_candidates": [{"filename": "plat-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+            },
+        },
+        "pins": {"foo": "foo@1.0", "foo[extra]": "foo[extra]@1.0", "foo[x]": "foo[x]@1.0", "plat": "plat@1.0"},
+        "variants": [{"items": [{"kind": "extra", "package": "app", "name": "cpu", "flags": ["extra_cpu"]}]}],
+    }
+    lock_b = {
+        "packages": {
+            "foo@1.0": {
+                "bin_paths": ["foo-bin"],
+                "data_paths": ["foo-data"],
+                "include_paths": ["foo-inc"],
+                "sdist_file": {"key": "foo_sdist"},
+                "wheel_candidates": [{"filename": "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+                "availability_markers": ["sys_platform == 'darwin'", "sys_platform == 'linux'"],
+            },
+        },
+        "pins": {"foo": "foo@1.0"},
+        "variants": [{"items": [{"kind": "extra", "package": "app", "name": "cpu", "flags": ["extra_cpu"]}]}],
+    }
+    merged = merge_workspace_locks(
+        [("member_a", lock_a), ("member_b", lock_b)],
+        skip_variant_members = ["member_b"],
+    )
+    merged_foo = merged["packages"]["foo@1.0"]
+    env.expect.that_collection(merged_foo.get("site_paths", [])).contains_exactly(["foo"])
+    env.expect.that_collection(merged_foo.get("bin_paths", [])).contains_exactly(["foo-bin"])
+    env.expect.that_collection(merged_foo.get("data_paths", [])).contains_exactly(["foo-data"])
+    env.expect.that_collection(merged_foo.get("include_paths", [])).contains_exactly(["foo-inc"])
+    env.expect.that_collection(merged_foo.get("availability_markers", [])).contains_exactly([
         "sys_platform == 'darwin'",
         "sys_platform == 'linux'",
     ]).in_order()
+    env.expect.that_bool("member_a" in merged.get("member_variant_flags", {})).equals(True)
+    env.expect.that_bool("member_b" in merged.get("member_variant_flags", {})).equals(False)
 
-    # When one member is wheel-only platform-specific and another provides an sdist,
-    # emit_unconditional_wheel_available ensures the wheel-only member's thin repo
-    # still resolves @ws//_lock:_wheel_available_<pkg>.
-    wheel_only = ("member_a", {"wheel_candidates": [{"filename": "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}]})
-    with_sdist = ("member_b", {
-        "wheel_candidates": [{"filename": "foo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
-        "sdist_file": {"key": "foo_sdist"},
-    })
-    merged_sdist = merge_dependencies_for_testing(wheel_only[1], [wheel_only, with_sdist])
-    env.expect.that_bool(merged_sdist.get("emit_unconditional_wheel_available", False)).equals(True)
+    # Slimming against merged_packages keeps wheel_platform_specific in sync with package_repo
+    # (member_a was wheel-only, but member_b supplied an sdist) while keeping availability_markers
+    # strictly per-member.
+    slim_a = slim_member_lock(lock_a, merged["packages"])
+    slim_foo = slim_a["packages"]["foo@1.0"]
+    env.expect.that_bool(is_wheel_platform_specific(slim_foo)).equals(False)
+    env.expect.that_bool(bool(slim_foo.get("sdist_file"))).equals(True)
+    env.expect.that_collection(slim_foo.get("availability_markers", [])).contains_exactly([
+        "sys_platform == 'linux'",
+    ])
+
+    # Wheel-only platform-specific package with no sdist in any member stays wheel_platform_specific.
+    slim_plat = slim_a["packages"]["plat@1.0"]
+    env.expect.that_bool(is_wheel_platform_specific(slim_plat)).equals(True)
+    env.expect.that_bool(bool(slim_plat.get("sdist_file"))).equals(False)
+
+    # Extras proxy keys are retained with cycle_group and still classify as extras proxies.
+    slim_extra = slim_a["packages"]["foo[extra]@1.0"]
+    env.expect.that_bool(is_extras_proxy("foo[extra]@1.0", slim_extra)).equals(True)
+    env.expect.that_bool("extras_proxy" in slim_extra).equals(False)
+    env.expect.that_str(slim_extra.get("cycle_group", "")).equals("cycle_0")
+
+    # Extras key with its own platform-specific wheel_candidates (e.g. local wheel)
+    # must not be misclassified as an extras proxy delegating to the base package.
+    slim_extra_whl = slim_a["packages"]["foo[x]@1.0"]
+    env.expect.that_bool(is_extras_proxy("foo[x]@1.0", slim_extra_whl)).equals(False)
+    env.expect.that_bool(is_wheel_platform_specific(slim_extra_whl)).equals(True)
+    avail_lines = []
+    avail_cond = availability_condition(avail_lines, "_maybe", "foo[x]@1.0", slim_a["packages"], "ws")
+    env.expect.that_str(avail_cond).equals("@ws//_lock:_wheel_available_foo[x]@1.0")
+    env.expect.that_collection(avail_lines).contains_exactly([])
 
 def _test_merge_dependencies_paths(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

@@ -1,5 +1,4 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
 load(":target_platform.bzl", "pycross_target_platform")
@@ -37,33 +36,6 @@ config_setting(
     constraint_values = [
         "@platforms//os:windows",
         "@platforms//cpu:aarch64",
-    ],
-)
-
-config_setting(
-    name = "_always_true_fastbuild",
-    values = {"compilation_mode": "fastbuild"},
-    visibility = ["//visibility:private"],
-)
-
-config_setting(
-    name = "_always_true_dbg",
-    values = {"compilation_mode": "dbg"},
-    visibility = ["//visibility:private"],
-)
-
-config_setting(
-    name = "_always_true_opt",
-    values = {"compilation_mode": "opt"},
-    visibility = ["//visibility:private"],
-)
-
-selects.config_setting_group(
-    name = "always_true",
-    match_any = [
-        ":_always_true_fastbuild",
-        ":_always_true_dbg",
-        ":_always_true_opt",
     ],
 )
 
@@ -478,7 +450,6 @@ bzl_library(
     name = "format_extension",
     srcs = ["format_extension.bzl"],
     deps = [
-        ":json_file_repo",
         ":lock_common",
         ":lock_repo_creation",
         ":lock_resolver",
@@ -556,11 +527,6 @@ bzl_library(
 bzl_library(
     name = "dist_info",
     srcs = ["dist_info.bzl"],
-)
-
-bzl_library(
-    name = "json_file_repo",
-    srcs = ["json_file_repo.bzl"],
 )
 
 bzl_library(

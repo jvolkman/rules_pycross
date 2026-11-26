@@ -19,11 +19,13 @@ load(
 # buildifier: disable=bzl-visibility
 load(
     "//pycross/private:lock_repo_creation.bzl",
-    "compute_workspace_pkg_has_deps_for_testing",
     "extra_build_tool_names_for_testing",
     "known_packages_from_lock_for_testing",
     "remote_file_dedup_key_and_repo_name_for_testing",
 )
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:package_repo.bzl", "merge_workspace_locks")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "canonicalize_package_key", "parse_flag_arg")
@@ -72,38 +74,35 @@ def _test_remote_file_dedup_key_and_repo_name(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_remote_file_dedup_key_and_repo_name_impl)
 
 # buildifier: disable=unused-variable
-def _test_compute_workspace_pkg_has_deps_impl(env, target):
-    """Multi-member workspaces record a package as having deps if any member lists marker_dependencies."""
-    all_resolved_locks = {
-        "ws__build": {
+def _test_merge_workspace_locks_marker_deps_impl(env, target):
+    """Multi-member merge retains marker_dependencies if any member lists them."""
+    ws_merged = merge_workspace_locks([
+        ("ws__build", {
             "packages": {
                 "pkg@1.0": {"marker_dependencies": []},
                 "empty@1.0": {},
             },
-        },
-        "ws_app": {
+        }),
+        ("ws_app", {
             "packages": {
                 "pkg@1.0": {"marker_dependencies": [{"key": "dep@1.0"}]},
             },
-        },
-        "other_ws": {
+        }),
+    ])
+    other_merged = merge_workspace_locks([
+        ("other_ws", {
             "packages": {
                 "pkg@1.0": {"marker_dependencies": []},
             },
-        },
-    }
-    workspaces = {
-        "ws": struct(repos = [struct(name = "ws__build"), struct(name = "ws_app")]),
-        "other_ws": struct(repos = [struct(name = "other_ws")]),
-    }
-    res = compute_workspace_pkg_has_deps_for_testing(workspaces, all_resolved_locks)
-    env.expect.that_bool(("ws", "pkg@1.0") in res).equals(True)
-    env.expect.that_bool(("ws", "empty@1.0") in res).equals(False)
-    env.expect.that_bool(("other_ws", "pkg@1.0") in res).equals(False)
+        }),
+    ])
+    env.expect.that_bool(bool(ws_merged["packages"]["pkg@1.0"].get("marker_dependencies"))).equals(True)
+    env.expect.that_bool(bool(ws_merged["packages"]["empty@1.0"].get("marker_dependencies"))).equals(False)
+    env.expect.that_bool(bool(other_merged["packages"]["pkg@1.0"].get("marker_dependencies"))).equals(False)
 
-def _test_compute_workspace_pkg_has_deps(name):
+def _test_merge_workspace_locks_marker_deps(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_compute_workspace_pkg_has_deps_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_merge_workspace_locks_marker_deps_impl)
 
 # buildifier: disable=unused-variable
 def _test_known_packages_from_lock_impl(env, target):
@@ -200,7 +199,7 @@ def lock_repo_creation_test_suite(name):
         name = name,
         tests = [
             _test_remote_file_dedup_key_and_repo_name,
-            _test_compute_workspace_pkg_has_deps,
+            _test_merge_workspace_locks_marker_deps,
             _test_known_packages_from_lock,
             _test_lock_contract_and_helpers,
             _test_lock_contract_rejects_empty_workspace_repo,

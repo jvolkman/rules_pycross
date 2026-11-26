@@ -60,10 +60,10 @@ def _backend_tool_deps_labels(tool_packages, packages, build_repo):
 # Visible for testing
 backend_tool_deps_labels_for_testing = _backend_tool_deps_labels
 
-def _merge_dependencies(first_data, entries):
-    merged = dict(first_data)
+def _merge_package_entries(entries):
+    merged = dict(entries[0])
 
-    for _, pkg_data in entries[1:]:
+    for pkg_data in entries[1:]:
         for field in ("site_paths", "bin_paths", "data_paths", "include_paths", "sdist_file"):
             if not merged.get(field) and pkg_data.get(field):
                 merged[field] = pkg_data[field]
@@ -72,7 +72,7 @@ def _merge_dependencies(first_data, entries):
     seen_marker_deps = {}  # (key, marker) -> entry
     for md in merged.get("marker_dependencies", []):
         seen_marker_deps[(md["key"], md.get("marker"))] = md
-    for _, pkg_data in entries[1:]:
+    for pkg_data in entries[1:]:
         for md in pkg_data.get("marker_dependencies", []):
             dedupe_key = (md["key"], md.get("marker"))
             if dedupe_key not in seen_marker_deps:
@@ -83,7 +83,7 @@ def _merge_dependencies(first_data, entries):
     seen_candidates = {}  # filename -> entry
     for wc in merged.get("wheel_candidates", []):
         seen_candidates[wc["filename"]] = wc
-    for _, pkg_data in entries[1:]:
+    for pkg_data in entries[1:]:
         for wc in pkg_data.get("wheel_candidates", []):
             if wc["filename"] not in seen_candidates:
                 seen_candidates[wc["filename"]] = wc
@@ -92,23 +92,139 @@ def _merge_dependencies(first_data, entries):
     # Merge availability_markers: union across workspace members so _lock emits
     # marker evaluators for every member's conditional root dependencies.
     seen_avail = {m: True for m in merged.get("availability_markers", [])}
-    for _, pkg_data in entries[1:]:
+    for pkg_data in entries[1:]:
         for m in pkg_data.get("availability_markers", []):
             seen_avail[m] = True
     if seen_avail:
         merged["availability_markers"] = sorted(seen_avail.keys())
 
-    # If any member considers this package wheel-only platform-specific while
-    # the merged package has an sdist or universal wheel fallback from another
-    # member, ensure _lock still emits an unconditional _wheel_available_<pkg>
-    # target so that member's thin repo never references a missing label.
-    if not is_wheel_platform_specific(merged) and any([is_wheel_platform_specific(d) for _, d in entries]):
-        merged["emit_unconditional_wheel_available"] = True
-
     return merged
 
-# Visible for testing
-merge_dependencies_for_testing = _merge_dependencies
+def merge_workspace_locks(member_locks, skip_variant_members = None):
+    """Merge per-member resolved locks into a single workspace lock payload.
+
+    Args:
+        member_locks: Ordered list of `(member_name, lock_dict)` pairs or a dict
+            `{member_name: lock_dict}` preserving workspace repo order.
+        skip_variant_members: Optional collection of member repo names whose
+            `_variants` flags should not be wired into workspace resolvers or
+            `reset.bzl` (e.g. auto-generated `<ws>__build`).
+
+    Returns:
+        Dict with `"packages"` and optional non-empty `"cycle_groups"`,
+        `"resolution_marker_exprs"`, `"variant_items"`, `"variant_sets"`, and
+        `"member_variant_flags"`.
+    """
+    items = member_locks.items() if type(member_locks) == "dict" else member_locks
+    skip_set = {m: True for m in (skip_variant_members or [])}
+
+    all_pkg_keys = {}  # pkg_key -> [pkg_data, ...]
+    cycle_groups = {}  # group_name -> [pkg_key, ...]
+    resolution_marker_exprs = {}  # constraint_name -> marker_expr or compound dict
+    variant_items = {}  # qualified_name -> True (dedup across members)
+    variant_sets = []  # list of {"qnames": [...], "flags": {flag label: [qnames]}, "member_flags": {member: {flag: [qnames]}}}
+    variant_sets_seen = {}  # sorted qnames key -> variant set (dedup across members)
+    member_variant_flags = {}  # member -> {flag_name: True} (all valid flags for that member)
+
+    for member, member_lock in items:
+        skip_member_variants = member in skip_set
+        for variant_set in member_lock.get("variants", []):
+            set_qnames = []
+            set_flags = {}  # "@<member>//_variants:<flag>" -> [qnames]
+            set_member_flags = {}  # flag -> [qnames]
+            for item in variant_set["items"]:
+                qname = variant_item_qname(item)
+                variant_items[qname] = True
+                set_qnames.append(qname)
+                if not skip_member_variants:
+                    for flag in item.get("flags", []):
+                        set_flags.setdefault(variants_flag_label(member, flag), []).append(qname)
+                        set_member_flags.setdefault(flag, []).append(qname)
+                        member_variant_flags.setdefault(member, {})[flag] = True
+            set_key = "|".join(sorted(set_qnames))
+            if set_key not in variant_sets_seen:
+                variant_sets_seen[set_key] = {"qnames": set_qnames, "flags": {}, "member_flags": {}}
+                variant_sets.append(variant_sets_seen[set_key])
+            variant_sets_seen[set_key]["flags"].update(set_flags)
+            if set_member_flags:
+                variant_sets_seen[set_key]["member_flags"][member] = set_member_flags
+
+        for pkg_key, pkg_data in member_lock.get("packages", {}).items():
+            all_pkg_keys.setdefault(pkg_key, []).append(pkg_data)
+
+        # Merge cycle groups (union across members).
+        for group_name, group_members in member_lock.get("cycle_groups", {}).items():
+            if group_name in cycle_groups and sorted(cycle_groups[group_name]) != sorted(group_members):
+                fail("Cycle group {} conflicts between workspace members ({} vs {})".format(group_name, cycle_groups[group_name], group_members))
+            cycle_groups[group_name] = group_members
+
+        # Merge resolution-marker expressions (union across members).
+        for cname, expr in member_lock.get("resolution_marker_exprs", {}).items():
+            if cname in resolution_marker_exprs and resolution_marker_exprs[cname] != expr:
+                fail("Resolution marker '{}' conflicts between workspace members ({} vs {})".format(cname, resolution_marker_exprs[cname], expr))
+            resolution_marker_exprs[cname] = expr
+
+    packages = {}
+    for pkg_key, entries in all_pkg_keys.items():
+        if len(entries) <= 1:
+            packages[pkg_key] = dict(entries[0])
+        else:
+            packages[pkg_key] = _merge_package_entries(entries)
+
+    result = {"packages": packages}
+    if cycle_groups:
+        result["cycle_groups"] = cycle_groups
+    if resolution_marker_exprs:
+        result["resolution_marker_exprs"] = resolution_marker_exprs
+    if variant_items:
+        result["variant_items"] = variant_items
+    if variant_sets:
+        result["variant_sets"] = variant_sets
+    if member_variant_flags:
+        result["member_variant_flags"] = member_variant_flags
+    return result
+
+def slim_member_lock(member_lock, merged_packages):
+    """Build the minimal per-member manifest needed by `thin_package_repo`.
+
+    Keeps the exact package keys present in `member_lock` (preserving
+    `base_packages_with_extras` per member) while resolving shared wheel/sdist
+    and cycle metadata against `merged_packages` so thin repos and
+    `package_repo` never disagree. `availability_markers` remain strictly
+    per-member.
+
+    Args:
+        member_lock: Resolved lock dict for one workspace member.
+        merged_packages: Merged `"packages"` dict from `merge_workspace_locks`.
+
+    Returns:
+        Slimmed dict suitable for `json.encode()` into `thin_package_repo.lock_data`.
+    """
+    slim_packages = {}
+    for pkg_key, member_pkg in member_lock.get("packages", {}).items():
+        merged_pkg = merged_packages.get(pkg_key, member_pkg)
+        slim_pkg = {}
+        if is_wheel_platform_specific(merged_pkg):
+            slim_pkg["wheel_platform_specific"] = True
+        if parse_package_key(pkg_key).extra and merged_pkg.get("wheel_candidates"):
+            slim_pkg["extras_proxy"] = False
+        if merged_pkg.get("sdist_file"):
+            slim_pkg["sdist_file"] = True
+        if merged_pkg.get("cycle_group"):
+            slim_pkg["cycle_group"] = merged_pkg["cycle_group"]
+        if member_pkg.get("availability_markers"):
+            slim_pkg["availability_markers"] = member_pkg["availability_markers"]
+        slim_packages[pkg_key] = slim_pkg
+
+    slim = {
+        "packages": slim_packages,
+        "pins": member_lock.get("pins", {}),
+    }
+    for key in ("variants", "resolution_marker_exprs", "testonly_pins"):
+        val = member_lock.get(key)
+        if val:
+            slim[key] = val
+    return slim
 
 def _normalize_workspace_variants(variant_sets):
     """Normalize deduplicated workspace variant sets once for lock rendering.
@@ -306,73 +422,13 @@ def _run_package_repo_hooks(hooks, packages_info, override_configs):
 run_package_repo_hooks_for_testing = _run_package_repo_hooks
 
 def _package_repo_impl(rctx):
-    # Workspace repos always have member_lock_files — even single-lock repos
-    # are wrapped in a workspace with one member.
-    packages = {}
-
-    # First pass: collect per-member package data, environment names, and cycle groups.
-    member_packages = {}  # member_name -> {pkg_key -> pkg_data}
-    cycle_groups = {}  # group_name -> [pkg_key, ...]
-    resolution_marker_exprs = {}  # constraint_name -> marker_expr or compound dict
-    variant_items = {}  # qualified_name -> True (dedup across members)
-    variant_sets = []  # list of {"qnames": [...], "flags": {flag label: [qnames]}, "member_flags": {member: {flag: [qnames]}}}
-    variant_sets_seen = {}  # sorted qnames key -> variant set (dedup across members)
-    member_variant_flags = {}  # member -> {flag_name: True} (all valid flags for that member)
-    skip_variant_members = {m: True for m in rctx.attr.skip_variant_members}
-    for member in rctx.attr.member_lock_files.keys():
-        if member in rctx.attr.member_lock_data:
-            member_lock = json.decode(rctx.attr.member_lock_data[member])
-        else:
-            lock_label = rctx.attr.member_lock_files[member]
-            member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
-
-        skip_member_variants = member in skip_variant_members
-        for variant_set in member_lock.get("variants", []):
-            set_qnames = []
-            set_flags = {}  # "@<member>//_variants:<flag>" -> [qnames]
-            set_member_flags = {}  # flag -> [qnames]
-            for item in variant_set["items"]:
-                qname = variant_item_qname(item)
-                variant_items[qname] = True
-                set_qnames.append(qname)
-                if not skip_member_variants:
-                    for flag in item.get("flags", []):
-                        set_flags.setdefault(variants_flag_label(member, flag), []).append(qname)
-                        set_member_flags.setdefault(flag, []).append(qname)
-                        member_variant_flags.setdefault(member, {})[flag] = True
-            set_key = "|".join(sorted(set_qnames))
-            if set_key not in variant_sets_seen:
-                variant_sets_seen[set_key] = {"qnames": set_qnames, "flags": {}, "member_flags": {}}
-                variant_sets.append(variant_sets_seen[set_key])
-            variant_sets_seen[set_key]["flags"].update(set_flags)
-            if set_member_flags:
-                variant_sets_seen[set_key]["member_flags"][member] = set_member_flags
-
-        member_packages[member] = member_lock.get("packages", {})
-
-        # Merge cycle groups (union across members).
-        for group_name, group_members in member_lock.get("cycle_groups", {}).items():
-            if group_name in cycle_groups and sorted(cycle_groups[group_name]) != sorted(group_members):
-                fail("Cycle group {} conflicts between workspace members ({} vs {})".format(group_name, cycle_groups[group_name], group_members))
-            cycle_groups[group_name] = group_members
-
-        # Merge resolution-marker expressions (union across members).
-        for cname, expr in member_lock.get("resolution_marker_exprs", {}).items():
-            if cname in resolution_marker_exprs and resolution_marker_exprs[cname] != expr:
-                fail("Resolution marker '{}' conflicts between workspace members ({} vs {})".format(cname, resolution_marker_exprs[cname], expr))
-            resolution_marker_exprs[cname] = expr
-
-    # Second pass: build merged package set across workspace members.
-    all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
-    for member, pkgs in member_packages.items():
-        for pkg_key, pkg_data in pkgs.items():
-            all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
-
-    for pkg_key, entries in all_pkg_keys.items():
-        if len(entries) <= 1:
-            packages[pkg_key] = dict(entries[0][1])
-            continue
-        packages[pkg_key] = _merge_dependencies(entries[0][1], entries)
+    merged = json.decode(rctx.attr.lock_data)
+    packages = merged.get("packages", {})
+    cycle_groups = merged.get("cycle_groups", {})
+    resolution_marker_exprs = merged.get("resolution_marker_exprs", {})
+    variant_items = merged.get("variant_items", {})
+    variant_sets = merged.get("variant_sets", [])
+    member_variant_flags = merged.get("member_variant_flags", {})
 
     # Workspace repos have no pins — each thin repo has its own.
     lock = {
@@ -540,19 +596,12 @@ package_repo = repository_rule(
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),
-        "member_lock_files": attr.string_dict(
-            doc = "Maps member repo names to their resolved lock file labels.",
+        "lock_data": attr.string(
+            doc = "JSON-encoded merged workspace lock payload from merge_workspace_locks().",
             mandatory = True,
-        ),
-        "member_lock_data": attr.string_dict(
-            doc = "Maps member repo names to their lock JSON content directly. When set, bypasses file reads for those members.",
         ),
         "override_configs": attr.string(
             doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",
-        ),
-        "skip_variant_members": attr.string_list(
-            doc = "Member repo names whose `_variants` flags should not be wired into workspace resolvers or reset.bzl (e.g. auto-generated `<ws>__build`).",
-            default = [],
         ),
     },
 )
