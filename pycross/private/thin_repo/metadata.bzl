@@ -83,44 +83,6 @@ def requirements_bzl(rctx, pins, packages, testonly_pins = {}):
     lines.append("]")
     return "\n".join(lines) + "\n"
 
-def packages_bzl(grouped_pins, packages):
-    """Render `_packages.bzl` metadata for all packages in a thin repo.
-
-    Args:
-        grouped_pins: Dict of base pin name -> `{"base_target", "extras"}`.
-        packages: Lock packages dict.
-
-    Returns:
-        Generated `_packages.bzl` file content.
-    """
-    packages_lines = [
-        '"""Generated package metadata. Do not edit."""',
-        "",
-        "PACKAGES = {",
-    ]
-    for base_pin_name in sorted(grouped_pins.keys()):
-        group = grouped_pins[base_pin_name]
-        us_name = underscore_name(base_pin_name)
-
-        base_target_dict = effective_base_target_dict(group)
-        has_sdist = False
-        if base_target_dict:
-            for pkg_key in base_target_dict.values():
-                if packages.get(pkg_key, {}).get("sdist_file"):
-                    has_sdist = True
-                    break
-
-        packages_lines.extend([
-            '    "{}": struct('.format(us_name),
-            "        has_sdist = {},".format(has_sdist),
-            "    ),",
-        ])
-    packages_lines.extend([
-        "}",
-        "",
-    ])
-    return "\n".join(packages_lines)
-
 def emit_backend_files(rctx, backend_configs, workspace_repo):
     """Generate `_backend/BUILD.bazel` and forwarding macro `.bzl` files.
 

@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
+load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl", "render_lock_bzl_with_meta", "render_reset_bzl")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "marker_evaluator_name", "sanitize_name")
@@ -1754,11 +1754,41 @@ def _test_sdist_deps_proxy_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_sdist_deps_proxy_rendering_impl)
 
+# buildifier: disable=unused-variable
+def _test_render_lock_with_meta_has_reset_impl(env, target):
+    """render_lock_bzl_with_meta.has_reset tracks whether :reset.bzl is loaded."""
+    conflict_sets = [["extra_a", "extra_b"]]
+
+    # Conflict sets present, but only an sdist-only package: nothing resets.
+    sdist_only = render_lock_bzl_with_meta(
+        {"packages": {"src@1.0": {"sdist_file": {"key": "src_sdist"}}}},
+        {"src_sdist": "@r//src:sdist"},
+        "ws__pkgs",
+        reset_conflict_sets = conflict_sets,
+    )
+    env.expect.that_bool(sdist_only.has_reset).equals(False)
+    env.expect.that_bool('load(":reset.bzl"' in sdist_only.content).equals(False)
+
+    # Conflict sets present with a resettable wheel package: :reset.bzl is loaded.
+    with_wheel = render_lock_bzl_with_meta(
+        {"packages": {"leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]}}},
+        {"leaf_whl": "@r//leaf:wheel"},
+        "ws__pkgs",
+        reset_conflict_sets = conflict_sets,
+    )
+    env.expect.that_bool(with_wheel.has_reset).equals(True)
+    env.expect.that_str(with_wheel.content).contains('load(":reset.bzl", "pycross_resettable_wheel_library")')
+
+def _test_render_lock_with_meta_has_reset(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_render_lock_with_meta_has_reset_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_render_lock,
+            _test_render_lock_with_meta_has_reset,
             _test_reset_plan,
             _test_reset_cycles,
             _test_reset_gates,

@@ -23,7 +23,7 @@ variant_state(
         "@golden_sdist_reset//_variants:extra_gpu": "@golden_sdist_reset//_variants:extra_gpu|extra_app_gpu",
     },
     string_flags = {
-        "@golden_sdist_reset//_variants:_variants": "{\"display\":\"@golden_sdist_reset//_variants\",\"map\":{\"extra_cpu\":[\"extra_app_cpu\"],\"extra_gpu\":[\"extra_app_gpu\"]},\"valid\":[\"extra_cpu\",\"extra_gpu\"]}",
+        "@golden_sdist_reset//_variants:_variants": "{\"display\":\"@golden_sdist_reset//_variants\",\"map\":{\"extra_cpu\":[\"extra_app_cpu\"],\"extra_gpu\":[\"extra_app_gpu\"]}}",
     },
 )
 

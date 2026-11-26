@@ -26,7 +26,6 @@ def _index_ext_impl(mctx):
     pycross_wheel_file(
         name = "wheel_html_fallback",
         indexes = [missing, mismatch, html],
-        package_version = "6.1",
         **common
     )
     pypi_file(

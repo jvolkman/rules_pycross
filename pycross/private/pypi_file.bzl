@@ -1,6 +1,6 @@
 """Rule to download files from pypi."""
 
-load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "update_attrs", "use_netrc")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_netrc")
 load("@pypackaging.bzl", "pypackaging")
 load(":util.bzl", "url_filename")
 
@@ -233,7 +233,7 @@ def find_simple_index_file(content, page_url, filename, sha256):
         return struct(url = None, reason = "listed with sha256 {}, expected {}".format(mismatch, sha256))
     return struct(url = None, reason = "file not listed")
 
-def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256, keep_metadata = False):
+def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256):
     """Resolves the URL of a file through the Simple Repository API.
 
     Each index is tried in order until one lists `filename`.
@@ -245,7 +245,6 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256, keep
         package_name: The name of the package.
         filename: The filename to find.
         sha256: The expected sha256 of the file.
-        keep_metadata: Whether to keep the downloaded index pages.
 
     Returns:
         The URL to the file.
@@ -273,11 +272,9 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256, keep
             continue
 
         found = find_simple_index_file(rctx.read(output), page_url, filename, sha256)
-        if not keep_metadata:
-            rctx.delete(output)
+        rctx.delete(output)
         if found.url:
-            if not keep_metadata:
-                rctx.delete("simple_index")
+            rctx.delete("simple_index")
             return found.url
         tried.append("{}: {}".format(index_url, found.reason))
 
@@ -302,10 +299,9 @@ def _pypi_file_impl(ctx):
         ctx.attr.package_name,
         ctx.attr.filename,
         ctx.attr.sha256,
-        keep_metadata = ctx.attr.keep_metadata,
     )
 
-    download_info = ctx.download(
+    ctx.download(
         url,
         "file/" + ctx.attr.filename,
         ctx.attr.sha256,
@@ -313,16 +309,12 @@ def _pypi_file_impl(ctx):
     )
     ctx.file("file/BUILD.bazel", _PYPI_FILE_BUILD.format(ctx.attr.filename))
 
-    attrs = update_attrs(ctx.attr, _pypi_file_attrs.keys(), {"sha256": download_info.sha256})
-
     if not hasattr(ctx, "repo_metadata"):
-        return attrs
+        return None
 
     # sha256 is mandatory, so the downloaded file is pinned and the generated
-    # BUILD file depends only on attrs. keep_metadata is the exception: it
-    # retains the live index pages, which change as new releases are
-    # published, so those repos stay non-reproducible.
-    return ctx.repo_metadata(reproducible = not ctx.attr.keep_metadata)
+    # BUILD file depends only on attrs.
+    return ctx.repo_metadata(reproducible = True)
 
 _pypi_file_attrs = {
     "sha256": attr.string(
@@ -340,9 +332,6 @@ _pypi_file_attrs = {
     "filename": attr.string(
         doc = "The name of the file to download.",
         mandatory = True,
-    ),
-    "keep_metadata": attr.bool(
-        doc = "Whether to keep the downloaded index pages (under simple_index/) for debugging.",
     ),
 }
 

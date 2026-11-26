@@ -176,8 +176,6 @@ def _test_extra_build_tools_auto_backend_impl(env, target):
             "build_requires": ["setuptools>=61", "wheel"],
             "site_paths": ["foo_pkg"],
             "bin_paths": ["foo_cli"],
-            "data_paths": ["share"],
-            "include_paths": ["foo.h"],
         },
     )
     env.expect.that_str(cfg.backend_macro).equals("setuptools_build")
@@ -188,8 +186,6 @@ def _test_extra_build_tools_auto_backend_impl(env, target):
     ])
     env.expect.that_collection(cfg.site_paths).contains_exactly(["foo_pkg"])
     env.expect.that_collection(cfg.bin_paths).contains_exactly(["foo_cli"])
-    env.expect.that_collection(cfg.data_paths).contains_exactly(["share"])
-    env.expect.that_collection(cfg.include_paths).contains_exactly(["foo.h"])
 
 def _test_extra_build_tools_auto_backend(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -212,8 +208,6 @@ def _test_explicit_build_backend_preserves_inspection_impl(env, target):
             "build_requires": ["setuptools>=61", "wheel"],
             "site_paths": ["foo_pkg"],
             "bin_paths": ["foo_cli"],
-            "data_paths": ["share"],
-            "include_paths": ["foo.h"],
         },
     )
     env.expect.that_str(cfg.backend_macro).equals("pep517_build")
@@ -228,8 +222,6 @@ def _test_explicit_build_backend_preserves_inspection_impl(env, target):
     ])
     env.expect.that_collection(cfg.site_paths).contains_exactly(["foo_pkg"])
     env.expect.that_collection(cfg.bin_paths).contains_exactly(["foo_cli"])
-    env.expect.that_collection(cfg.data_paths).contains_exactly(["share"])
-    env.expect.that_collection(cfg.include_paths).contains_exactly(["foo.h"])
 
 def _test_explicit_build_backend_preserves_inspection(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -242,8 +234,6 @@ def _test_wheel_file_build_metadata_paths_impl(env, target):
     """render_wheel_file_build_for_testing must emit site_paths, bin_paths, data_paths, include_paths."""
     rendered = render_wheel_file_build_for_testing(
         filename = "foo-1.0.0-py3-none-any.whl",
-        package_name = "foo",
-        package_version = "1.0.0",
         inspection_data = {
             "site_paths": ["foo"],
             "bin_paths": ["foo-cli"],

@@ -50,7 +50,6 @@ py_binary(
 py_binary(
     name = "extract_wheel_bin",
     srcs = ["extract_wheel_bin.py"],
-    imports = ["../../.."],
     visibility = ["//visibility:public"],
 )
 

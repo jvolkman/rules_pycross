@@ -20,7 +20,7 @@ pycross_transitioning_file_proxy(
     platform = "//:_internal_platform",
 )
 
-exports_files(["requirements.bzl", "_packages.bzl"])
+exports_files(["requirements.bzl"])
 
 pycross_modules_mapping(
     name = "_modules_mapping",

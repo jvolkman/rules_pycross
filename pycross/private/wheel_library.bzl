@@ -470,8 +470,8 @@ def _pycross_wheel_metadata_impl(ctx):
     return [
         DefaultInfo(files = depset(ctx.files.wheel)),
         PycrossPackageInfo(
-            package_name = ctx.attr.package_name,
-            package_version = ctx.attr.package_version,
+            package_name = "",
+            package_version = "",
             site_paths = ctx.attr.site_paths,
             site_paths_exact = ctx.attr.site_paths_exact,
             bin_paths = ctx.attr.bin_paths,
@@ -490,8 +490,6 @@ pycross_wheel_metadata = rule(
             allow_files = True,
             mandatory = True,
         ),
-        "package_name": attr.string(doc = "The normalized package name."),
-        "package_version": attr.string(doc = "The package version."),
         "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
         "site_paths_exact": attr.bool(
             default = True,

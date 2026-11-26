@@ -131,7 +131,7 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
     # When the select touches a conflict set, also add an explicit
     # _unselected_<set> condition -> _no_variant_<set> so unselected variants fail
     # clearly while platform-incompatible selected variants still fall through to default.
-    # Variant defaults come from this repo's transition (`_default_<set>`), not from
+    # Variant defaults come from this repo's transition (`d:<set>` in `//_lock:_state`), not from
     # //conditions:default.
     default_target = None
     unselected_groups = {}

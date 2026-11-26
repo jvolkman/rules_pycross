@@ -14,8 +14,6 @@ exports_files(["inspection.json"])
 pycross_wheel_metadata(
     name = "wheel",
     wheel = "{filename}",
-    package_name = "{package_name}",
-    package_version = "{package_version}",
     site_paths = {site_paths},
     bin_paths = {bin_paths},
     data_paths = {data_paths},
@@ -23,11 +21,9 @@ pycross_wheel_metadata(
 )
 """
 
-def _render_wheel_file_build(filename, package_name, package_version, inspection_data):
+def _render_wheel_file_build(filename, inspection_data):
     return _BUILD_TEMPLATE.format(
         filename = filename,
-        package_name = package_name or "",
-        package_version = package_version or "",
         site_paths = inspection_data.get("site_paths", []),
         bin_paths = inspection_data.get("bin_paths", []),
         data_paths = inspection_data.get("data_paths", []),
@@ -71,8 +67,6 @@ def _pycross_wheel_file_impl(rctx):
 
     rctx.file("BUILD.bazel", _render_wheel_file_build(
         filename = rctx.attr.filename,
-        package_name = rctx.attr.package_name,
-        package_version = rctx.attr.package_version,
         inspection_data = inspection_data,
     ))
 
@@ -94,7 +88,6 @@ pycross_wheel_file = repository_rule(
         "sha256": attr.string(mandatory = True),
         "filename": attr.string(mandatory = True, doc = "The wheel filename."),
         "package_name": attr.string(doc = "Package name (required for index lookup)."),
-        "package_version": attr.string(doc = "Package version."),
         "indexes": attr.string_list(default = [DEFAULT_INDEX], doc = "Simple Repository API index URLs, tried in order."),
         "_inspect_tool": attr.label(default = "//pycross/private/tools:inspect_package.py"),
     },

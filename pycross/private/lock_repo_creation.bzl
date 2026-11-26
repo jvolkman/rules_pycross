@@ -132,7 +132,6 @@ def _create_remote_file_repo(remote_file_repo, file, indexes):
     elif indexes:
         pypi_file_attrs["indexes"] = indexes
     if is_wheel:
-        pypi_file_attrs["package_version"] = file["package_version"]
         pycross_wheel_file(**pypi_file_attrs)
     else:
         pypi_file(**pypi_file_attrs)
@@ -162,7 +161,7 @@ def _variants_flag_ref(label):
     return (repo, flag)
 
 def _compute_variant_pins(member, flags, settings, resolved_locks):
-    """Compute the variants a repo's `flags`/`settings` select, for its transition's `_pin_<set>`.
+    """Compute the variants a repo's `flags`/`settings` select, for its transition's `p:<set>` entry in `//_lock:_state`.
 
     Args:
         member: The repo name.
@@ -498,7 +497,6 @@ def create_repos(
                 member_name = member,
                 backend_configs = backend_configs_json,
             )
-            thin_repo_attrs["generate_root_aliases"] = True
             if member in auto_build_set:
                 thin_repo_attrs["expose_variant_flags"] = False
 

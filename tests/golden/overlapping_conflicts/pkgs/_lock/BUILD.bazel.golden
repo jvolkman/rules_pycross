@@ -31,8 +31,8 @@ variant_state(
         "@golden_overlapping_conflicts_pinned//_variants:group_g-b": "@golden_overlapping_conflicts_pinned//_variants:group_g-b|group_app_g-b",
     },
     string_flags = {
-        "@golden_overlapping_conflicts//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"extra_y\":[\"extra_app_y\"],\"group_g-a\":[\"group_app_g-a\"],\"group_g-b\":[\"group_app_g-b\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
-        "@golden_overlapping_conflicts_pinned//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts_pinned//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"extra_y\":[\"extra_app_y\"],\"group_g-a\":[\"group_app_g-a\"],\"group_g-b\":[\"group_app_g-b\"]},\"valid\":[\"extra_x\",\"extra_y\",\"group_g-a\",\"group_g-b\"]}",
+        "@golden_overlapping_conflicts//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"extra_y\":[\"extra_app_y\"],\"group_g-a\":[\"group_app_g-a\"],\"group_g-b\":[\"group_app_g-b\"]}}",
+        "@golden_overlapping_conflicts_pinned//_variants:_variants": "{\"display\":\"@golden_overlapping_conflicts_pinned//_variants\",\"map\":{\"extra_x\":[\"extra_app_x\"],\"extra_y\":[\"extra_app_y\"],\"group_g-a\":[\"group_app_g-a\"],\"group_g-b\":[\"group_app_g-b\"]}}",
     },
 )
 
