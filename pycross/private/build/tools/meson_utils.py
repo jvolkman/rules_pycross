@@ -1,14 +1,13 @@
 """Meson-specific utilities and cross.ini generation for rules_pycross PEP 517 builds."""
 
-import shlex
 import textwrap
 from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Sequence
 
-from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 from pycross.private.build.tools.utils.lifecycle import setup_pkg_config
@@ -24,41 +23,27 @@ def format_meson_list(items: List[str]) -> str:
     return "[" + ", ".join(f"'{_escape_meson_str(item)}'" for item in items) + "]"
 
 
-def _split_flags(flags: str) -> List[str]:
-    """Split a flags string, dropping double quotes inside tokens.
+def _strip_inner_quotes(flags: Sequence[str]) -> List[str]:
+    """Drop double quotes inside flag tokens.
 
-    The cc layer shell-quotes tokens such as -D__DATE__="redacted". Meson
-    passes c_args to the compiler verbatim, but projects embed them in
+    Meson passes c_args to the compiler verbatim, but projects embed them in
     generated sources (numpy writes them into a raw string in
     numpy/__config__.py), where a literal `"` breaks the file. Strip inner
     double quotes without re-splitting so paths containing spaces stay intact.
     """
-    return [tok.replace('"', "") for tok in shlex.split(flags)] if flags else []
+    return [tok.replace('"', "") for tok in flags]
 
 
 def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = None) -> None:
     """Generates the Meson cross.ini file dynamically from BuildContext and env configuration."""
-
-    def get_var(name: str, default_fallback: str = "") -> str:
-        val = ctx.sysconfig_vars.get(name)
-        if val is not None:
-            return val
-        if cc_config and name in cc_config:
-            return replace_placeholder(ctx.prefix, cc_config[name])
-        return default_fallback
-
-    cc = get_var("CC")
-    cxx = get_var("CXX")
-    if not cc or not cxx:
+    cc_layer = ctx.cc_layer
+    if cc_layer is None or not cc_layer.cc_path or not cc_layer.cxx_path:
         raise ValueError(
             "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_layer is configured for this build."
         )
-    cflags = get_var("CFLAGS", "")
-    cxxflags = get_var("CXXFLAGS", "")
 
-    # Parse arguments for Meson cross file
-    c_args = _split_flags(cflags)
-    cxx_args = _split_flags(cxxflags)
+    c_args = _strip_inner_quotes(cc_layer.cflags)
+    cxx_args = _strip_inner_quotes(cc_layer.cxxflags)
 
     # Filter linker flags (-Wl,...) out of c_args/cxx_args into link args.
     #
@@ -76,28 +61,8 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # use -bundle on macOS, the correct Mach-O type for Python extensions). So
     # c_link_args only needs what pycross exports in LDFLAGS (the cc layer's
     # library dir and the C++ runtime libs).
-    ldflags = get_var("LDFLAGS", "")
-    c_link_args = _split_flags(ldflags)
+    c_link_args = _strip_inner_quotes(cc_layer.ldflags)
     c_link_args.extend(leaked_link_args)
-
-    # setup_cc_layer already adds filtered include_dirs to CFLAGS/CXXFLAGS.
-    # Only add any missing non-stdlib include_dirs here (e.g. when called
-    # directly without setup_cc_layer), applying the same -nostdlibinc guard
-    # so libc++/libc++abi headers never break #include_next chains.
-    toolchain_provides_cxx_headers = "-nostdlibinc" in c_args or "-nostdlibinc" in cxx_args
-    if cc_config and "include_dirs" in cc_config:
-        existing_c = set(c_args)
-        existing_cxx = set(cxx_args)
-        for inc_dir_str in cc_config["include_dirs"]:
-            inc_dir = str(Path(replace_placeholder(ctx.prefix, inc_dir_str)).absolute())
-            if toolchain_provides_cxx_headers and ("libcxx" in inc_dir or "libcxxabi" in inc_dir):
-                continue
-            if f"-I{inc_dir}" not in existing_c and f"-isystem{inc_dir}" not in existing_c:
-                c_args.append(f"-I{inc_dir}")
-                existing_c.add(f"-I{inc_dir}")
-            if f"-I{inc_dir}" not in existing_cxx and f"-isystem{inc_dir}" not in existing_cxx:
-                cxx_args.append(f"-I{inc_dir}")
-                existing_cxx.add(f"-I{inc_dir}")
 
     # Locate target Python library directory and add it to linker search path
     target_python_lib_dir = ctx.target_python.parent.parent / "lib"
@@ -171,24 +136,19 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         # x86_64 Linux and macOS: 80-bit extended stored in 16 bytes
         longdouble_format = "INTEL_EXTENDED_16_BYTES_LE"
 
-    cc_list = shlex.split(cc) if cc else []
-    cxx_list = shlex.split(cxx) if cxx else []
-
     # Build the [binaries] section dynamically to maintain hermeticity.
     # Only reference tools that exist inside the build virtualenv, using
     # their full absolute paths. Bare names like 'cython' or 'pkg-config'
     # would resolve via the system PATH, breaking sandbox isolation.
     binaries_lines = [
-        f"c = {format_meson_list(cc_list)}",
-        f"cpp = {format_meson_list(cxx_list)}",
+        f"c = {format_meson_list([str(cc_layer.cc_path)])}",
+        f"cpp = {format_meson_list([str(cc_layer.cxx_path)])}",
     ]
 
-    ar = get_var("AR")
-    if ar:
-        ar_list, ranlib_path = parse_ar_and_guess_ranlib(ar)
-        binaries_lines.append(f"ar = {format_meson_list(ar_list)}")
-        if ranlib_path:
-            binaries_lines.append(f"ranlib = '{_escape_meson_str(ranlib_path.as_posix())}'")
+    if cc_layer.ar_list:
+        binaries_lines.append(f"ar = {format_meson_list(cc_layer.ar_list)}")
+        if cc_layer.ranlib_path:
+            binaries_lines.append(f"ranlib = '{_escape_meson_str(cc_layer.ranlib_path.as_posix())}'")
 
     # Cython: only inject if present in the build virtualenv.
     # Meson does NOT inherently require Cython; it is only needed for

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from pycross.private.build.tools.utils.cc_toolchain import CC_ENV_KEYS
 from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import load_build_context
@@ -40,6 +41,7 @@ class BackendStrategy:
     setup_venv: Callable[[BuildContext], None] = build_standard_venv
     pre_build: Callable[[BuildContext], None] = lambda ctx: None
     prepare_env: Callable[[BuildContext], None] = lambda ctx: None
+    export_cc_env: bool = True
 
 
 def setup_pkg_config(ctx: BuildContext) -> Path:
@@ -117,6 +119,10 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
     run_pre_build_hooks_from_config(ctx)
 
     strategy.pre_build(ctx)
+
+    if not strategy.export_cc_env:
+        for env_key in CC_ENV_KEYS:
+            ctx.build_env.pop(env_key, None)
 
     apply_sysconfig_overrides(ctx)
 

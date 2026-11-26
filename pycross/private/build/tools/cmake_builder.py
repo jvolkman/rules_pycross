@@ -4,10 +4,9 @@ import os
 import sys
 from pathlib import Path
 
-from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
+from pycross.private.build.tools.utils.cc_toolchain import join_flags
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import load_layers
-from pycross.private.build.tools.utils.context import replace_placeholder
 from pycross.private.build.tools.utils.lifecycle import BackendStrategy
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
 
@@ -22,25 +21,16 @@ def _cmake_escape(value: str) -> str:
 
 
 def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
-    def get_var(name: str, default_fallback: str = "") -> str:
-        val = ctx.sysconfig_vars.get(name)
-        if val is not None:
-            return val
-        if cc_config and name in cc_config:
-            return replace_placeholder(ctx.prefix, cc_config[name])
-        return default_fallback
-
-    cc = get_var("CC")
-    cxx = get_var("CXX")
-    if not cc or not cxx:
+    cc_layer = ctx.cc_layer
+    if cc_layer is None or not cc_layer.cc_path or not cc_layer.cxx_path:
         raise ValueError(
             "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_layer is configured for this build."
         )
-    cflags_raw = get_var("CFLAGS", "")
-    cxxflags_raw = get_var("CXXFLAGS", "")
-    cflags = _cmake_escape(cflags_raw)
-    cxxflags = _cmake_escape(cxxflags_raw)
-    ldflags = _cmake_escape(get_var("LDFLAGS", ""))
+    cc = str(cc_layer.cc_path)
+    cxx = str(cc_layer.cxx_path)
+    cflags = _cmake_escape(join_flags(cc_layer.cflags))
+    cxxflags = _cmake_escape(join_flags(cc_layer.cxxflags))
+    ldflags = _cmake_escape(join_flags(cc_layer.ldflags))
 
     # Determine system and processor
     target_system = cc_config.get("target_os", "Linux")
@@ -54,26 +44,14 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     if target_system == "darwin" and cmake_system_processor == "aarch64":
         cmake_system_processor = "arm64"
 
-    # Detect AR and guess RANLIB
-    ar = get_var("AR")
-    ar_list, ranlib_path = parse_ar_and_guess_ranlib(ar)
-
     # CMake does not support passing flags in CMAKE_AR directly without
     # additional workarounds. We extract just the binary path and drop flags.
-    ar_path = Path(ar_list[0]) if ar_list else None
+    ar_path = Path(cc_layer.ar_list[0]) if cc_layer.ar_list else None
+    ranlib_path = cc_layer.ranlib_path
 
     layer_dir = ctx.temp_dir / "cc_layer"
-    layer_lib_dir = layer_dir / "lib"
-
-    toolchain_provides_cxx_headers = "-nostdlibinc" in cflags_raw or "-nostdlibinc" in cxxflags_raw
-    include_paths = []
-    for inc_dir_str in cc_config.get("include_dirs", []):
-        inc_dir = Path(replace_placeholder(ctx.prefix, inc_dir_str)).absolute()
-        if toolchain_provides_cxx_headers and ("libcxx" in str(inc_dir) or "libcxxabi" in str(inc_dir)):
-            continue
-        inc_str = _cmake_escape(inc_dir.as_posix())
-        if inc_str not in include_paths:
-            include_paths.append(inc_str)
+    layer_lib_dir = cc_layer.layer_lib_dir
+    include_paths = [_cmake_escape(inc_dir.as_posix()) for inc_dir in cc_layer.include_dirs]
 
     # Write the toolchain file
     toolchain_lines = [
@@ -132,16 +110,11 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     new_cmake_args = f"-DCMAKE_TOOLCHAIN_FILE={toolchain_path.absolute()}"
     ctx.build_env["CMAKE_ARGS"] = f"{existing_cmake_args} {new_cmake_args}".strip()
 
-    # Strip compiler env vars so CMake exclusively uses the toolchain file
-    # rather than mixing in environment overrides.
-    for key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "AR", "ARFLAGS"]:
-        ctx.build_env.pop(key, None)
-
 
 def pre_build(ctx: BuildContext) -> None:
     # 1. Provide CMake toolchain file for cross-compilation and compiler injection
     cc_layer_config = next((m for m in load_layers(ctx) if "CC" in m), None)
-    if cc_layer_config:
+    if ctx.cc_layer and cc_layer_config:
         generate_toolchain_file(ctx, cc_layer_config)
 
     # 2. Setup CMAKE_PREFIX_PATH so CMake's find_package() can locate packages
@@ -177,6 +150,7 @@ def pre_build(ctx: BuildContext) -> None:
 def main():
     strategy = BackendStrategy(
         pre_build=pre_build,
+        export_cc_env=False,
     )
     run_standard_build_lifecycle(sys.argv[1], strategy)
 

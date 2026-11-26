@@ -12,6 +12,24 @@ from typing import Optional
 
 
 @dataclass
+class CcLayerState:
+    """Resolved C/C++ toolchain state populated once by ``setup_cc_layer``."""
+
+    cc_path: Path
+    cxx_path: Path
+    cflags: List[str]
+    cxxflags: List[str]
+    ldflags: List[str]
+    ldsharedflags: List[str]
+    ar_list: List[str]
+    arflags: List[str]
+    ranlib_path: Optional[Path]
+    include_dirs: List[Path]
+    layer_lib_dir: Path
+    runtime_libs: List[Path]
+
+
+@dataclass
 class BuildContext:
     # Main configuration loaded from Bazel JSON
     bazel_config: Dict[str, Any]
@@ -42,6 +60,8 @@ class BuildContext:
     build_env: Dict[str, str] = field(default_factory=dict)
     _layers: Optional[List[Dict[str, Any]]] = None
     config_settings: Dict[str, Any] = field(default_factory=dict)
+    cc_layer: Optional[CcLayerState] = None
+    is_crossenv: bool = False
 
 
 def _short_windows_sdist_root(prefix: Path, original_sdist_root: str) -> Path:

@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from pycross.private.build.tools.utils.cc_toolchain import _resolve_msvc_environment
 from pycross.private.build.tools.utils.cc_toolchain import get_wrapper_flags
+from pycross.private.build.tools.utils.cc_toolchain import join_flags
 from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
 from pycross.private.build.tools.utils.cc_toolchain import unversioned_library_name
 from pycross.private.build.tools.utils.cc_toolchain import wrap_compiler
@@ -28,6 +29,7 @@ class MockBuildContext:
         self.prefix = temp_dir
         self.temp_dir = temp_dir
         self.exec_python = Path(sys.executable)
+        self.cc_layer = None
 
 
 class CcToolchainTest(unittest.TestCase):
@@ -59,9 +61,9 @@ class CcToolchainTest(unittest.TestCase):
         bin_dir = self.temp_path / "bin"
         bin_dir.mkdir()
 
-        cflags = "-O2 -target x86_64-linux-gnu --sysroot=/tmp/sysroot"
-        ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,--as-needed -Wl,-O1 -lpthread"
-        wrapper = wrap_compiler("cc", "/usr/bin/gcc", cflags, bin_dir, ldflags=ldflags)
+        compile_flags = ["-O2", "-target", "x86_64-linux-gnu", "--sysroot=/tmp/sysroot"]
+        ldflags = ["-fuse-ld=lld", "-B/tmp/crt", "-L/tmp/glibc", "-Wl,--as-needed", "-Wl,-O1", "-lpthread"]
+        wrapper = wrap_compiler("cc", "/usr/bin/gcc", compile_flags, bin_dir, ldflags=ldflags)
 
         self.assertTrue(wrapper.exists())
         self.assertTrue(os.access(wrapper, os.X_OK))
@@ -78,17 +80,25 @@ class CcToolchainTest(unittest.TestCase):
         self.assertIn("-Wl,--as-needed", content)
 
     def test_get_wrapper_flags_trailing_flag(self):
-        self.assertEqual(get_wrapper_flags("-O2 -target"), [])
-        self.assertEqual(get_wrapper_flags("-O2 --sysroot=/tmp/s -isysroot"), ["--sysroot=/tmp/s"])
+        self.assertEqual(get_wrapper_flags(["-O2", "-target"]), [])
+        self.assertEqual(get_wrapper_flags(["-O2", "--sysroot=/tmp/s", "-isysroot"]), ["--sysroot=/tmp/s"])
 
     def test_wrap_compiler_link_vs_non_link_invocations(self):
         bin_dir = self.temp_path / "bin"
         bin_dir.mkdir(exist_ok=True)
         fake_cc = self._make_fake_cc()
 
-        cflags = "-O2 -target x86_64-linux-gnu --sysroot=/dev/null"
-        ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,-rpath,$ORIGIN -Wl,--as-needed -Wl,-O1 -lpthread"
-        wrapper = wrap_compiler("cc", str(fake_cc), cflags, bin_dir, ldflags=ldflags)
+        compile_flags = ["-O2", "-target", "x86_64-linux-gnu", "--sysroot=/dev/null"]
+        ldflags = [
+            "-fuse-ld=lld",
+            "-B/tmp/crt",
+            "-L/tmp/glibc",
+            "-Wl,-rpath,$ORIGIN",
+            "-Wl,--as-needed",
+            "-Wl,-O1",
+            "-lpthread",
+        ]
+        wrapper = wrap_compiler("cc", str(fake_cc), compile_flags, bin_dir, ldflags=ldflags)
 
         def run_wrapper(*args: str) -> list[str]:
             out = subprocess.check_output([str(wrapper), *args], text=True)
@@ -142,7 +152,7 @@ class CcToolchainTest(unittest.TestCase):
         bin_dir.mkdir(exist_ok=True)
         fake_cc = self._make_fake_cc()
 
-        wrapper = wrap_compiler("cc", str(fake_cc), "-O2", bin_dir, ldflags="-lpthread")
+        wrapper = wrap_compiler("cc", str(fake_cc), ["-O2"], bin_dir, ldflags=["-lpthread"])
         # Confirm the wrapper checks needs_filter before rebuilding "$@".
         content = wrapper.read_text()
         self.assertIn("needs_filter=0", content)
@@ -158,9 +168,9 @@ class CcToolchainTest(unittest.TestCase):
         fake_cc = self._make_fake_cc()
 
         # Like the @llvm musl toolchain: -static-pie is executable-only.
-        ldflags = "-static-pie -fuse-ld=lld -L/tmp/musl -Wl,--gc-sections"
-        ldsharedflags = "-fuse-ld=lld -L/tmp/musl -Wl,--gc-sections -shared"
-        wrapper = wrap_compiler("cc", str(fake_cc), "-O2", bin_dir, ldflags=ldflags, ldsharedflags=ldsharedflags)
+        ldflags = ["-static-pie", "-fuse-ld=lld", "-L/tmp/musl", "-Wl,--gc-sections"]
+        ldsharedflags = ["-fuse-ld=lld", "-L/tmp/musl", "-Wl,--gc-sections", "-shared"]
+        wrapper = wrap_compiler("cc", str(fake_cc), ["-O2"], bin_dir, ldflags=ldflags, ldsharedflags=ldsharedflags)
 
         def run_wrapper(*args: str) -> list[str]:
             return json.loads(subprocess.check_output([str(wrapper), *args], text=True))
@@ -187,13 +197,13 @@ class CcToolchainTest(unittest.TestCase):
         cc_config = {
             "CC": str(fake_cc),
             "CXX": str(fake_cc),
-            "CFLAGS": "-O2",
-            "CXXFLAGS": "-O2",
+            "CFLAGS": ["-O2"],
+            "CXXFLAGS": ["-O2"],
             # Like hermetic-llvm 0.8.24 on glibc.
-            "LDFLAGS": "-fuse-ld=lld -no-pie -Wl,-S",
-            "LDSHAREDFLAGS": "-fuse-ld=lld -shared -Wl,-S",
+            "LDFLAGS": ["-fuse-ld=lld", "-no-pie", "-Wl,-S"],
+            "LDSHAREDFLAGS": ["-fuse-ld=lld", "-shared", "-Wl,-S"],
             "AR": "/usr/bin/ar",
-            "ARFLAGS": "rcs",
+            "ARFLAGS": ["rcs"],
         }
 
         setup_cc_layer(ctx, cc_config)
@@ -226,12 +236,12 @@ class CcToolchainTest(unittest.TestCase):
         cc_config = {
             "CC": str(fake_cc),
             "CXX": str(fake_cc),
-            "CFLAGS": "-O2 -target x86_64-linux-gnu --sysroot=/c-sysroot",
-            "CXXFLAGS": "-O2 -target aarch64-apple-darwin -isysroot /cxx-sdk --sysroot=/cxx-sysroot",
-            "LDFLAGS": "",
-            "LDSHAREDFLAGS": "-shared",
+            "CFLAGS": ["-O2", "-target", "x86_64-linux-gnu", "--sysroot=/c-sysroot"],
+            "CXXFLAGS": ["-O2", "-target", "aarch64-apple-darwin", "-isysroot", "/cxx-sdk", "--sysroot=/cxx-sysroot"],
+            "LDFLAGS": [],
+            "LDSHAREDFLAGS": ["-shared"],
             "AR": "/usr/bin/ar",
-            "ARFLAGS": "rcs",
+            "ARFLAGS": ["rcs"],
         }
 
         setup_cc_layer(ctx, cc_config)
@@ -261,12 +271,12 @@ class CcToolchainTest(unittest.TestCase):
             "shared_libs": [str(lib_bar)],
             "CC": "/usr/bin/gcc",
             "CXX": "/usr/bin/g++",
-            "CFLAGS": "-O2",
-            "CXXFLAGS": "-O2",
-            "LDFLAGS": "-fuse-ld=lld -B$$EXT_BUILD_ROOT$$/crt -Wl,-O1",
-            "LDSHAREDFLAGS": "-shared -Wl,-O1",
+            "CFLAGS": ["-O2"],
+            "CXXFLAGS": ["-O2"],
+            "LDFLAGS": ["-fuse-ld=lld", "-B$$EXT_BUILD_ROOT$$/crt", "-Wl,-O1"],
+            "LDSHAREDFLAGS": ["-shared", "-Wl,-O1"],
             "AR": "/usr/bin/ar",
-            "ARFLAGS": "rcs",
+            "ARFLAGS": ["rcs"],
         }
 
         setup_cc_layer(ctx, cc_config)
@@ -319,12 +329,12 @@ class CcToolchainTest(unittest.TestCase):
         cc_config = {
             "CC": "external/MSVC tools/bin/cl.exe",
             "CXX": "$$EXT_BUILD_ROOT$$/external/MSVC tools/bin/cl.exe",
-            "CFLAGS": "-nologo",
-            "CXXFLAGS": "-nologo -std:c++17",
-            "LDFLAGS": "",
-            "LDSHAREDFLAGS": "",
+            "CFLAGS": ["-nologo"],
+            "CXXFLAGS": ["-nologo", "-std:c++17"],
+            "LDFLAGS": [],
+            "LDSHAREDFLAGS": [],
             "AR": str(tool_dir / "lib.exe"),
-            "ARFLAGS": "",
+            "ARFLAGS": [],
             "include_dirs": ["$$EXT_BUILD_ROOT$$/dep include"],
             "msvc_env": {
                 "PATH": "external/MSVC tools/bin;$$EXT_BUILD_ROOT$$/SDK bin",
@@ -456,12 +466,12 @@ class CcToolchainTest(unittest.TestCase):
         cc_config = {
             "CC": str(sdk_tools / "cl.exe"),
             "CXX": str(sdk_tools / "cl.exe"),
-            "CFLAGS": "",
-            "CXXFLAGS": "",
-            "LDFLAGS": "",
-            "LDSHAREDFLAGS": "",
+            "CFLAGS": [],
+            "CXXFLAGS": [],
+            "LDFLAGS": [],
+            "LDSHAREDFLAGS": [],
             "AR": "lib.exe",
-            "ARFLAGS": "",
+            "ARFLAGS": [],
             "msvc_env": {"PATH": "sdk tools", "INCLUDE": "", "LIB": ""},
         }
         with patch("pycross.private.build.tools.utils.cc_toolchain.os", wraps=os) as cc_os:
@@ -498,12 +508,12 @@ class CcToolchainTest(unittest.TestCase):
                 cc_config = {
                     "CC": "external/MSVC tools/bin/cl.exe",
                     "CXX": "$$EXT_BUILD_ROOT$$/external/MSVC tools/bin/cl.exe",
-                    "CFLAGS": "",
-                    "CXXFLAGS": "",
-                    "LDFLAGS": "",
-                    "LDSHAREDFLAGS": "",
+                    "CFLAGS": [],
+                    "CXXFLAGS": [],
+                    "LDFLAGS": [],
+                    "LDSHAREDFLAGS": [],
                     "AR": "ar",
-                    "ARFLAGS": "",
+                    "ARFLAGS": [],
                     "msvc_env": msvc_env,
                 }
                 with patch("pycross.private.build.tools.utils.cc_toolchain.os", wraps=os) as cc_os:
@@ -541,12 +551,12 @@ class CcToolchainTest(unittest.TestCase):
             "shared_libs": [str(versioned)],
             "CC": "/usr/bin/gcc",
             "CXX": "/usr/bin/g++",
-            "CFLAGS": "",
-            "CXXFLAGS": "",
-            "LDFLAGS": "",
-            "LDSHAREDFLAGS": "-shared",
+            "CFLAGS": [],
+            "CXXFLAGS": [],
+            "LDFLAGS": [],
+            "LDSHAREDFLAGS": ["-shared"],
             "AR": "/usr/bin/ar",
-            "ARFLAGS": "rcs",
+            "ARFLAGS": ["rcs"],
         }
         setup_cc_layer(ctx, cc_config)
         lib_dir = Path(ctx.build_env["PYCROSS_LIBRARY_PATH"])
@@ -560,12 +570,12 @@ class CcToolchainTest(unittest.TestCase):
         cc_config = {
             "CC": "/usr/bin/clang",
             "CXX": "/usr/bin/clang++",
-            "CFLAGS": "-O2",
-            "CXXFLAGS": "-O2",
-            "LDFLAGS": "-Wl,-O1",
-            "LDSHAREDFLAGS": "-Wl,-O1 -shared",
+            "CFLAGS": ["-O2"],
+            "CXXFLAGS": ["-O2"],
+            "LDFLAGS": ["-Wl,-O1"],
+            "LDSHAREDFLAGS": ["-Wl,-O1", "-shared"],
             "AR": "/usr/bin/ar",
-            "ARFLAGS": "rcs",
+            "ARFLAGS": ["rcs"],
         }
 
         setup_cc_layer(ctx, cc_config)
@@ -578,6 +588,54 @@ class CcToolchainTest(unittest.TestCase):
         self.assertTrue(ctx.sysconfig_vars["LDSHARED"].startswith(ctx.sysconfig_vars["CC"]))
         self.assertTrue(ctx.sysconfig_vars["LDCXXSHARED"].startswith(ctx.sysconfig_vars["CXX"]))
         self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"].split()[-3:], ["-bundle", "-undefined", "dynamic_lookup"])
+
+    def test_setup_cc_layer_state_quoting_and_filtering(self):
+        ctx = MockBuildContext(self.temp_path)
+        spaced_inc = self.temp_path / "dep include"
+        libcxx_inc = self.temp_path / "libcxx" / "include"
+        spaced_rt = self.temp_path / "rt libs" / "libc++.a"
+        cc_config = {
+            "CC": "/usr/bin/clang",
+            "CXX": "/usr/bin/clang++",
+            # -nostdlibinc only in CXXFLAGS must still filter libcxx consistently everywhere.
+            "CFLAGS": ["-O2", '-D__DATE__="redacted"'],
+            "CXXFLAGS": ["-nostdlibinc", "-O2"],
+            "LDFLAGS": [],
+            "LDSHAREDFLAGS": ["-shared"],
+            "AR": "/usr/bin/ar",
+            "ARFLAGS": ["rcs"],
+            "include_dirs": [str(spaced_inc), str(libcxx_inc), str(spaced_inc)],
+            "runtime_libs": [str(spaced_rt)],
+        }
+
+        state = setup_cc_layer(ctx, cc_config)
+
+        self.assertIs(ctx.cc_layer, state)
+        self.assertEqual(state.include_dirs, [spaced_inc.absolute()])
+        self.assertEqual(state.runtime_libs, [spaced_rt.absolute()])
+        self.assertEqual(state.cflags, ["-O2", '-D__DATE__="redacted"', f"-I{spaced_inc.absolute()}"])
+        self.assertEqual(state.cxxflags, ["-nostdlibinc", "-O2", f"-I{spaced_inc.absolute()}"])
+        self.assertEqual(state.ldflags, [f"-L{state.layer_lib_dir}", str(spaced_rt.absolute())])
+        self.assertEqual(state.arflags, ["rcs"])
+
+        # Spaced include dirs and runtime libs are properly shell-quoted in sysconfig_vars.
+        self.assertEqual(shlex.split(ctx.sysconfig_vars["CFLAGS"]), state.cflags)
+        self.assertEqual(shlex.split(ctx.sysconfig_vars["LDFLAGS"]), state.ldflags)
+        self.assertEqual(ctx.build_env["PYCROSS_INCLUDE_PATH"], str(spaced_inc.absolute()))
+        self.assertNotIn("libcxx", ctx.build_env["PYCROSS_INCLUDE_PATH"])
+        for key in ("CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "AR", "ARFLAGS"):
+            self.assertEqual(ctx.build_env[key], ctx.sysconfig_vars[key])
+
+    def test_join_flags_posix_and_windows(self):
+        self.assertEqual(join_flags([]), "")
+        self.assertEqual(
+            join_flags(["-nologo", r"-IC:\a\b", r"-IC:\a b\c"], posix=False),
+            r'-nologo -IC:\a\b "-IC:\a b\c"',
+        )
+        self.assertEqual(
+            join_flags(["-O2", "-I/path with spaces/inc"], posix=True),
+            "-O2 '-I/path with spaces/inc'",
+        )
 
     def test_setup_path_tools_posix_wrapper(self):
         tools_dir = self.temp_path / "tools"

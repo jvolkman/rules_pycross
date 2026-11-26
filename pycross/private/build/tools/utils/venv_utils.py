@@ -244,6 +244,8 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
         str(sysconfig_json),
         "--target-python",
         str(ctx.target_python),
+        "--extra-pythonpath",
+        str(ctx.sdist_dir.absolute()),
     ]
 
     try:
@@ -257,11 +259,10 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
         print(cpe.output.decode(), file=sys.stderr)
         raise
 
+    ctx.is_crossenv = True
     site_dir = find_site_dir(ctx.env_dir)
     _link_merge_multiple(ctx.python_paths, site_dir)
     _write_site_hooks(ctx, site_dir)
-
-    inject_python_wrapper(ctx)
 
 
 def build_crossenv_or_standard_venv(ctx: BuildContext) -> None:

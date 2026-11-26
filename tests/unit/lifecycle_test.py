@@ -69,6 +69,71 @@ class LifecycleTest(unittest.TestCase):
 
         self.assertEqual(call_order, ["setup_venv", "pre_build", "prepare_env"])
 
+    @patch("pycross.private.build.tools.utils.lifecycle.extract_sdist")
+    @patch("pycross.private.build.tools.utils.lifecycle.os.chdir")
+    @patch("pycross.private.build.tools.utils.lifecycle.setup_path_tools")
+    @patch("pycross.private.build.tools.utils.lifecycle.apply_sysconfig_overrides")
+    @patch("pycross.private.build.tools.utils.lifecycle.run_pep517_build")
+    @patch("pycross.private.build.tools.utils.lifecycle.load_target_sysconfig", return_value={})
+    def test_export_cc_env_false_visible_to_pre_build_hooks_and_stripped_before_build(
+        self,
+        _mock_load_sysconfig,
+        mock_pep517,
+        _mock_apply_sys,
+        _mock_setup_path,
+        _mock_chdir,
+        _mock_extract,
+    ):
+        cc_layer_path = self.temp_path / "cc_layer.json"
+        cc_layer_path.write_text(
+            json.dumps(
+                {
+                    "CC": "/usr/bin/cc",
+                    "CXX": "/usr/bin/c++",
+                    "CFLAGS": ["-O2"],
+                    "CXXFLAGS": ["-O2"],
+                    "LDFLAGS": [],
+                    "LDSHAREDFLAGS": ["-shared"],
+                    "AR": "/usr/bin/ar",
+                    "ARFLAGS": ["rcs"],
+                }
+            )
+        )
+        cfg = json.loads(self.config_path.read_text())
+        cfg["layers"] = [str(cc_layer_path)]
+        self.config_path.write_text(json.dumps(cfg))
+
+        seen_in_hook = {}
+        seen_in_prepare_env = {}
+        seen_in_build = {}
+
+        def fake_hooks(ctx):
+            seen_in_hook.update(ctx.build_env)
+
+        def prepare_env(ctx):
+            seen_in_prepare_env.update(ctx.build_env)
+
+        def fake_build(ctx):
+            seen_in_build.update(ctx.build_env)
+            return "out.whl"
+
+        mock_pep517.side_effect = fake_build
+        strategy = BackendStrategy(
+            setup_venv=lambda ctx: None,
+            prepare_env=prepare_env,
+            export_cc_env=False,
+        )
+        with patch(
+            "pycross.private.build.tools.utils.lifecycle.run_pre_build_hooks_from_config",
+            side_effect=fake_hooks,
+        ):
+            run_standard_build_lifecycle(str(self.config_path), strategy)
+
+        for key in ("CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "AR", "ARFLAGS"):
+            self.assertIn(key, seen_in_hook)
+            self.assertNotIn(key, seen_in_prepare_env)
+            self.assertNotIn(key, seen_in_build)
+
 
 class PreBuildPatchesTest(unittest.TestCase):
     def setUp(self):

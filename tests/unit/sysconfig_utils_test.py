@@ -272,6 +272,39 @@ class PlatformOverridesTest(unittest.TestCase):
             )
             apply_sysconfig_overrides(ctx2)
             self.assertEqual(ctx2.build_env["_PYTHON_HOST_PLATFORM"], "linux-custom")
+            self.assertTrue((lib_dir / "site-packages" / "_sysconfigdata_pycross.pth").exists())
+
+    def test_apply_sysconfig_overrides_skips_pth_for_crossenv(self):
+        with TemporaryDirectory() as tmp:
+            env_dir = Path(tmp) / "env"
+            site_dir = (
+                env_dir / "Lib" / "site-packages"
+                if os.name == "nt"
+                else env_dir / "lib" / "python3.12" / "site-packages"
+            )
+            site_dir.mkdir(parents=True)
+            sysconfig_py = site_dir / "_sysconfigdata_pycross.py"
+            sysconfig_py.write_text("build_time_vars = {'OLD': '1'}\n")
+            pycache_dir = site_dir / "__pycache__"
+            pycache_dir.mkdir()
+            stale_pyc = pycache_dir / "_sysconfigdata_pycross.cpython-314.pyc"
+            stale_pyc.write_bytes(b"stale")
+            unrelated_pyc = pycache_dir / "other.cpython-314.pyc"
+            unrelated_pyc.write_bytes(b"keep")
+
+            ctx = SimpleNamespace(
+                env_dir=env_dir,
+                is_crossenv=True,
+                sysconfig_vars={"MACHDEP": "linux", "HOST_GNU_TYPE": "aarch64-unknown-linux-gnu", "NEW": "2"},
+                build_env={},
+            )
+            apply_sysconfig_overrides(ctx)
+
+            self.assertIn("'NEW': '2'", sysconfig_py.read_text())
+            self.assertFalse(stale_pyc.exists())
+            self.assertTrue(unrelated_pyc.exists())
+            self.assertFalse((site_dir / "_sysconfigdata_pycross.pth").exists())
+            self.assertEqual(ctx.build_env["_PYTHON_SYSCONFIGDATA_NAME"], "_sysconfigdata_pycross")
 
 
 if __name__ == "__main__":

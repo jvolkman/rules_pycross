@@ -108,24 +108,59 @@ class VenvUtilsTest(unittest.TestCase):
         self.assertEqual(result, os.pathsep + "/external/dependency")
 
     @unittest.skipIf(os.name == "nt", "POSIX crossenv layout")
-    def test_build_crossenv_venv_writes_site_hooks(self):
+    def test_build_crossenv_venv_writes_site_hooks_without_outer_wrapper(self):
         ctx = MockBuildContext(self.temp_path)
         ctx.target_python = Path("/target/bin/python3")
         ctx.build_env = {}
         ctx.bazel_config = {}
         ctx.python_paths = []
         ctx.site_hooks = ["import os; os.environ['FROM_SITE_HOOK'] = '1'"]
+        ctx.python_exe.write_text("#!/bin/sh\n# crossenv sentinel\n")
 
         with patch("pycross.private.build.tools.utils.venv_utils.subprocess.check_output") as mock_run:
             build_crossenv_venv(ctx)
             mock_run.assert_called_once()
+            args = mock_run.call_args.kwargs["args"]
+            self.assertIn("--extra-pythonpath", args)
+            idx = args.index("--extra-pythonpath")
+            self.assertEqual(args[idx + 1], str(ctx.sdist_dir.absolute()))
 
+        self.assertTrue(ctx.is_crossenv)
+        # build_crossenv_venv must not overwrite bin/python with inject_python_wrapper.
+        self.assertIn("crossenv sentinel", ctx.python_exe.read_text())
         hooks_py = ctx.env_dir / "_pycross_hooks.py"
         hooks_pth = ctx.env_dir / "lib" / "python3.10" / "site-packages" / "_pycross_hooks.pth"
         self.assertTrue(hooks_py.exists())
         self.assertTrue(hooks_pth.exists())
         self.assertIn("FROM_SITE_HOOK", hooks_py.read_text())
         self.assertIn("_pycross_hooks", hooks_pth.read_text())
+
+    @unittest.skipIf(os.name == "nt", "POSIX crossenv layout")
+    def test_build_crossenv_venv_runs_module_from_crossenv_lib(self):
+        import sysconfig
+
+        env_dir = self.temp_path / "real_crossenv"
+        sdist_dir = self.temp_path / "real_sdist"
+        sdist_dir.mkdir()
+        ctx = SimpleNamespace(
+            exec_python=Path(sys.executable),
+            target_python=self.temp_path / "target" / "bin" / "python3",
+            prefix=self.temp_path,
+            env_dir=env_dir,
+            original_sdist_root="sdist",
+            sdist_dir=sdist_dir,
+            sdist_root_dir=sdist_dir,
+            sysconfig_vars={**sysconfig.get_config_vars(), "HOST_GNU_TYPE": "aarch64-unknown-linux-gnu"},
+            python_paths=[],
+            site_hooks=[],
+            build_env={},
+            is_crossenv=False,
+        )
+
+        build_crossenv_venv(ctx)
+        self.assertTrue(ctx.is_crossenv)
+        self.assertTrue((env_dir / "bin" / "python").is_symlink())
+        self.assertTrue((find_site_dir(env_dir) / "_sysconfigdata_pycross.py").exists())
 
     @unittest.skipUnless(os.name == "nt", "Windows venv layout")
     def test_build_standard_venv_on_windows(self):

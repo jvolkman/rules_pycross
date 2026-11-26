@@ -9,6 +9,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from pycross.private.build.tools.crossenv import SYSCONFIG_DATA_NAME
+from pycross.private.build.tools.crossenv.utils import normalize_arch
+from pycross.private.build.tools.crossenv.utils import parse_target_triple
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.venv_utils import find_site_dir
 
@@ -125,26 +128,6 @@ def load_target_sysconfig(ctx: BuildContext) -> Dict[str, Any]:
     return find_sysconfig_data(target_sys_path)
 
 
-def _arch_from_host_gnu_type(host_gnu_type: str) -> str:
-    """Extract Python/Linux target architecture name from HOST_GNU_TYPE."""
-    if not host_gnu_type:
-        return "x86_64"
-    cpu = host_gnu_type.split("-", 1)[0].lower()
-    if cpu in ("aarch64", "arm64"):
-        return "aarch64"
-    if cpu in ("x86_64", "amd64"):
-        return "x86_64"
-    if cpu in ("i386", "i486", "i586", "i686", "x86", "x86_32"):
-        return "i686"
-    if cpu in ("ppc64le", "powerpc64le"):
-        return "ppc64le"
-    if cpu in ("s390x", "riscv64"):
-        return cpu
-    if cpu.startswith("arm"):
-        return "armv7l" if cpu in ("arm", "armv7", "armv7a") else cpu
-    return cpu
-
-
 def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
     """Derive _PYTHON_HOST_PLATFORM and MACOSX_DEPLOYMENT_TARGET dynamically from target sysconfig."""
     machdep = sysconfig_vars.get("MACHDEP")
@@ -153,17 +136,22 @@ def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[
     if not machdep:
         return None, None
 
-    arch = _arch_from_host_gnu_type(host_gnu_type)
+    if host_gnu_type:
+        try:
+            _, arch = parse_target_triple(host_gnu_type)
+            arch = normalize_arch(arch, os_name=machdep)
+        except ValueError:
+            arch = normalize_arch(host_gnu_type.split("-", 1)[0], os_name=machdep)
+    else:
+        arch = "x86_64"
 
     if machdep == "darwin":
-        if arch == "aarch64":
-            arch = "arm64"
         dep_target = sysconfig_vars.get("MACOSX_DEPLOYMENT_TARGET")
         if not dep_target:
             dep_target = "11.0"  # fallback deployment target
         return f"macosx-{dep_target}-{arch}", dep_target
 
-    elif machdep == "linux":
+    if machdep == "linux":
         return f"linux-{arch}", None
 
     return None, None
@@ -174,10 +162,11 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
 
     This function serves two purposes:
 
-    1. **Sysconfigdata override**: Writes a custom ``_pycross_sysconfigdata.py``
-       module and a ``.pth`` file so that Python's ``sysconfig`` reads
-       target-platform build variables instead of the host's. This is needed
-       by all builders.
+    1. **Sysconfigdata override**: Writes ``_sysconfigdata_pycross.py`` (overwriting
+       the initial crossenv copy in place when cross-compiling) so Python's
+       ``sysconfig`` reads final target-platform build variables. For standard
+       venvs, also writes a ``.pth`` file to set ``_PYTHON_SYSCONFIGDATA_NAME``
+       (crossenv's ``CrossenvFinder`` already serves the module directly).
 
     2. **Environment variable overrides**: Sets ``_PYTHON_HOST_PLATFORM`` and
        ``MACOSX_DEPLOYMENT_TARGET`` directly in the build environment
@@ -187,11 +176,18 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
        are preserved.
     """
     site_dir = find_site_dir(ctx.env_dir)
-    with open(site_dir / "_sysconfigdata_pycross.py", "w") as f:
+    with open(site_dir / f"{SYSCONFIG_DATA_NAME}.py", "w") as f:
         f.write(f"build_time_vars = {repr(ctx.sysconfig_vars)}\n")
-    with open(site_dir / "_sysconfigdata_pycross.pth", "w") as f:
-        f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"\n')
-    ctx.build_env["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"
+    pycache_dir = site_dir / "__pycache__"
+    if pycache_dir.is_dir():
+        for stale_pyc in pycache_dir.glob(f"{SYSCONFIG_DATA_NAME}.*.pyc"):
+            stale_pyc.unlink(missing_ok=True)
+
+    is_crossenv = getattr(ctx, "is_crossenv", False) or (ctx.env_dir / "lib" / "site.py").is_file()
+    if not is_crossenv:
+        with open(site_dir / f"{SYSCONFIG_DATA_NAME}.pth", "w") as f:
+            f.write(f'import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "{SYSCONFIG_DATA_NAME}"\n')
+    ctx.build_env["_PYTHON_SYSCONFIGDATA_NAME"] = SYSCONFIG_DATA_NAME
 
     effective_vars = ctx.sysconfig_vars
     if ctx.build_env.get("MACOSX_DEPLOYMENT_TARGET"):
