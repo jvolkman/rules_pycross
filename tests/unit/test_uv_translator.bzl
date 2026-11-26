@@ -14,10 +14,13 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 load("//pycross/private:translator_common.bzl", "read_project_dict_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "fold_variant_marker", "format_package_key", "parse_package_key")
+load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "parse_package_key")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", "discover_uv_all_members", "translate_uv")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:variant_util.bzl", "fold_variant_marker")
 
 def _lock_model(
         projects = ["*"],

@@ -1,7 +1,9 @@
 """PEP 508 dependency and resolution-marker evaluator rendering for `_lock/lock.bzl`."""
 
 load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
+load("//pycross/private:lock_contract.bzl", "constraint_setting_name", "marker_match_target_name")
 load("//pycross/private:util.bzl", "marker_evaluator_name", "marker_uses_extra", "parse_package_key")
+load("//pycross/private:variant_util.bzl", "marker_mentions_variant")
 load(":common.bzl", "ind")
 
 def format_variants_attr(resolvers):
@@ -69,10 +71,8 @@ def matching_variant_resolvers(markers, variant_resolvers):
     for label, qnames in sorted(variant_resolvers.items()):
         found = False
         for q in qnames:
-            sq = "'__variant_{}'".format(q)
-            dq = '"__variant_{}"'.format(q)
             for m in variant_markers:
-                if sq in m or dq in m:
+                if marker_mentions_variant(m, q):
                     found = True
                     break
             if found:
@@ -114,7 +114,7 @@ def render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
             lines,
             eval_name,
             marker_str,
-            "{}_match".format(eval_name),
+            marker_match_target_name(eval_name),
             extra = extra,
             resolvers = resolvers,
         )
@@ -140,9 +140,9 @@ def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_
             # Compound constraint: combine variant + marker config_settings.
             # Both is_<variant> and is_<marker> must already exist.
             lines.extend(config_setting_group(
-                "is_{}".format(constraint_name),
+                constraint_setting_name(constraint_name),
                 "match_all",
-                ["is_{}".format(entry["variant"]), "is_{}".format(entry["marker"])],
+                [constraint_setting_name(entry["variant"]), constraint_setting_name(entry["marker"])],
                 indent = 1,
             ))
             if loads != None:
@@ -154,6 +154,6 @@ def render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_
                 lines,
                 eval_name,
                 entry,
-                "is_{}".format(constraint_name),
+                constraint_setting_name(constraint_name),
                 resolvers = resolvers,
             )

@@ -8,12 +8,23 @@ Used by the per-format lock extensions (uv, pdm, poetry, pylock).
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@pypackaging.bzl", "pypackaging")
-load("@rules_pycross//pycross/private:override_helpers.bzl", "merge_backend_overrides")
+load("@rules_pycross//pycross/private:override_helpers.bzl", "canonicalize_override_key", "merge_backend_overrides")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
+load(
+    "//pycross/private:lock_contract.bzl",
+    "VARIANTS_PACKAGE",
+    "VARIANTS_STRING_FLAG_TARGET",
+    "build_repo_name",
+    "lock_sdist_deps_label",
+    "pkgs_repo_name",
+    "sdist_repo_name",
+    "whldir_name",
+)
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "parse_package_key", "sanitize_name", "sdist_builds_disallowed", "variant_item_qname")
+load("//pycross/private:util.bzl", "TRUE_FLAG_VALUES", "parse_flag_arg", "parse_package_key", "sanitize_name", "sdist_builds_disallowed")
+load("//pycross/private:variant_util.bzl", "split_variant_tokens", "variant_item_qname", "variant_set_suffix")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 
@@ -25,17 +36,14 @@ def _normalize_override_name(pkg_name, backend_name, workspace_name):
     The package name is canonicalized; the version is kept as written and must match
     the locked version string.
     """
-    if pkg_name == "*":
-        return pkg_name
-    name, sep, version = pkg_name.partition("@")
-    if not name or name == "*" or (sep and not version):
+    norm = canonicalize_override_key(pkg_name)
+    if norm == None:
         fail("{} override '{}' (workspace '{}'): expected a package name, 'name@version', or '*'".format(
             backend_name,
             pkg_name,
             workspace_name,
         ))
-    name = pypackaging.utils.canonicalize_name(name)
-    return "{}@{}".format(name, version) if sep else name
+    return norm
 
 def _validate_override_packages(override_configs, all_resolved_locks, workspace_memberships):
     """Fail on backend overrides that name a package (or version) not present in their workspace.
@@ -137,18 +145,15 @@ def _create_remote_file_repo(remote_file_repo, file, indexes):
         pypi_file(**pypi_file_attrs)
     return remote_file_label
 
-# Same spellings as coerce_transition_values (util.bzl), which applies them in the transition.
-_TRUE_VALUES = ["True", "true", "1"]
-
 def _variants_flag_ref(label):
     """Return (repo name, flag) if label is a generated repo's `//_variants` or `//_variants:<flag>`, else None."""
     repo, sep, target = label.partition("//")
     if not sep:
         return None
-    if target == "_variants":
-        flag = "_variants"
-    elif target.startswith("_variants:"):
-        flag = target[len("_variants:"):]
+    if target == VARIANTS_PACKAGE:
+        flag = VARIANTS_STRING_FLAG_TARGET
+    elif target.startswith(VARIANTS_PACKAGE + ":"):
+        flag = target[len(VARIANTS_PACKAGE) + 1:]
     else:
         return None
     if repo.startswith("@@"):
@@ -177,10 +182,10 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
     # (`@repo//_variants:_variants`), and canonical (`@@...`) spellings.
     values = {}  # (repo_name, flag_name) -> (label, value)
     for f in flags:
-        label, sep, value = f[2:].partition("=")
-        ref = _variants_flag_ref(label)
+        parsed = parse_flag_arg(f)
+        ref = _variants_flag_ref(parsed.label)
         if ref and ref[0] in resolved_locks:
-            values[ref] = (label, value if sep else "True")
+            values[ref] = (parsed.label, parsed.value)
     for label, value in settings.items():
         ref = _variants_flag_ref(label)
         if ref and ref[0] in resolved_locks:
@@ -190,14 +195,12 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
     index = {}
     selected = {}  # set suffix -> {qname: True}
     for (repo_name, flag_name), (label, value) in sorted(values.items()):
-        if flag_name == "_variants":
-            if not value:
-                continue
-            tokens = [t.strip() for t in value.split(",") if t.strip()]
+        if flag_name == VARIANTS_STRING_FLAG_TARGET:
+            tokens = split_variant_tokens(value)
             if not tokens:
                 continue
         else:
-            if value not in _TRUE_VALUES:
+            if value not in TRUE_FLAG_VALUES:
                 continue
             tokens = [flag_name]
 
@@ -205,7 +208,7 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
             repo_index = {}
             for variant_set in resolved_locks[repo_name].get("variants", []):
                 qnames = [variant_item_qname(item) for item in variant_set["items"]]
-                set_suffix = "_".join(sorted(qnames))
+                set_suffix = variant_set_suffix(qnames)
                 for item in variant_set["items"]:
                     for flag in item.get("flags", []):
                         repo_index.setdefault(flag, []).append((set_suffix, variant_item_qname(item)))
@@ -213,7 +216,7 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
 
         repo_index = index[repo_name]
         for token in tokens:
-            if flag_name == "_variants" and token not in repo_index:
+            if flag_name == VARIANTS_STRING_FLAG_TARGET and token not in repo_index:
                 if repo_index:
                     detail = "expected one of: " + ", ".join(sorted(repo_index.keys()))
                 else:
@@ -366,7 +369,7 @@ def create_repos(
         # Pre-calculate known packages in this lock file to filter sdist build_requires
         known_packages = known_packages_by_repo[repo_name]
 
-        lock_repo_for_deps = "{}__pkgs".format(workspace_name)
+        lock_repo_for_deps = pkgs_repo_name(workspace_name)
 
         # Instantiate sdist repos for packages requiring source builds.
         for pkg_key, pkg in resolved_lock.get("packages", {}).items():
@@ -380,25 +383,18 @@ def create_repos(
             sdist_file_key = sdist_file["key"]
             sdist_label = repo_remote_files[sdist_file_key]
 
-            sdist_repo_name = "{}_sdist_{}".format(
-                lock_repo_for_deps,
-                sanitize_name(pkg_key),
-            )
+            pkg_sdist_repo = sdist_repo_name(lock_repo_for_deps, pkg_key)
 
-            if sdist_repo_name in created_sdist_repos:
+            if pkg_sdist_repo in created_sdist_repos:
                 continue
-            created_sdist_repos[sdist_repo_name] = True
+            created_sdist_repos[pkg_sdist_repo] = True
 
             sdist_deps = (
-                ["@{}//_lock:_sdist_deps_{}".format(lock_repo_for_deps, pkg_key)] if (workspace_name, pkg_key) in workspace_pkg_has_deps else []
+                [lock_sdist_deps_label(lock_repo_for_deps, pkg_key)] if (workspace_name, pkg_key) in workspace_pkg_has_deps else []
             )
 
             parts = parse_package_key(pkg_key)
-            pkg_name_part = parts.name
             pkg_version = parts.version
-            ver_with_tag = "{}~{}".format(pkg_version, parts.tag) if parts.tag else pkg_version
-            whldir_norm_name = sanitize_name(pkg_name_part)
-            whldir_name = "{}-{}.whldir".format(whldir_norm_name, ver_with_tag)
 
             if pkg.get("build_tools_repo") and pkg["build_tools_repo"] not in known_packages_by_repo:
                 fail("Package '{}' sets build_tools_repo = '{}', which is not a repo created by this extension. Known repos: {}".format(
@@ -406,9 +402,9 @@ def create_repos(
                     pkg["build_tools_repo"],
                     ", ".join(sorted(known_packages_by_repo.keys())),
                 ))
-            thin_repo = pkg.get("build_tools_repo") or "{}__build".format(workspace_name)
+            thin_repo = pkg.get("build_tools_repo") or build_repo_name(workspace_name)
             sdist_repo_attrs = {
-                "name": sdist_repo_name,
+                "name": pkg_sdist_repo,
                 "sdist": sdist_label,
                 "deps": sdist_deps,
                 "known_packages": known_packages_by_repo.get(thin_repo, known_packages),
@@ -417,7 +413,7 @@ def create_repos(
                 "backend_to_rule": BACKEND_TO_RULE,
                 "backend_tool_packages": backend_tool_packages,
                 "default_backend": DEFAULT_BACKEND,
-                "whldir_name": whldir_name,
+                "whldir_name": whldir_name(pkg_key),
             }
             remote_file = resolved_lock.get("remote_files", {}).get(sdist_file_key, {})
             sdist_urls = remote_file.get("urls", [])
@@ -454,7 +450,7 @@ def create_repos(
         workspace_groups.setdefault(uname, []).append(repo_name)
 
     for workspace_name, member_repos in workspace_groups.items():
-        workspace_repo_name = "{}__pkgs".format(workspace_name)
+        workspace_repo_name = pkgs_repo_name(workspace_name)
 
         # Merge repo_maps from all members
         merged_repo_map = {}
@@ -473,7 +469,7 @@ def create_repos(
         skip_variant_members = [m for m in member_repos if m in auto_build_set]
         package_repo_attrs = dict(
             name = workspace_repo_name,
-            build_repo = "{}__build".format(workspace_name),
+            build_repo = build_repo_name(workspace_name),
             repo_map = merged_repo_map,
             backend_configs = backend_configs_json,
             member_lock_files = member_lock_files,

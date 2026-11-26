@@ -18,8 +18,21 @@ The file structure is as follows:
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":build_text.bzl", "alias", "flag_setting")
+load(
+    ":lock_contract.bzl",
+    "VARIANTS_PACKAGE",
+    "VARIANT_STATE_TARGET",
+    "constraint_setting_name",
+    "local_lock_target_label",
+    "sdist_target_name",
+    "unselected_target_name",
+    "variants_flag_label",
+    "wheel_target_name",
+    "whldir_name",
+)
 load(":resolved_lock_renderer.bzl", "render_lock_bzl_with_meta", "render_reset_bzl")
-load(":util.bzl", "format_package_key", "is_wheel_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
+load(":util.bzl", "format_package_key", "is_wheel_platform_specific", "parse_package_key", "underscore_name")
+load(":variant_util.bzl", "variant_item_qname", "variant_set_suffix")
 
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
@@ -97,8 +110,50 @@ def _merge_dependencies(first_data, entries):
 # Visible for testing
 merge_dependencies_for_testing = _merge_dependencies
 
-def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_variant_flags):
+def _normalize_workspace_variants(variant_sets):
+    """Normalize deduplicated workspace variant sets once for lock rendering.
+
+    Computes sorted set suffixes, consolidated bool/string flag maps, and
+    resolver/item lookups in a single pass.
+    """
+    sets_by_suffix = {}  # set_suffix -> sorted [qname, ...]
+    all_flags = {}  # flag_label -> [unique qnames]
+    member_flag_maps = {}  # member -> {flag -> [unique qnames]}
+    qname_to_resolvers = {}  # qname -> [resolver_name, ...]
+    resolver_qnames = {}  # ":<resolver_name>" -> sorted [qname, ...]
+    for vset in variant_sets:
+        sorted_qnames = sorted(vset["qnames"])
+        set_suffix = variant_set_suffix(sorted_qnames)
+        sets_by_suffix[set_suffix] = sorted_qnames
+        resolver_name = "_resolver_" + set_suffix
+        resolver_qnames[":" + resolver_name] = sorted_qnames
+        for qname in sorted_qnames:
+            resolvers = qname_to_resolvers.setdefault(qname, [])
+            if resolver_name not in resolvers:
+                resolvers.append(resolver_name)
+        for flag_label, qnames in vset["flags"].items():
+            dest = all_flags.setdefault(flag_label, [])
+            for q in qnames:
+                if q not in dest:
+                    dest.append(q)
+        for member, fmap in vset.get("member_flags", {}).items():
+            m_dest = member_flag_maps.setdefault(member, {})
+            for flag, qnames in fmap.items():
+                dest = m_dest.setdefault(flag, [])
+                for q in qnames:
+                    if q not in dest:
+                        dest.append(q)
+    return struct(
+        sets_by_suffix = sets_by_suffix,
+        all_flags = all_flags,
+        member_flag_maps = member_flag_maps,
+        qname_to_resolvers = qname_to_resolvers,
+        resolver_qnames = resolver_qnames,
+    )
+
+def _render_lock_build(variant_items, normalized_variants, member_variant_flags, qname_to_resolvers = None):
     """Render `_lock/BUILD.bazel` for a workspace package repo."""
+    qname_to_resolvers = qname_to_resolvers if qname_to_resolvers != None else normalized_variants.qname_to_resolvers
     lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
@@ -120,42 +175,21 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
         "",
     ])
 
-    if variant_sets:
-        # Collect unique set keys, consolidated bool_flag mappings, and
-        # per-member string_flag mappings across all conflict sets.
-        sets_by_suffix = {}  # set_suffix -> sorted qnames
-        all_flags = {}  # flag_label -> [unique qnames]
-        member_flag_maps = {}  # member -> {flag -> [unique qnames]}
-        for vset in variant_sets:
-            sorted_qnames = sorted(vset["qnames"])
-            set_suffix = "_".join(sorted_qnames)
-            sets_by_suffix[set_suffix] = sorted_qnames
-            for flag_label, qnames in vset["flags"].items():
-                dest = all_flags.setdefault(flag_label, [])
-                for q in qnames:
-                    if q not in dest:
-                        dest.append(q)
-            for member, fmap in vset.get("member_flags", {}).items():
-                m_dest = member_flag_maps.setdefault(member, {})
-                for flag, qnames in fmap.items():
-                    dest = m_dest.setdefault(flag, [])
-                    for q in qnames:
-                        if q not in dest:
-                            dest.append(q)
-
+    sets_by_suffix = normalized_variants.sets_by_suffix
+    if sets_by_suffix:
         # There are no static defaults here: thin repos select variants. Their
         # `_variants` bool_flags and string_flags feed `_variant_state` once,
         # and their transitions merge per-set pins, defaults, and usable
         # narrowing into the canonical `:_state` setting.
         lock_build_lines.extend([
             "string_flag(",
-            '    name = "_state",',
+            '    name = "{}",'.format(VARIANT_STATE_TARGET),
             '    build_setting_default = "",',
             ")",
             "",
             "variant_state(",
             '    name = "_variant_state",',
-            '    state = ":_state",',
+            '    state = ":{}",'.format(VARIANT_STATE_TARGET),
             "    sets = {",
         ])
         for set_suffix, qnames in sorted(sets_by_suffix.items()):
@@ -164,18 +198,18 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
             "    },",
             "    flags = {",
         ])
-        for flag_label, qnames in sorted(all_flags.items()):
+        for flag_label, qnames in sorted(normalized_variants.all_flags.items()):
             lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
         lock_build_lines.append("    },")
         if member_variant_flags:
             lock_build_lines.append("    string_flags = {")
             for member in sorted(member_variant_flags.keys()):
-                flag_map = member_flag_maps.get(member, {})
+                flag_map = normalized_variants.member_flag_maps.get(member, {})
                 spec = {
-                    "display": "@{}//_variants".format(member),
+                    "display": "@{}//{}".format(member, VARIANTS_PACKAGE),
                     "map": {k: v for k, v in sorted(flag_map.items())},
                 }
-                lock_build_lines.append('        "@{}//_variants:_variants": {},'.format(member, json.encode(json.encode(spec))))
+                lock_build_lines.append('        "{}": {},'.format(variants_flag_label(member), json.encode(json.encode(spec))))
             lock_build_lines.append("    },")
         lock_build_lines.extend([
             ")",
@@ -192,14 +226,14 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
                 ")",
                 "",
             ])
-            lock_build_lines.extend(flag_setting("_unselected_{}".format(set_suffix), ":" + resolver_name, "", inline = True))
+            lock_build_lines.extend(flag_setting(unselected_target_name(set_suffix), ":" + resolver_name, "", inline = True))
 
     # Emit config_settings referencing the per-set or per-item projection.
     for qname in sorted(variant_items.keys()):
         resolvers = qname_to_resolvers.get(qname, [])
         if len(resolvers) == 1:
             # Simple case: item is in exactly one conflict set.
-            lock_build_lines.extend(flag_setting("is_{}".format(qname), ":" + resolvers[0], qname, inline = True))
+            lock_build_lines.extend(flag_setting(constraint_setting_name(qname), ":" + resolvers[0], qname, inline = True))
         elif len(resolvers) > 1:
             # Item appears in multiple conflict sets: project directly from `_variant_state`.
             item_proj_name = "_item_" + qname
@@ -211,12 +245,20 @@ def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_v
                 ")",
                 "",
             ])
-            lock_build_lines.extend(flag_setting("is_{}".format(qname), ":" + item_proj_name, "true", inline = True))
+            lock_build_lines.extend(flag_setting(constraint_setting_name(qname), ":" + item_proj_name, "true", inline = True))
 
     return "\n".join(lock_build_lines)
 
+def _render_lock_build_for_testing(variant_items, variant_sets, qname_to_resolvers, member_variant_flags):
+    return _render_lock_build(
+        variant_items,
+        _normalize_workspace_variants(variant_sets),
+        member_variant_flags,
+        qname_to_resolvers = qname_to_resolvers,
+    )
+
 # Visible for testing
-render_lock_build_for_testing = _render_lock_build
+render_lock_build_for_testing = _render_lock_build_for_testing
 
 def _run_package_repo_hooks(hooks, packages_info, override_configs):
     """Run registered package_repo hooks, deduplicating backends that share a hook function."""
@@ -295,7 +337,7 @@ def _package_repo_impl(rctx):
                 set_qnames.append(qname)
                 if not skip_member_variants:
                     for flag in item.get("flags", []):
-                        set_flags.setdefault("@{}//_variants:{}".format(member, flag), []).append(qname)
+                        set_flags.setdefault(variants_flag_label(member, flag), []).append(qname)
                         set_member_flags.setdefault(flag, []).append(qname)
                         member_variant_flags.setdefault(member, {})[flag] = True
             set_key = "|".join(sorted(set_qnames))
@@ -341,37 +383,30 @@ def _package_repo_impl(rctx):
 
     rctx.file("REPO.bazel", "")
 
-    # Map each variant item to the resolver(s) it participates in.
-    qname_to_resolvers = {}  # qname -> [resolver_name, ...]
-    resolver_qnames = {}  # ":<resolver_name>" -> sorted [qname, ...]
-    for vset in variant_sets:
-        sorted_qnames = sorted(vset["qnames"])
-        resolver_name = "_resolver_" + "_".join(sorted_qnames)
-        resolver_qnames[":" + resolver_name] = sorted_qnames
-        for qname in vset["qnames"]:
-            qname_to_resolvers.setdefault(qname, []).append(resolver_name)
+    # Normalize deduplicated workspace variant sets once for lock.bzl, reset.bzl, and _lock/BUILD.bazel.
+    normalized_variants = _normalize_workspace_variants(variant_sets)
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
     lock_result = render_lock_bzl_with_meta(
         lock,
         rctx.attr.repo_map,
         rctx.name,
-        variant_resolvers = resolver_qnames,
-        reset_conflict_sets = [vset["qnames"] for vset in variant_sets],
+        variant_resolvers = normalized_variants.resolver_qnames,
+        reset_conflict_sets = normalized_variants.sets_by_suffix.values(),
     )
     rctx.file("_lock/lock.bzl", lock_result.content)
     if lock_result.has_reset:
         rctx.file(
             "_lock/reset.bzl",
             render_reset_bzl(
-                [label for vset in variant_sets for label in vset["flags"].keys()],
-                string_flag_labels = ["@{}//_variants:_variants".format(m) for m in sorted(member_variant_flags.keys())],
+                normalized_variants.all_flags.keys(),
+                string_flag_labels = [variants_flag_label(m) for m in sorted(member_variant_flags.keys())],
             ),
         )
 
     rctx.file(
         "_lock/BUILD.bazel",
-        _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_variant_flags),
+        _render_lock_build(variant_items, normalized_variants, member_variant_flags),
     )
 
     # 2. Root BUILD.bazel
@@ -401,28 +436,22 @@ def _package_repo_impl(rctx):
         # own wheels or sdists; they share the base package's artifacts.
         if parts.extra:
             continue
-        pkg_name_part = parts.name
-        pkg_version = parts.version
-        pkg_tag = parts.tag
-        norm_name = _normalize_name(pkg_name_part)
-        us_name = underscore_name(pkg_name_part)
-        ver_with_tag = "{}~{}".format(pkg_version, pkg_tag) if pkg_tag else pkg_version
-        whldir_name = "{}-{}.whldir".format(us_name, ver_with_tag)
-        target_name = format_package_key(norm_name, pkg_version, tag = pkg_tag)
+        norm_name = _normalize_name(parts.name)
+        target_name = format_package_key(norm_name, parts.version, tag = parts.tag)
 
         # Versioned target: _wheel:name@version[~tag] -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
         wheel_lines.extend([
             "pycross_wheel_dir(",
             '    name = "{}",'.format(target_name),
-            '    src = "//_lock:_wheel_{}",'.format(pkg_key),
-            '    whldir_name = "{}",'.format(whldir_name),
+            '    src = "{}",'.format(local_lock_target_label(wheel_target_name(pkg_key))),
+            '    whldir_name = "{}",'.format(whldir_name(pkg_key)),
             ")",
             "",
         ])
 
         sdist_file = packages[pkg_key].get("sdist_file")
         if sdist_file:
-            sdist_lines.extend(alias(target_name, "//_lock:_sdist_{}".format(pkg_key)))
+            sdist_lines.extend(alias(target_name, local_lock_target_label(sdist_target_name(pkg_key))))
 
     rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")

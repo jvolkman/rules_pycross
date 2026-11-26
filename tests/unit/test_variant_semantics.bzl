@@ -9,10 +9,10 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:package_repo.bzl", "render_lock_build_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "decode_variant_state", "merge_variant_state")
+load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_set_projection", "variant_state")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_set_projection", "variant_state")
+load("//pycross/private:variant_util.bzl", "decode_variant_state", "merge_variant_state")
 
 _VariantTupleInfo = provider(
     doc = "Resolved variant values across a set of resolvers.",

@@ -20,6 +20,7 @@ load("//pycross/private/thin_repo:pins.bzl", "append_root_aliases", "emit_pin_di
 load("//pycross/private/thin_repo:selects.bzl", "variant_fallbacks")
 load("//pycross/private/thin_repo:transition.bzl", "render_transition_bzl")
 load("//pycross/private/thin_repo:variants.bzl", "collect_variants", "transition_settings", "variants_build")
+load(":lock_contract.bzl", "variant_state_label")
 load(":util.bzl", "base_packages_with_extras", "parse_package_key")
 
 def _thin_package_repo_impl(rctx):
@@ -30,7 +31,9 @@ def _thin_package_repo_impl(rctx):
     pins = lock["pins"]
     testonly_pins_set = {p: True for p in lock.get("testonly_pins", [])}
 
-    # Normalize pin values: bare strings (unconditional) become {"": value}
+    # Normalize pin values: bare strings (unconditional) become {"": value}.
+    # Kept because hand-authored resolved-lock fixtures (e.g. tests/golden/fixtures/*.json)
+    # pass bare string pins directly to thin_package_repo.
     for pin_name in pins.keys():
         if type(pins[pin_name]) == "string":
             pins[pin_name] = {"": pins[pin_name]}
@@ -86,6 +89,7 @@ def _thin_package_repo_impl(rctx):
     )
     state_overrides = settings.state_overrides
     pins_by_set = settings.pins_by_set
+    defaults_by_set = settings.defaults_by_set
     excluded = settings.excluded
     has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings) or bool(state_overrides)
 
@@ -111,7 +115,7 @@ def _thin_package_repo_impl(rctx):
                 rctx.attr.member_name,
                 rctx.attr.flags,
                 rctx.attr.settings,
-                variant_state_label = "@{}//_lock:_state".format(workspace_repo) if state_overrides else "",
+                variant_state_label = variant_state_label(workspace_repo) if state_overrides else "",
                 variant_state_overrides = state_overrides,
             ),
         )
@@ -126,6 +130,7 @@ def _thin_package_repo_impl(rctx):
         variant_info = variant_info,
         no_variant_fallbacks = no_variant_fallbacks,
         pins_by_set = pins_by_set,
+        defaults_by_set = defaults_by_set,
         excluded = excluded,
         resolution_marker_exprs = lock.get("resolution_marker_exprs", {}),
     )
@@ -215,6 +220,7 @@ def _thin_package_repo_impl(rctx):
         getattr(rctx, "original_name", "") or "<repo>",
         unselected_groups = unselected_groups,
         pins_by_set = pins_by_set,
+        defaults_by_set = defaults_by_set,
         excluded = excluded,
         expose_variant_flags = rctx.attr.expose_variant_flags,
     )

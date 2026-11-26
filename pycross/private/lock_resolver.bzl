@@ -1,7 +1,15 @@
 """Starlark implementation of the raw lock resolver."""
 
 load("@pypackaging.bzl", "pypackaging")
-load(":util.bzl", "base_package_key", "format_package_key", "parse_package_key", "resolution_marker_constraint_name", "variant_item_qname")
+load(
+    ":util.bzl",
+    "base_package_key",
+    "canonicalize_package_key",
+    "format_package_key",
+    "parse_package_key",
+    "resolution_marker_constraint_name",
+)
+load(":variant_util.bzl", "variant_item_qname")
 
 def _file_key(f):
     if not f.get("sha256"):
@@ -17,19 +25,6 @@ def _file_key(f):
         key += "/%x" % (h & 0xffffffff)
     return key
 
-def _canonicalize_package_spec(name):
-    """Canonicalize package spec ('name', 'name[extra]', 'name@ver', 'name[extra]@ver', or with '~tag')."""
-    parts = parse_package_key(name)
-    norm_name = pypackaging.utils.canonicalize_name(parts.name)
-    norm_extra = pypackaging.utils.canonicalize_name(parts.extra) if parts.extra else ""
-    if "@" in name:
-        if not parts.version:
-            fail("Invalid package key '{}': version cannot be empty after '@'".format(name))
-        if "~" in name.split("@", 1)[1] and not parts.tag:
-            fail("Invalid package key '{}': source tag cannot be empty after '~'".format(name))
-        return format_package_key(norm_name, parts.version, extra = norm_extra, tag = parts.tag), True, bool(parts.tag)
-    return format_package_key(norm_name, extra = norm_extra), False, False
-
 def _package_source(raw_pkg):
     """Return the human-readable source identifier for a raw lock package, or ''."""
     if raw_pkg.get("source"):
@@ -44,20 +39,69 @@ def _package_source(raw_pkg):
             return url[4:] if url.startswith("git+") else url
     return ""
 
-def _resolve_matching_keys(name, versions_by_name, keys_by_name_version, canonical_to_key, source_by_key, attr_name, source = "", allow_multiple_sources = False):
-    """Resolve a package spec (and optional `source`) to one or more locked package keys."""
-    canonical, has_version, has_tag = _canonicalize_package_spec(name)
-    if has_tag:
-        resolved = canonical_to_key.get(canonical)
+def _build_pkg_index(all_package_keys):
+    """Build lookup indices over locked package keys for annotation and dependency resolution."""
+    versions_by_name = {}
+    keys_by_name_version = {}
+    canonical_to_key = {}
+    source_by_key = {}
+    locked_versions_by_simple_name = {}
+    for pkg_key, raw_pkg in all_package_keys.items():
+        parts = parse_package_key(pkg_key)
+
+        if parts.name not in locked_versions_by_simple_name:
+            locked_versions_by_simple_name[parts.name] = []
+        if parts.version not in locked_versions_by_simple_name[parts.name]:
+            locked_versions_by_simple_name[parts.name].append(parts.version)
+
+        canon = canonicalize_package_key(pkg_key)
+        canonical_to_key[canon.canonical] = pkg_key
+        dep_name = format_package_key(canon.name, extra = canon.extra)
+        dep_nv = format_package_key(canon.name, canon.version, extra = canon.extra)
+        versions_by_name.setdefault(dep_name, []).append(pkg_key)
+        keys_by_name_version.setdefault(dep_nv, []).append(pkg_key)
+        src = _package_source(raw_pkg)
+        if src:
+            source_by_key[pkg_key] = src
+
+    return struct(
+        versions_by_name = versions_by_name,
+        keys_by_name_version = keys_by_name_version,
+        canonical_to_key = canonical_to_key,
+        source_by_key = source_by_key,
+        all_package_keys = all_package_keys,
+        locked_versions_by_simple_name = locked_versions_by_simple_name,
+    )
+
+def _lookup_pkg_keys(pkg_index, spec):
+    """Canonicalize `spec` and return `(canonical, matching_keys)` from `pkg_index`."""
+    parsed = canonicalize_package_key(spec)
+    if parsed.has_tag:
+        resolved = pkg_index.canonical_to_key.get(parsed.canonical)
         options = [resolved] if resolved else []
-    elif has_version:
-        options = list(keys_by_name_version.get(canonical, []))
+    elif parsed.has_version:
+        options = list(pkg_index.keys_by_name_version.get(parsed.canonical, []))
     else:
-        options = list(versions_by_name.get(canonical, []))
+        options = list(pkg_index.versions_by_name.get(parsed.canonical, []))
+    return parsed.canonical, options
+
+def _dep_is_ignored(dep_key, ignore_deps):
+    """Return True if `dep_key` matches any canonical entry in `ignore_deps`."""
+    if not ignore_deps:
+        return False
+    canon = canonicalize_package_key(dep_key)
+    canon_name = format_package_key(canon.name, extra = canon.extra)
+    canon_nv = format_package_key(canon.name, canon.version, extra = canon.extra)
+    return canon_name in ignore_deps or canon_nv in ignore_deps or canon.canonical in ignore_deps
+
+def _resolve_matching_keys(name, pkg_index, attr_name, source = "", allow_multiple_sources = False):
+    """Resolve a package spec (and optional `source`) to one or more locked package keys."""
+    _, options = _lookup_pkg_keys(pkg_index, name)
 
     if not options:
         fail('{} entry "{}" matches no packages'.format(attr_name, name))
 
+    source_by_key = pkg_index.source_by_key
     if source and source != "*":
         filtered = [k for k in options if source_by_key.get(k, "") == source]
         if not filtered:
@@ -94,42 +138,30 @@ def _resolve_matching_keys(name, versions_by_name, keys_by_name_version, canonic
 
     return options
 
-def _resolve_single_version(name, versions_by_name, keys_by_name_version, canonical_to_key, source_by_key, attr_name, source = ""):
+def _resolve_single_version(name, pkg_index, attr_name, source = ""):
     return _resolve_matching_keys(
         name,
-        versions_by_name,
-        keys_by_name_version,
-        canonical_to_key,
-        source_by_key,
+        pkg_index,
         attr_name,
         source = source,
     )[0]
 
-def _apply_annotation(ann, versions_by_name, keys_by_name_version, canonical_to_key, source_by_key):
+def _apply_annotation(ann, pkg_index):
     build_deps = None
     if "extra_build_tools" in ann:
         build_deps = []
         for dep in ann["extra_build_tools"]:
             resolved_dep = _resolve_single_version(
                 dep,
-                versions_by_name,
-                keys_by_name_version,
-                canonical_to_key,
-                source_by_key,
+                pkg_index,
                 "extra_build_tools",
             )
             build_deps.append(resolved_dep)
 
     ignore_deps = {}
     for dep in ann.get("ignore_dependencies", []):
-        canonical, has_version, has_tag = _canonicalize_package_spec(dep)
-        if has_tag:
-            if canonical not in canonical_to_key:
-                fail('ignore_dependencies entry "{}" matches no packages'.format(dep))
-        elif has_version:
-            if canonical not in keys_by_name_version:
-                fail('ignore_dependencies entry "{}" matches no packages'.format(dep))
-        elif canonical not in versions_by_name:
+        canonical, matches = _lookup_pkg_keys(pkg_index, dep)
+        if not matches:
             fail('ignore_dependencies entry "{}" matches no packages'.format(dep))
         ignore_deps[canonical] = True
 
@@ -137,10 +169,7 @@ def _apply_annotation(ann, versions_by_name, keys_by_name_version, canonical_to_
     for dep in ann.get("extra_dependencies", []):
         resolved_dep = _resolve_single_version(
             dep,
-            versions_by_name,
-            keys_by_name_version,
-            canonical_to_key,
-            source_by_key,
+            pkg_index,
             "extra_dependencies",
         )
         extra_deps.append(resolved_dep)
@@ -165,7 +194,7 @@ def _apply_annotation(ann, versions_by_name, keys_by_name_version, canonical_to_
         precompile = ann.get("precompile", ""),
     )
 
-def _collect_package_annotations(annotations_data, versions_by_name, keys_by_name_version, all_package_keys, canonical_to_key, source_by_key):
+def _collect_package_annotations(annotations_data, pkg_index):
     annotations = {}
 
     wildcard_annotation = annotations_data.get("*")
@@ -180,15 +209,12 @@ def _collect_package_annotations(annotations_data, versions_by_name, keys_by_nam
         pkg_source = pkg[1] if type(pkg) == "tuple" else ann.get("source", "")
         resolved_pkgs = _resolve_matching_keys(
             pkg_spec,
-            versions_by_name,
-            keys_by_name_version,
-            canonical_to_key,
-            source_by_key,
+            pkg_index,
             "annotations",
             source = pkg_source,
             allow_multiple_sources = True,
         )
-        applied = _apply_annotation(ann, versions_by_name, keys_by_name_version, canonical_to_key, source_by_key)
+        applied = _apply_annotation(ann, pkg_index)
         for resolved_pkg in resolved_pkgs:
             if resolved_pkg in specific_keys:
                 fail('Multiple annotations match package "{}"'.format(resolved_pkg))
@@ -198,10 +224,10 @@ def _collect_package_annotations(annotations_data, versions_by_name, keys_by_nam
     wildcard_only_keys = {}
     if wildcard_annotation:
         resolved_wildcard = None
-        for pkg_key in all_package_keys:
+        for pkg_key in pkg_index.all_package_keys:
             if pkg_key not in specific_keys:
                 if resolved_wildcard == None:
-                    resolved_wildcard = _apply_annotation(wildcard_annotation, versions_by_name, keys_by_name_version, canonical_to_key, source_by_key)
+                    resolved_wildcard = _apply_annotation(wildcard_annotation, pkg_index)
                 annotations[pkg_key] = resolved_wildcard
                 wildcard_only_keys[pkg_key] = True
 
@@ -294,22 +320,14 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         for dep_key in default_extra_build_tools:
             if _base_key(dep_key) == pkg_key_no_extra:
                 continue
-            canon_dep_key, _, _ = _canonicalize_package_spec(dep_key)
-            dep_parts = parse_package_key(canon_dep_key)
-            canon_dep_name = format_package_key(dep_parts.name, extra = dep_parts.extra)
-            canon_dep_nv = format_package_key(dep_parts.name, dep_parts.version, extra = dep_parts.extra)
-            if canon_dep_name not in ann_ignore_deps and canon_dep_nv not in ann_ignore_deps and canon_dep_key not in ann_ignore_deps and dep_key not in normal_deps:
+            if not _dep_is_ignored(dep_key, ann_ignore_deps) and dep_key not in normal_deps:
                 extra_build_tools.append(dep_key)
                 all_dependency_keys.append(dep_key)
 
     marker_dependencies = []
     for dep in pkg.get("dependencies", []):
         dep_key = dep.get("key") or "{}@{}".format(dep["name"], dep["version"])
-        canon_dep_key, _, _ = _canonicalize_package_spec(dep_key)
-        dep_parts = parse_package_key(canon_dep_key)
-        canon_dep_name = format_package_key(dep_parts.name, extra = dep_parts.extra)
-        canon_dep_nv = format_package_key(dep_parts.name, dep_parts.version, extra = dep_parts.extra)
-        if canon_dep_name in ann_ignore_deps or canon_dep_nv in ann_ignore_deps or canon_dep_key in ann_ignore_deps:
+        if _dep_is_ignored(dep_key, ann_ignore_deps):
             continue
         marker_dependencies.append({
             "key": dep_key,
@@ -692,31 +710,8 @@ def resolve(
     )
 
     lock_model_packages = lock_model_data.get("packages", {})
-    all_package_keys = lock_model_packages
-
-    versions_by_name = {}
-    keys_by_name_version = {}
-    canonical_to_key = {}
-    source_by_key = {}
-    locked_versions_by_simple_name = {}
-    for pkg_key, raw_pkg in all_package_keys.items():
-        parts = parse_package_key(pkg_key)
-
-        if parts.name not in locked_versions_by_simple_name:
-            locked_versions_by_simple_name[parts.name] = []
-        if parts.version not in locked_versions_by_simple_name[parts.name]:
-            locked_versions_by_simple_name[parts.name].append(parts.version)
-
-        canon_key, _, _ = _canonicalize_package_spec(pkg_key)
-        canonical_to_key[canon_key] = pkg_key
-        canon_parts = parse_package_key(canon_key)
-        dep_name = format_package_key(canon_parts.name, extra = canon_parts.extra)
-        dep_nv = format_package_key(canon_parts.name, canon_parts.version, extra = canon_parts.extra)
-        versions_by_name.setdefault(dep_name, []).append(pkg_key)
-        keys_by_name_version.setdefault(dep_nv, []).append(pkg_key)
-        src = _package_source(raw_pkg)
-        if src:
-            source_by_key[pkg_key] = src
+    pkg_index = _build_pkg_index(lock_model_packages)
+    locked_versions_by_simple_name = pkg_index.locked_versions_by_simple_name
 
     # Warn about local wheels that don't match locked packages
     for pkg_key, filenames in local_wheels_by_pkg.items():
@@ -743,21 +738,14 @@ def resolve(
     if annotations_data:
         annotations, wildcard_only_keys = _collect_package_annotations(
             annotations_data,
-            versions_by_name,
-            keys_by_name_version,
-            all_package_keys,
-            canonical_to_key,
-            source_by_key,
+            pkg_index,
         )
 
     default_extra_build_tools = []
     for dep in default_extra_build_tools_args:
         resolved_dep = _resolve_single_version(
             dep,
-            versions_by_name,
-            keys_by_name_version,
-            canonical_to_key,
-            source_by_key,
+            pkg_index,
             "extra_build_tools",
         )
         default_extra_build_tools.append(resolved_dep)

@@ -10,7 +10,7 @@ Each backend extension follows the same pattern:
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")
-load("@pypackaging.bzl", "pypackaging")
+load(":util.bzl", "canonicalize_package_key")
 
 def merge_backend_overrides(scope, pkg_name, version = ""):
     """Merge wildcard, package-specific, and version-specific backend overrides.
@@ -114,15 +114,21 @@ def encode_build_system_attrs(tag):
 
     return backend_attrs
 
-def _canonicalize_override_key(pkg_name):
+def canonicalize_override_key(pkg_name):
+    """Canonicalize a backend override key (`"*"`, `"name"`, or `"name@version"`).
+
+    Args:
+        pkg_name: Raw override key string from a module tag.
+
+    Returns:
+        Canonicalized key string, or `None` if `pkg_name` is malformed.
+    """
     if pkg_name == "*":
-        return pkg_name
+        return "*"
     name, sep, version = pkg_name.partition("@")
-    if not name or name == "*" or (sep and not version):
-        # Preserve malformed input so lock_repo_creation's validation reports the original string.
-        return pkg_name
-    norm = pypackaging.utils.canonicalize_name(name)
-    return "{}@{}".format(norm, version) if sep else norm
+    if not name or name == "*" or (sep and not version) or "[" in name or "~" in version:
+        return None
+    return canonicalize_package_key(pkg_name).canonical
 
 def _collect_module_overrides(modules, build_backend):
     """Collect override tags across Bzlmod modules with root-module-wins precedence.
@@ -136,7 +142,9 @@ def _collect_module_overrides(modules, build_backend):
         seen_in_module = {}
         for tag in module.tags.override:
             key = tag.workspace
-            norm_name = _canonicalize_override_key(tag.name)
+
+            # Preserve malformed input so lock_repo_creation's validation reports the original string.
+            norm_name = canonicalize_override_key(tag.name) or tag.name
             dup_key = (key, norm_name)
             if dup_key in seen_in_module:
                 fail("Duplicate {} override for package '{}' in workspace '{}' (module '{}')".format(

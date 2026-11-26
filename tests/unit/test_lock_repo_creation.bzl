@@ -1,7 +1,20 @@
 """Tests for lock_repo_creation helpers."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
+
+# buildifier: disable=bzl-visibility
+load(
+    "//pycross/private:lock_contract.bzl",
+    "build_repo_name",
+    "is_extras_proxy",
+    "local_lock_target_label",
+    "lock_constraint_label",
+    "pkgs_repo_name",
+    "sdist_repo_name",
+    "whldir_name",
+)
 
 # buildifier: disable=bzl-visibility
 load(
@@ -11,6 +24,12 @@ load(
     "known_packages_from_lock_for_testing",
     "remote_file_dedup_key_and_repo_name_for_testing",
 )
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "canonicalize_package_key", "parse_flag_arg")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:variant_util.bzl", "split_variant_tokens", "variant_set_suffix")
 
 # buildifier: disable=unused-variable
 def _test_remote_file_dedup_key_and_repo_name_impl(env, target):
@@ -124,6 +143,59 @@ def _test_known_packages_from_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_known_packages_from_lock_impl)
 
+# buildifier: disable=unused-variable
+def _test_lock_contract_and_helpers_impl(env, target):
+    """Verify shared lock_contract, canonicalize_package_key, parse_flag_arg, and variant_util helpers."""
+    env.expect.that_str(pkgs_repo_name("uv")).equals("uv__pkgs")
+    env.expect.that_str(build_repo_name("uv")).equals("uv__build")
+    env.expect.that_str(sdist_repo_name("uv__pkgs", "my-pkg@1.0.0~deadbeef")).equals("uv__pkgs_sdist_my_pkg_1_0_0_deadbeef")
+    env.expect.that_str(local_lock_target_label("_wheel_foo@1.0")).equals("//_lock:_wheel_foo@1.0")
+    env.expect.that_str(lock_constraint_label("uv__pkgs", "extra_cpu")).equals("@uv__pkgs//_lock:is_extra_cpu")
+    env.expect.that_str(whldir_name("Typing_Extensions@4.12.2")).equals("typing_extensions-4.12.2.whldir")
+    env.expect.that_str(whldir_name("torch@2.5.0~abcd1234")).equals("torch-2.5.0~abcd1234.whldir")
+    env.expect.that_bool(is_extras_proxy("foo[bar]@1.0", {})).equals(True)
+    env.expect.that_bool(is_extras_proxy("foo[bar]@1.0", {"wheel_candidates": [{"filename": "foo.whl"}]})).equals(False)
+    env.expect.that_bool(is_extras_proxy("foo@1.0", {})).equals(False)
+
+    canon = canonicalize_package_key("Foo_Bar[My_Extra]@1.0~abcd1234")
+    env.expect.that_str(canon.canonical).equals("foo-bar[my-extra]@1.0~abcd1234")
+    env.expect.that_bool(canon.has_version).equals(True)
+    env.expect.that_bool(canon.has_tag).equals(True)
+    env.expect.that_str(canonicalize_package_key("*", allow_wildcard = True).canonical).equals("*")
+
+    parsed_flag = parse_flag_arg("--@repo//_variants:extra_a")
+    env.expect.that_str(parsed_flag.label).equals("@repo//_variants:extra_a")
+    env.expect.that_str(parsed_flag.value).equals("True")
+    env.expect.that_bool(parsed_flag.has_value).equals(False)
+
+    env.expect.that_str(variant_set_suffix(["b", "a"])).equals("a_b")
+    env.expect.that_collection(split_variant_tokens(" a , , b ")).contains_exactly(["a", "b"]).in_order()
+    env.expect.that_collection(split_variant_tokens("")).contains_exactly([])
+
+def _test_lock_contract_and_helpers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_lock_contract_and_helpers_impl)
+
+def _empty_workspace_repo_subject_impl(_ctx):
+    lock_constraint_label("", "extra_cpu")
+    return []
+
+_empty_workspace_repo_subject = rule(implementation = _empty_workspace_repo_subject_impl)
+
+def _test_lock_contract_rejects_empty_workspace_repo_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("lock_target_label requires a non-empty repository name"),
+    )
+
+def _test_lock_contract_rejects_empty_workspace_repo(name):
+    util.helper_target(_empty_workspace_repo_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_lock_contract_rejects_empty_workspace_repo_impl,
+        expect_failure = True,
+    )
+
 def lock_repo_creation_test_suite(name):
     test_suite(
         name = name,
@@ -131,5 +203,7 @@ def lock_repo_creation_test_suite(name):
             _test_remote_file_dedup_key_and_repo_name,
             _test_compute_workspace_pkg_has_deps,
             _test_known_packages_from_lock,
+            _test_lock_contract_and_helpers,
+            _test_lock_contract_rejects_empty_workspace_repo,
         ],
     )

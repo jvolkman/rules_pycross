@@ -2,7 +2,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
+load(":py_providers.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
 def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_files = ctx.files.wheel

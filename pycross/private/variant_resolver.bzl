@@ -21,7 +21,14 @@ marker evaluators can match them directly without two-stage rival plumbing or
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":deferred_failure.bzl", "register_failure_action")
-load(":util.bzl", "decode_variant_state", "excluded_variant_items")
+load(
+    ":lock_contract.bzl",
+    "VARIANT_STATE_DEFAULT_PREFIX",
+    "VARIANT_STATE_PIN_PREFIX",
+    "VARIANT_STATE_USABLE_PREFIX",
+    "variant_state_key",
+)
+load(":variant_util.bzl", "decode_variant_state", "excluded_variant_items", "split_variant_tokens")
 
 VariantStateInfo = provider(
     doc = "Resolved conflict-variant selections for all conflict sets in a workspace.",
@@ -51,7 +58,7 @@ def _parse_usable_str(value, set_items, source):
     return usable
 
 def _parse_string_flags(ctx):
-    """Validate all string_flags tokens and return decoded `(display, flag_map, tokens)` tuples."""
+    """Validate all string_flags tokens and return normalized `(display, qnames)` tuples."""
     parsed = []
     for flag, spec_json in ctx.attr.string_flags.items():
         raw = flag[BuildSettingInfo].value
@@ -61,23 +68,20 @@ def _parse_string_flags(ctx):
         display = spec.get("display") or str(flag.label)
         flag_map = spec.get("map", {})
         valid = spec.get("valid", sorted(flag_map.keys()))
-        tokens = []
-        for token in raw.split(","):
-            token = token.strip()
-            if not token:
-                continue
+        for token in split_variant_tokens(raw):
             if token not in valid:
                 fail("{} selects unknown variant '{}' (expected one of: {})".format(
                     display,
                     token,
                     ", ".join(valid),
                 ))
-            tokens.append(token)
-        parsed.append((display, flag_map, tokens))
+            names = flag_map.get(token)
+            if names:
+                parsed.append(("{}={}".format(display, token), names))
     return parsed
 
 def _parse_bool_flags(ctx):
-    """Return `(display, names)` tuples for every active bool_flag."""
+    """Return normalized `(display, qnames)` tuples for every active bool_flag."""
     parsed = []
     for flag, value in ctx.attr.flags.items():
         if not flag[BuildSettingInfo].value:
@@ -94,7 +98,7 @@ def _variant_state_impl(ctx):
     # Validate unknown tokens in `//_variants` string_flags before evaluating
     # pins or unusable sets so typos fail loudly everywhere.
     parsed_string_flags = _parse_string_flags(ctx)
-    parsed_bool_flags = _parse_bool_flags(ctx)
+    active_flag_entries = _parse_bool_flags(ctx) + parsed_string_flags
 
     raw_state = ctx.attr.state[BuildSettingInfo].value if ctx.attr.state else ""
     state_label = str(ctx.attr.state.label) if ctx.attr.state else ""
@@ -104,14 +108,14 @@ def _variant_state_impl(ctx):
     explicit = {}
     usable_by_set = {}
     for set_key, set_items in sorted(sets.items()):
-        pin = state.get("p:" + set_key, "")
+        pin = state.get(variant_state_key(VARIANT_STATE_PIN_PREFIX, set_key), "")
         if pin:
             explicit[set_key] = _check_item(set_items, pin, state_label)
             continue
 
         # Absent `"u:<set>"` in `_state` (including reset `""`) means `"*"` (all
         # items usable), whereas explicit `""` means no items are usable.
-        usable = _parse_usable_str(state.get("u:" + set_key, "*"), set_items, state_label)
+        usable = _parse_usable_str(state.get(variant_state_key(VARIANT_STATE_USABLE_PREFIX, set_key), "*"), set_items, state_label)
         usable_by_set[set_key] = usable
         if usable != None and not usable:
             explicit[set_key] = ""
@@ -120,7 +124,7 @@ def _variant_state_impl(ctx):
         set_items_dict = {item: True for item in set_items}
         active = []
         active_flags = []
-        for display, names in parsed_bool_flags:
+        for display, names in active_flag_entries:
             enabled = [
                 name
                 for name in names
@@ -128,29 +132,11 @@ def _variant_state_impl(ctx):
             ]
             if not enabled:
                 continue
-            active_flags.append(display)
+            if display not in active_flags:
+                active_flags.append(display)
             for name in enabled:
                 if name not in active:
                     active.append(name)
-
-        for display, flag_map, tokens in parsed_string_flags:
-            for token in tokens:
-                names = flag_map.get(token)
-                if not names:
-                    continue
-                enabled = [
-                    name
-                    for name in names
-                    if name in set_items_dict and (usable == None or name in usable)
-                ]
-                if not enabled:
-                    continue
-                flag_display = "{}={}".format(display, token)
-                if flag_display not in active_flags:
-                    active_flags.append(flag_display)
-                for name in enabled:
-                    if name not in active:
-                        active.append(name)
 
         if len(active) > 1:
             detail = " (enabling {})".format(" and ".join(active)) if len(active_flags) == 1 else ""
@@ -174,7 +160,7 @@ def _variant_state_impl(ctx):
             continue
 
         usable = usable_by_set.get(set_key)
-        default = state.get("d:" + set_key, "")
+        default = state.get(variant_state_key(VARIANT_STATE_DEFAULT_PREFIX, set_key), "")
         if default and (usable == None or default in usable):
             checked_default = _check_item(set_items, default, state_label)
             if checked_default not in rivals_excluded:

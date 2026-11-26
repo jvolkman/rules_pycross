@@ -1,6 +1,13 @@
 """Per-pin BUILD.bazel, `__actual/`, and root alias generation for thin package repos."""
 
 load("//pycross/private:build_text.bzl", "alias")
+load(
+    "//pycross/private:lock_contract.bzl",
+    "lock_dist_info_prefix",
+    "lock_label_prefix",
+    "sdist_label_prefix",
+    "wheel_label_prefix",
+)
 load("//pycross/private:util.bzl", "is_platform_specific", "underscore_name")
 load(":availability.bzl", "emit_maybe_alias")
 load(":common.bzl", "NO_MATCH_ERROR_TARGET", "effective_base_target_dict", "is_key_platform_specific", "safe_name")
@@ -97,9 +104,9 @@ def pin_build(pin, repo_ctx):
     aggregated_keys = repo_ctx.aggregated_keys
     packages = repo_ctx.packages
 
-    lock_ref = "@{}//_lock:".format(workspace_repo)
-    wheel_ref = "@{}//_wheel:".format(workspace_repo)
-    sdist_ref = "@{}//_sdist:".format(workspace_repo)
+    lock_ref = lock_label_prefix(workspace_repo)
+    wheel_ref = wheel_label_prefix(workspace_repo)
+    sdist_ref = sdist_label_prefix(workspace_repo)
 
     actual_lines = []
     used_main = {}
@@ -150,7 +157,7 @@ def pin_build(pin, repo_ctx):
         unselected_groups.update(actual_wheel.unselected_groups)
         _emit_proxy(file_rule, safe_name(target_name, "wheel"), actual_wheel.expr)
 
-        actual_dist_info = proxy_actual(actual_lines, pin_target_dict, lock_ref + "_dist_info_", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
+        actual_dist_info = proxy_actual(actual_lines, pin_target_dict, lock_dist_info_prefix(workspace_repo), workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
         unselected_groups.update(actual_dist_info.unselected_groups)
         _emit_proxy(file_rule, safe_name(target_name, "dist_info"), actual_dist_info.expr)
         lines.extend(alias(safe_name(target_name, "data"), ":" + safe_name(target_name, "pkg"), trailing_blank = False))

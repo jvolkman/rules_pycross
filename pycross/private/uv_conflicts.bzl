@@ -13,12 +13,15 @@ load(
 )
 load(
     ":util.bzl",
-    "excluded_variant_items",
-    "fold_variant_marker",
-    "marker_mentions_variant",
     "parse_package_key",
     "resolution_marker_constraint_name",
     "sanitize_name",
+)
+load(
+    ":variant_util.bzl",
+    "excluded_variant_items",
+    "fold_variant_marker",
+    "marker_mentions_variant",
     "variant_conflict_pairs",
     "variant_item_qname",
 )

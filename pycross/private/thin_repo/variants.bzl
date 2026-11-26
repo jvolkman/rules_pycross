@@ -1,7 +1,17 @@
 """Variant flag collection, transition settings, and `_variants/BUILD.bazel` generation."""
 
 load("//pycross/private:build_text.bzl", "alias", "config_setting_group")
-load("//pycross/private:util.bzl", "excluded_variant_items", "variant_item_qname")
+load(
+    "//pycross/private:lock_contract.bzl",
+    "VARIANTS_STRING_FLAG_TARGET",
+    "VARIANT_STATE_DEFAULT_PREFIX",
+    "VARIANT_STATE_PIN_PREFIX",
+    "VARIANT_STATE_USABLE_PREFIX",
+    "lock_constraint_label",
+    "lock_unselected_label",
+    "variant_state_key",
+)
+load("//pycross/private:variant_util.bzl", "excluded_variant_items", "variant_item_qname", "variant_set_suffix")
 load(":selects.bzl", "unselected_condition")
 
 def collect_variants(variant_sets):
@@ -55,7 +65,7 @@ def collect_variants(variant_sets):
                         usable.append(flag)
                     break
         if qnames:
-            sets["_".join(sorted(qnames))] = struct(
+            sets[variant_set_suffix(qnames)] = struct(
                 qnames = qnames,
                 display_items = display_items,
                 flags = usable,
@@ -80,6 +90,26 @@ def excluded_items(variant_info, pins_by_set):
         pins_by_set.values(),
     )
 
+def effective_defaults(variant_info, pins_by_set = None, excluded = None):
+    """Return `{set_suffix: default_qname}` for unpinned sets with a non-excluded default.
+
+    Args:
+        variant_info: Result of `collect_variants`.
+        pins_by_set: Optional `{set suffix: pinned qname}` dict.
+        excluded: Optional `{qname: True}` dict of items excluded by pins.
+
+    Returns:
+        Dict `{set_suffix: default_qname}`.
+    """
+    pins_by_set = pins_by_set or {}
+    excluded = excluded or {}
+    defaults = {}
+    for set_suffix, vset in sorted(variant_info.sets.items()):
+        # A default that conflicts with a pin in another set would select both.
+        if set_suffix not in pins_by_set and not vset.pin and vset.default and vset.default not in excluded:
+            defaults[set_suffix] = vset.default
+    return defaults
+
 def usable_settings(variant_info, pins_by_set, excluded):
     """`u:<set>` overrides in `//_lock:_state` for a transitioned repo.
 
@@ -103,7 +133,7 @@ def usable_settings(variant_info, pins_by_set, excluded):
             continue
         usable = [q for q in vset.requested if q not in excluded]
         if len(usable) < len(vset.qnames):
-            result["u:" + set_suffix] = " ".join(sorted(usable))
+            result[variant_state_key(VARIANT_STATE_USABLE_PREFIX, set_suffix)] = " ".join(sorted(usable))
     return result
 
 def transition_settings(variant_info, variant_pins, member_name, has_other_flags):
@@ -117,7 +147,7 @@ def transition_settings(variant_info, variant_pins, member_name, has_other_flags
             own `flags` or `settings`).
 
     Returns:
-        struct(state_overrides = {key: value}, pins_by_set, excluded).
+        struct(state_overrides = {key: value}, pins_by_set, defaults_by_set, excluded).
     """
     pins_by_set = dict(variant_pins)
     for set_suffix, vset in sorted(variant_info.sets.items()):
@@ -133,19 +163,23 @@ def transition_settings(variant_info, variant_pins, member_name, has_other_flags
             ))
         pins_by_set[set_suffix] = vset.pin
     excluded = excluded_items(variant_info, pins_by_set)
+    defaults_by_set = effective_defaults(variant_info, pins_by_set, excluded)
 
     state_overrides = {}
     for set_suffix, qname in sorted(pins_by_set.items()):
-        state_overrides["p:" + set_suffix] = qname
-    for set_suffix, vset in sorted(variant_info.sets.items()):
-        # A default that conflicts with a pin in another set would select both.
-        if set_suffix not in pins_by_set and vset.default and vset.default not in excluded:
-            state_overrides["d:" + set_suffix] = vset.default
+        state_overrides[variant_state_key(VARIANT_STATE_PIN_PREFIX, set_suffix)] = qname
+    for set_suffix, qname in sorted(defaults_by_set.items()):
+        state_overrides[variant_state_key(VARIANT_STATE_DEFAULT_PREFIX, set_suffix)] = qname
     if has_other_flags or state_overrides:
         state_overrides.update(usable_settings(variant_info, pins_by_set, excluded))
-    return struct(state_overrides = state_overrides, pins_by_set = pins_by_set, excluded = excluded)
+    return struct(
+        state_overrides = state_overrides,
+        pins_by_set = pins_by_set,
+        defaults_by_set = defaults_by_set,
+        excluded = excluded,
+    )
 
-def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None, pins_by_set = None, excluded = None, expose_variant_flags = True):
+def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None, pins_by_set = None, defaults_by_set = None, excluded = None, expose_variant_flags = True):
     """Render _variants/BUILD.bazel: this repo's variant flags.
 
     The workspace repo's variant resolvers read these bool_flags (see
@@ -162,6 +196,8 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
         unselected_groups: {name: [set suffixes]} of `_unselected_all_*`
             groups that the repo's selects reference.
         pins_by_set: {set suffix: qname} this repo's transition pins.
+        defaults_by_set: Optional precomputed {set suffix: default qname}
+            (from `transition_settings`). Computed from `variant_info` when omitted.
         excluded: {qname: True} of items that conflict with those pins.
         expose_variant_flags: Whether to emit user-facing `_variants` flags and
             `is_<flag>` config_settings (False for auto-generated `<ws>__build`).
@@ -175,13 +211,13 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
 
     pins_by_set = pins_by_set or {}
     excluded = excluded or {}
+    if defaults_by_set == None:
+        defaults_by_set = effective_defaults(variant_info, pins_by_set, excluded)
     defaults = {}  # qname -> [all set suffixes containing qname] for repo defaults/pins
     if expose_variant_flags:
         default_qnames = {}
         for set_suffix, vset in variant_info.sets.items():
-            sel = pins_by_set.get(set_suffix) or vset.pin
-            if not sel and vset.default not in excluded:
-                sel = vset.default
+            sel = pins_by_set.get(set_suffix) or vset.pin or defaults_by_set.get(set_suffix)
             if sel:
                 default_qnames[sel] = True
         for qname in default_qnames.keys():
@@ -206,7 +242,7 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
         body.extend(config_setting_group(
             "_selected_{}".format(qname),
             "match_any",
-            ["@{}//_lock:is_{}".format(workspace_repo, qname), unselected.condition],
+            [lock_constraint_label(workspace_repo, qname), unselected.condition],
         ))
 
     # `_unselected_all_<hash>`: all of several conflict sets are unselected.
@@ -215,13 +251,13 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
         body.extend(config_setting_group(
             name,
             "match_all",
-            ["@{}//_lock:_unselected_{}".format(workspace_repo, s) for s in set_suffixes],
+            [lock_unselected_label(workspace_repo, s) for s in set_suffixes],
         ))
 
     if flags:
         body.extend([
             "string_flag(",
-            '    name = "_variants",',
+            '    name = "{}",'.format(VARIANTS_STRING_FLAG_TARGET),
             '    build_setting_default = "",',
             ")",
             "",
@@ -235,7 +271,7 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
             ")",
             "",
         ])
-        conditions = [selected.get(q, "@{}//_lock:is_{}".format(workspace_repo, q)) for q in qnames]
+        conditions = [selected.get(q, lock_constraint_label(workspace_repo, q)) for q in qnames]
         if len(qnames) == 1:
             body.extend(alias("is_{}".format(flag), conditions[0]))
             continue

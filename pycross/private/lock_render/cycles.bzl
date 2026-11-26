@@ -1,5 +1,6 @@
 """Cycle SCC edge-map rendering and `pycross_cycle_member_marker_deps` emission."""
 
+load("//pycross/private:lock_contract.bzl", "is_extras_proxy", "raw_target_name")
 load("//pycross/private:util.bzl", "base_package_key", "parse_package_key", "sanitize_name")
 load(":common.bzl", "ind")
 load(":markers.bzl", "format_variants_attr", "matching_variant_resolvers")
@@ -32,7 +33,7 @@ def build_cycle_edges_dict(scc, packages):
             elif base_key and dep_key == base_key:
                 has_unconditional_base = True
             edge_list.append(entry)
-        if not pkg.get("wheel_candidates") and base_key and not has_unconditional_base:
+        if is_extras_proxy(pkg_key, pkg) and not has_unconditional_base:
             if base_key in scc_set:
                 edge_list.append({"dep": base_key})
         edges[pkg_key] = edge_list
@@ -107,7 +108,7 @@ def render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_resol
         for pkg_key in sorted(resolved_members):
             lines.append(ind("pycross_cycle_member_marker_deps("))
             lines.append(ind("name = {},".format(json.encode(pkg_key)), 2))
-            lines.append(ind("raw_name = {},".format(json.encode("_raw_{}".format(pkg_key))), 2))
+            lines.append(ind("raw_name = {},".format(json.encode(raw_target_name(pkg_key))), 2))
             lines.append(ind("member = {},".format(json.encode(pkg_key)), 2))
             lines.append(ind("edges = {},".format(edges_var_name), 2))
             if resolvers:

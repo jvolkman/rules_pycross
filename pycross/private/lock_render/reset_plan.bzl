@@ -15,7 +15,9 @@ SCC is resettable and no intra-SCC edge depends on variants.
 """
 
 load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
-load("//pycross/private:util.bzl", "base_package_key", "fold_variant_marker", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name", "variant_conflict_pairs")
+load("//pycross/private:lock_contract.bzl", "VARIANT_STATE_LOCAL_LABEL", "is_extras_proxy")
+load("//pycross/private:util.bzl", "base_package_key", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:variant_util.bzl", "fold_variant_marker", "variant_conflict_pairs")
 load(":common.bzl", "is_in_same_cycle")
 load(":wheels.bzl", "resolved_wheel_candidates", "wheel_match_condition")
 
@@ -34,9 +36,6 @@ def marker_depends_on_variants(marker, conflict_pairs):
         True if the marker's result can vary with the selected variants.
     """
     return fold_variant_marker(marker, conflict_pairs = conflict_pairs) == "V"
-
-def _is_extras_proxy(key, pkg):
-    return not pkg.get("wheel_candidates") and bool(parse_package_key(key).extra)
 
 def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = None):
     """Decides which packages install with reset variant settings, and their gates.
@@ -76,7 +75,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         if cg:
             cycle_members_by_group.setdefault(cg, []).append(pkg_key)
         total_edges += len(pkg.get("marker_dependencies", []))
-        if _is_extras_proxy(pkg_key, pkg):
+        if is_extras_proxy(pkg_key, pkg):
             total_edges += 1
 
     def group(name, kind, labels):
@@ -89,11 +88,11 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         pkg = packages[key]
         parts = parse_package_key(key)
         resolved = resolved_wheel_candidates(pkg, repo_map)
-        is_extras_proxy = _is_extras_proxy(key, pkg)
+        extras_proxy = is_extras_proxy(key, pkg)
         if pkg.get("post_install_patches") or pkg.get("build_target"):
             return no
         base = None
-        if is_extras_proxy:
+        if extras_proxy:
             base_key = base_package_key(key)
             if ignore_same_cycle and is_in_same_cycle(base_key, pkg, packages):
                 base = raw_plan.get(base_key)
@@ -118,7 +117,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
                     return no
 
         items = []
-        if is_extras_proxy:
+        if extras_proxy:
             if base.gate:
                 items.append(base.gate)
         elif pkg.get("sdist_file") and pkg["sdist_file"].get("key") and has_build_fallback(pkg):
@@ -176,7 +175,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         wheel_members = []
         extras_members = []
         for m in members:
-            if _is_extras_proxy(m, packages[m]):
+            if is_extras_proxy(m, packages[m]):
                 extras_members.append(m)
             else:
                 wheel_members.append(m)
@@ -259,7 +258,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             members = cycle_members_by_group[ident] if kind == "cycle" else [ident]
             for m in members:
                 pkg = packages[m]
-                if _is_extras_proxy(m, pkg):
+                if is_extras_proxy(m, pkg):
                     base_key = base_package_key(m)
                     if base_key in packages and not (kind == "cycle" and is_in_same_cycle(base_key, pkg, packages)):
                         dep_node = node_of(base_key)
@@ -293,7 +292,7 @@ def render_reset_bzl(flag_labels, string_flag_labels = None):
     Returns:
         The file content.
     """
-    outputs = [(json.encode("//_lock:_state"), '""')]
+    outputs = [(json.encode(VARIANT_STATE_LOCAL_LABEL), '""')]
     for label in sorted({label: True for label in flag_labels}.keys()):
         outputs.append((json.encode(label), "False"))
     for label in sorted({label: True for label in (string_flag_labels or [])}.keys()):
