@@ -10,6 +10,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Sequence
+from typing import Set
 from typing import Tuple
 
 from pycross.private.build.tools.utils.context import BuildContext
@@ -249,29 +250,63 @@ def unversioned_library_name(filename: str) -> Optional[str]:
     return None
 
 
-def _resolve_msvc_environment(ctx: BuildContext, environment: Dict[str, str], inherited_path: str) -> Dict[str, str]:
+_MSVC_NOT_FOUND = "msvc_not_found"
+_MSVC_SDK_ENV_KEYS = ("PATH", "INCLUDE", "LIB")
+
+
+def _filter_msvc_entries(value: str) -> List[str]:
+    """Split an MSVC environment value and drop rules_cc placeholder segments.
+
+    Return an empty list when no non-empty non-placeholder segment remains.
+    When at least one real entry is present, preserve empty segments in place.
+    """
+    if not value:
+        return []
+    entries = [entry for entry in value.split(os.pathsep) if entry.strip().lower() != _MSVC_NOT_FOUND]
+    if not any(entry.strip() for entry in entries):
+        return []
+    return entries
+
+
+def _resolve_msvc_environment(
+    ctx: BuildContext,
+    environment: Dict[str, str],
+    inherited_env: Dict[str, str],
+) -> Tuple[Dict[str, str], Set[str]]:
     """Resolve directories in MSVC's PATH, INCLUDE, and LIB before building.
 
-    Make relative paths absolute under the Bazel execroot and replace
-    $$EXT_BUILD_ROOT$$ placeholders with that root. Normalize resolved SDK paths
-    and append the existing build PATH after SDK PATH entries. This keeps paths
-    valid when the build runs from the sdist without normalizing inherited PATH.
+    Make relative SDK paths absolute under the Bazel execroot, replace
+    $$EXT_BUILD_ROOT$$ placeholders with that root, and drop rules_cc's
+    msvc_not_found placeholder segments. Normalize resolved SDK paths and append
+    any existing build_env value for the same key after the SDK entries so that
+    SDK paths take priority without overwriting user values.
+
+    Returns:
+        A tuple of `(resolved_env, sdk_keys)`, where `sdk_keys` contains the
+        keys that received at least one non-empty SDK entry from `environment`.
     """
-    result = {}
+    result: Dict[str, str] = {}
+    sdk_keys: Set[str] = set()
     for key, value in environment.items():
+        source_entries = _filter_msvc_entries(value)
         entries = []
-        source_entries = value.split(os.pathsep) if value else []
-        # Resolve SDK paths from the execroot and normalize nonempty entries.
+        # Resolve SDK paths from the execroot and normalize non-empty entries.
         # Keep empty entries unchanged instead of normalizing them to ".".
         for entry in source_entries:
             resolved = resolve_sandbox_path(ctx.prefix, entry)
             entries.append(os.path.normpath(resolved) if resolved else "")
-        # Keep existing build tools available after SDK tools so the selected
-        # MSVC compiler takes priority.
-        if key == "PATH" and inherited_path:
-            entries.append(inherited_path)
-        result[key] = os.pathsep.join(entries)
-    return result
+        if source_entries:
+            sdk_keys.add(key)
+
+        # Keep inherited and user-supplied values after SDK entries so that the
+        # selected MSVC toolchain takes priority without dropping user paths.
+        inherited_val = inherited_env.get(key, "")
+        if inherited_val:
+            entries.append(inherited_val)
+
+        if entries:
+            result[key] = os.pathsep.join(entries)
+    return result, sdk_keys
 
 
 CC_ENV_KEYS = ("CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "AR", "ARFLAGS")
@@ -450,21 +485,21 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> CcLayerState
         ctx.sysconfig_vars["LDCXXSHARED"] = shlex.join([str(cxx_path), "-shared"])
 
     # Set library search paths and the compiler environment for build subprocesses.
-    inherited_path = ctx.build_env.get("PATH", "")
     build_env_update = {
         "PYCROSS_LIBRARY_PATH": str(layer_lib_dir),
         "PYCROSS_INCLUDE_PATH": os.pathsep.join(str(p) for p in include_dirs),
     }
     if native_msvc:
         raw_msvc_env = cc_config["msvc_env"]
-        msvc_env = _resolve_msvc_environment(ctx, raw_msvc_env, inherited_path)
-        # Custom toolchains can omit SDK variables. Tell setuptools to use the
-        # prepared SDK only when the full environment is available; inherited
-        # PATH alone does not establish that the toolchain supplied an SDK PATH.
-        if raw_msvc_env.get("PATH") and all(msvc_env.get(key) for key in ("PATH", "INCLUDE", "LIB")):
+        msvc_env, sdk_keys = _resolve_msvc_environment(ctx, raw_msvc_env, ctx.build_env)
+        # Custom toolchains can omit SDK variables or emit rules_cc's
+        # msvc_not_found placeholder. Tell setuptools to use the prepared SDK
+        # only when the toolchain itself supplied PATH, INCLUDE, and LIB.
+        if all(key in sdk_keys for key in _MSVC_SDK_ENV_KEYS):
             msvc_env["DISTUTILS_USE_SDK"] = "1"
         build_env_update.update(msvc_env)
     else:
+        inherited_path = ctx.build_env.get("PATH", "")
         build_env_update["PATH"] = os.pathsep.join((str(layer_bin_dir), inherited_path))
 
     ctx.build_env.update(build_env_update)
