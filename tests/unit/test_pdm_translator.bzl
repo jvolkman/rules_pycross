@@ -717,6 +717,26 @@ def _test_pdm_workspace_cache_matches_standalone(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_workspace_cache_matches_standalone_impl)
 
+# buildifier: disable=unused-variable
+def _test_pdm_file_missing_hash_impl(env, target):
+    project = _minimal_project(deps = ["pkg==1.0.0"])
+    lock = _minimal_lock([
+        {
+            "name": "pkg",
+            "version": "1.0.0",
+            "files": [{"file": "pkg-1.0.0-py3-none-any.whl"}],
+        },
+    ])
+    result = translate_pdm(project, lock, _lock_model())
+    files = result["packages"]["pkg@1.0.0"]["files"]
+    env.expect.that_int(len(files)).equals(1)
+    env.expect.that_str(files[0]["name"]).equals("pkg-1.0.0-py3-none-any.whl")
+    env.expect.that_str(files[0]["sha256"]).equals("")
+
+def _test_pdm_file_missing_hash(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_file_missing_hash_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -741,5 +761,6 @@ def pdm_translator_test_suite(name):
             _test_pdm_extra_package_entry_markers,
             _test_discover_pdm_all_members,
             _test_pdm_workspace_cache_matches_standalone,
+            _test_pdm_file_missing_hash,
         ],
     )

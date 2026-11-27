@@ -2,7 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_netrc")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:pypi_file.bzl", "DEFAULT_INDEX", "get_pypi_file_url")
+load("//pycross/private:pypi_file.bzl", "DEFAULT_INDEX", "get_pypi_file_url", "warn_unverified_download")
 
 _BUILD_TEMPLATE = """\
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
@@ -45,12 +45,14 @@ def _pycross_wheel_file_impl(rctx):
         )]
 
     # Download the wheel file directly
-    rctx.download(
+    download_info = rctx.download(
         urls,
         rctx.attr.filename,
         rctx.attr.sha256,
         auth = use_netrc(netrc, urls, {}),
     )
+    if not rctx.attr.sha256:
+        warn_unverified_download(rctx.attr.filename, download_info)
 
     # Inspect the wheel for site_paths, bin_paths, data_paths, and include_paths
     exec_internal_tool(

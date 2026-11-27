@@ -839,6 +839,27 @@ def _test_poetry_workspace_cache_matches_standalone(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_workspace_cache_matches_standalone_impl)
 
+# --- test_poetry_file_missing_hash ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_file_missing_hash_impl(env, target):
+    project = {"project": {"name": "my-app", "dependencies": ["pkg==1.0.0"]}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("pkg", "1.0.0", files = [{"file": "pkg-1.0.0-py3-none-any.whl"}]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    files = result["packages"]["pkg@1.0.0"]["files"]
+    env.expect.that_int(len(files)).equals(1)
+    env.expect.that_str(files[0]["name"]).equals("pkg-1.0.0-py3-none-any.whl")
+    env.expect.that_str(files[0]["sha256"]).equals("")
+
+def _test_poetry_file_missing_hash(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_file_missing_hash_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -867,5 +888,6 @@ def poetry_translator_test_suite(name):
             _test_poetry_forked_transitive_dep,
             _test_poetry_mixed_dev_group_order,
             _test_poetry_workspace_cache_matches_standalone,
+            _test_poetry_file_missing_hash,
         ],
     )

@@ -43,9 +43,10 @@ def _parse_file_info(file_info, package_name, package_version):
     else:
         fail("PDM file entry has no 'file' or 'url' member")
 
+    raw_hash = file_info.get("hash", "")
     return make_file_entry(
         filename,
-        strip_sha256_prefix(file_info["hash"]),
+        strip_sha256_prefix(raw_hash) if raw_hash else "",
         package_name,
         package_version,
         urls = urls,

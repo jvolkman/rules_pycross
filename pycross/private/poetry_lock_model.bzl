@@ -317,7 +317,7 @@ def _build_poetry_workspace_base(lock_dict):
         files = [
             make_file_entry(
                 url_decode_filename(f["file"]),
-                strip_sha256_prefix(f["hash"]),
+                strip_sha256_prefix(f["hash"]) if f.get("hash") else "",
                 package_name,
                 package_version,
                 urls = source_urls,

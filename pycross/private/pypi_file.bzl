@@ -288,6 +288,17 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256):
         ),
     )
 
+def warn_unverified_download(filename, download_info = None):
+    """Emit a fetch-time warning when downloading a file without a lockfile sha256."""
+    observed = getattr(download_info, "sha256", "") if download_info != None else ""
+    observed_note = " (downloaded sha256: {})".format(observed) if observed else ""
+
+    # buildifier: disable=print
+    print("WARNING: Downloading '{}' without a sha256 hash in the lock file{}; integrity was not verified.".format(
+        filename,
+        observed_note,
+    ))
+
 def _pypi_file_impl(ctx):
     """Implementation of the pypi_file rule."""
 
@@ -301,12 +312,14 @@ def _pypi_file_impl(ctx):
         ctx.attr.sha256,
     )
 
-    ctx.download(
+    download_info = ctx.download(
         url,
         "file/" + ctx.attr.filename,
         ctx.attr.sha256,
         auth = use_netrc(netrc, [url], {}),
     )
+    if not ctx.attr.sha256:
+        warn_unverified_download(ctx.attr.filename, download_info)
     ctx.file("file/BUILD.bazel", _PYPI_FILE_BUILD.format(ctx.attr.filename))
 
     if not hasattr(ctx, "repo_metadata"):

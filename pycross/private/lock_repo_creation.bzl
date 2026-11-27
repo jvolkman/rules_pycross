@@ -414,8 +414,11 @@ def create_repos(
             }
             remote_file = merged_remote_files.get(sdist_file_key, {})
             sdist_urls = remote_file.get("urls", [])
-            if remote_file.get("sha256") and not (sdist_urls and sdist_urls[0].startswith("git+")):
+            is_git_sdist = bool(sdist_urls and sdist_urls[0].startswith("git+"))
+            if remote_file.get("sha256") and not is_git_sdist:
                 sdist_repo_attrs["sdist_sha256"] = remote_file["sha256"]
+            elif sdist_urls and not is_git_sdist:
+                sdist_repo_attrs["sdist_unverified"] = True
             if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
                 sdist_repo_attrs["extra_build_tools"] = _extra_build_tool_names(pkg["extra_build_tools"])
 

@@ -364,6 +364,12 @@ def _sdist_repo_common(rctx):
     """
     _validate_build_backend(rctx.attr)
 
+    if rctx.attr.sdist_unverified:
+        # buildifier: disable=print
+        print("WARNING: Building sdist '{}' without a sha256 hash in the lock file; integrity was not verified.".format(
+            rctx.attr.sdist,
+        ))
+
     sdist_path = rctx.path(rctx.attr.sdist)
     if hasattr(rctx, "watch"):
         # rctx.path() does not record file contents as repo inputs, so watch
@@ -472,6 +478,10 @@ _SDIST_REPO_ATTRS = {
         doc = "Verified SHA256 of `sdist`. When set, the repo rule relies on this attribute " +
               "for cache invalidation instead of watching `sdist`, so repo contents cache hits " +
               "do not need to materialize the archive repo.",
+    ),
+    "sdist_unverified": attr.bool(
+        default = False,
+        doc = "Whether `sdist` was fetched from a direct URL without a lockfile sha256 hash.",
     ),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "Sorted canonical package names pinned in the build tools repo, used to filter build_requires."),
