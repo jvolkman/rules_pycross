@@ -117,7 +117,14 @@ COMMON_BUILD_ATTRS = {
 
 CC_BUILD_ATTRS = {
     "native_deps": attr.label_list(
-        doc = "C/C++ libraries whose headers and libraries are made available to the build.",
+        doc = "C/C++ libraries whose headers, libraries, and transitive linkopts are made available to the build. " +
+              "On POSIX toolchains, transitive `linkopts` and `additional_linker_inputs` are forwarded verbatim " +
+              "to sdist links (both extension `.so`/`.dylib` links and feature-probe executables) before the " +
+              "rule's own `linkopts`. Native MSVC builds skip the POSIX compiler wrapper and do not forward " +
+              "them. Binary-only flags incompatible with Python extensions (such as `-Wl,-z,defs` / " +
+              "`--no-undefined`, symbol-hiding version scripts, or `-static`) are not filtered and will fail " +
+              "extension or cdylib links, matching `cc_binary(linkshared = True)`; fix those flags on the " +
+              "`cc_library` or pass a target without them.",
         providers = [CcInfo],
         aspects = [collect_wheel_shared_libraries],
     ),
@@ -125,7 +132,7 @@ CC_BUILD_ATTRS = {
         doc = "Extra C/C++ compiler flags, appended after the toolchain flags.",
     ),
     "linkopts": attr.string_list(
-        doc = "Extra linker flags, appended after the toolchain flags.",
+        doc = "Extra linker flags, appended after the toolchain flags and `native_deps` linkopts.",
     ),
     "pkg_config_files": attr.label_list(
         doc = "pkg-config `.pc` files made available to the build (e.g. from `pycross_cc_pkg_config`).",

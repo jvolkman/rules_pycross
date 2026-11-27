@@ -4,12 +4,14 @@ load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
     "//pycross/private/build:cc_toolchain_util.bzl",
+    "absolutize_flags",
     "absolutize_path_in_str",
     "configure_features",
     "create_msvc_environment",
     "get_flags_info",
     "get_include_dirs",
     "get_libraries",
+    "get_link_flags",
     "get_tools_info",
 )
 
@@ -19,7 +21,7 @@ def _absolute_tool_value(workspace_name, value):
     return value
 
 def _absolutize_flags(workspace_name, flags):
-    return [absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag) for flag in flags]
+    return absolutize_flags(workspace_name, "$$EXT_BUILD_ROOT$$/", flags)
 
 def _get_sysconfig_data(workspace_name, tools, flags):
     cc = _absolute_tool_value(workspace_name, tools.cc)
@@ -119,12 +121,13 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts):
 
     copts = [_expand_locations_and_vars("copts", ctx, copt, native_deps, make_vars) for copt in copts]
     linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt, native_deps, make_vars) for linkopt in linkopts]
+    dep_link_info = get_link_flags(native_deps)
     flags = get_flags_info(
         ctx,
         cc_toolchain = cpp_toolchain,
         feature_configuration = feature_configuration,
         copts = copts,
-        linkopts = linkopts,
+        linkopts = dep_link_info.flags + linkopts,
         native_deps = native_deps,
     )
     tools = get_tools_info(
@@ -135,7 +138,7 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts):
     include_dirs = []
     static_libs = []
     shared_libs = []
-    transitive_files = []
+    transitive_files = [dep_link_info.additional_inputs]
 
     target_os, target_cpu = _get_target_os_and_cpu(ctx)
     if cpp_toolchain.all_files:

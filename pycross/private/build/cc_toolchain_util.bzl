@@ -305,6 +305,83 @@ def _prefix(text, from_str, prefix):
         return text
     return before + prefix + middle + after
 
+_RUNTIME_PATH_FLAGS = (
+    "-rpath",
+    "--rpath",
+    "-install_name",
+    "-soname",
+    "--soname",
+)
+_RUNTIME_PATH_PREFIXES = tuple([flag + "=" for flag in _RUNTIME_PATH_FLAGS])
+
+def _absolutize_wl_flag(workspace_name, root_str, flag, skip_next):
+    """Absolutizes path tokens inside a `-Wl,...` flag while skipping runtime loader paths.
+
+    Returns:
+        tuple[str, bool]: The rewritten `-Wl,...` flag and whether the next
+        linker token in a following flag is a runtime path argument to skip.
+    """
+    parts = flag.split(",")
+    out = [parts[0]]
+    for sub in parts[1:]:
+        if skip_next:
+            out.append(sub)
+            skip_next = False
+            continue
+        if sub in _RUNTIME_PATH_FLAGS:
+            out.append(sub)
+            skip_next = True
+            continue
+        if sub.startswith(_RUNTIME_PATH_PREFIXES):
+            out.append(sub)
+            continue
+        out.append(absolutize_path_in_str(workspace_name, root_str, sub))
+    return ",".join(out), skip_next
+
+def absolutize_flags(workspace_name, root_str, flags):
+    """Absolutizes build-time relative paths in compiler and linker flags.
+
+    Prefixes relative Bazel paths (`external/`, `../`, `<workspace>/`, and
+    `bazel-out/`) with `root_str`, while leaving runtime loader path values
+    (`-rpath`, `--rpath`, `-install_name`, `-soname`) unchanged across
+    single-token `=`, `-Wl,...`, two-token, and `-Xlinker` forms.
+
+    Args:
+        workspace_name: The Bazel workspace name.
+        root_str: The placeholder prefix to prepend (for example,
+            `"$$EXT_BUILD_ROOT$$/"`).
+        flags: list[str], compiler or linker flag tokens.
+
+    Returns:
+        list[str]: Flag tokens with build-time relative paths absolutized.
+    """
+    result = []
+    skip_next_arg = False
+    for flag in flags:
+        if flag.startswith("-Wl,"):
+            rewritten, skip_next_arg = _absolutize_wl_flag(
+                workspace_name,
+                root_str,
+                flag,
+                skip_next_arg,
+            )
+            result.append(rewritten)
+            continue
+        if skip_next_arg:
+            result.append(flag)
+            if flag != "-Xlinker":
+                skip_next_arg = False
+            continue
+        if flag in _RUNTIME_PATH_FLAGS:
+            result.append(flag)
+            skip_next_arg = True
+            continue
+        if flag.startswith(_RUNTIME_PATH_PREFIXES):
+            result.append(flag)
+            continue
+        result.append(absolutize_path_in_str(workspace_name, root_str, flag))
+    return result
+
 def get_include_dirs(ccinfo):
     """Returns unique include directories for the given CcInfo.
 
@@ -362,5 +439,71 @@ def get_libraries(ccinfo):
         all = all_libraries,
     )
 
+def _absolutize_additional_input_paths(flag, input_paths):
+    """Prefixes relative paths from `additional_inputs` with `$$EXT_BUILD_ROOT$$/`."""
+    for path in input_paths:
+        if not path or path.startswith("/"):
+            continue
+        if "$$EXT_BUILD_ROOT$$/" + path in flag:
+            continue
+        if flag == path:
+            return "$$EXT_BUILD_ROOT$$/" + path
+        if path not in flag:
+            continue
+        before, middle, after = flag.partition(path)
+        valid_before = (
+            before in ("-T", "@") or
+            before.endswith(("=", ",", ":", ",-T"))
+        )
+        if valid_before and (not after or after[0] in (",", ":")):
+            flag = before + "$$EXT_BUILD_ROOT$$/" + middle + after
+    return flag
+
+def get_link_flags(native_deps):
+    """Returns transitive `user_link_flags` and `additional_inputs` from `native_deps`.
+
+    Merges `linking_context.linker_inputs` across all `CcInfo` deps in a single
+    depset so diamond dependencies are deduplicated in topological link order.
+    Any relative path matching a linker input's `additional_inputs` is prefixed
+    with `$$EXT_BUILD_ROOT$$/` so main-repo linker and version scripts resolve
+    inside sdist build directories.
+
+    Args:
+        native_deps: list[Target], targets that may provide CcInfo.
+
+    Returns:
+        struct(flags = list[str], additional_inputs = depset[File]).
+    """
+    linker_inputs = depset(
+        transitive = [
+            dep[CcInfo].linking_context.linker_inputs
+            for dep in native_deps
+            if CcInfo in dep and dep[CcInfo].linking_context
+        ],
+        order = "topological",
+    ).to_list()
+
+    flags = []
+    additional_inputs = []
+    for li in linker_inputs:
+        li_inputs = li.additional_inputs.to_list() if type(li.additional_inputs) == "depset" else list(li.additional_inputs or [])
+        if li_inputs:
+            additional_inputs.extend(li_inputs)
+        if not li.user_link_flags:
+            continue
+        input_paths = sorted(
+            [f.path for f in li_inputs],
+            key = len,
+            reverse = True,
+        ) if li_inputs else []
+        for flag in li.user_link_flags:
+            flags.append(_absolutize_additional_input_paths(flag, input_paths))
+
+    return struct(
+        flags = flags,
+        additional_inputs = depset(additional_inputs),
+    )
+
 # Visible for testing.
+absolutize_additional_input_paths_for_testing = _absolutize_additional_input_paths
 convert_flags_for_testing = _convert_flags
