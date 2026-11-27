@@ -291,13 +291,15 @@ def discover_pdm_all_members(mctx, lock_file_label, toml_cache = None):
     members = []
     for pkg in lock_data.get("package", []):
         # PDM marks workspace members with editable = true and a path.
-        if pkg.get("editable") and "path" in pkg:
-            if type(pkg["path"]) == "string" and is_external_member_path(pkg["path"]):
-                continue
-            members.append(struct(
-                name = pkg["name"],
-                path = pkg["path"],
-            ))
+        path = pkg.get("path")
+        if not pkg.get("editable") or type(path) != "string":
+            continue
+        if is_external_member_path(path):
+            continue
+        members.append(struct(
+            name = pkg["name"],
+            path = path,
+        ))
 
     return members
 

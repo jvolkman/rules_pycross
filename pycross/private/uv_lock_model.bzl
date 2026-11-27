@@ -88,8 +88,8 @@ def _source_value(source):
 def _is_local_source(source):
     """Return True when a UV lock `source` table refers to a local package."""
     return (
-        ("editable" in source and type(source.get("editable")) == "string") or
-        ("virtual" in source and type(source.get("virtual")) == "string") or
+        type(source.get("editable")) == "string" or
+        type(source.get("virtual")) == "string" or
         "directory" in source
     )
 
@@ -323,15 +323,19 @@ def _build_uv_workspace_base(lock_dict):
         if canon_name not in packages_by_canon_name:
             packages_by_canon_name[canon_name] = lock_pkg
         source = lock_pkg.get("source", {})
-        if "virtual" not in source and not source.get("editable"):
+        editable = source.get("editable")
+        virtual = source.get("virtual")
+        if type(editable) == "string":
+            member_path = editable
+        elif type(virtual) == "string":
+            member_path = virtual
+        else:
             continue
         if manifest_members != None:
             if canon_name not in manifest_members:
                 continue
-        else:
-            member_path = source.get("editable") if "editable" in source else source.get("virtual")
-            if type(member_path) == "string" and is_external_member_path(member_path):
-                continue
+        elif is_external_member_path(member_path):
+            continue
         base_workspace_members[canon_name] = lock_pkg
 
     return struct(
@@ -549,15 +553,17 @@ def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
         if manifest_members != None and canonicalize_name(pkg["name"]) not in manifest_members:
             continue
         source = pkg.get("source", {})
-        if "editable" in source and type(source["editable"]) == "string":
-            if manifest_members == None and is_external_member_path(source["editable"]):
+        editable = source.get("editable")
+        virtual = source.get("virtual")
+        if type(editable) == "string":
+            if manifest_members == None and is_external_member_path(editable):
                 continue
             members.append(struct(
                 name = pkg["name"],
-                path = source["editable"],
+                path = editable,
             ))
-        elif "virtual" in source and type(source["virtual"]) == "string":
-            if manifest_members == None and is_external_member_path(source["virtual"]):
+        elif type(virtual) == "string":
+            if manifest_members == None and is_external_member_path(virtual):
                 continue
 
             # Only include virtual members that have actual dependencies.
@@ -571,7 +577,7 @@ def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
             if has_deps:
                 members.append(struct(
                     name = pkg["name"],
-                    path = source["virtual"],
+                    path = virtual,
                 ))
 
     return members

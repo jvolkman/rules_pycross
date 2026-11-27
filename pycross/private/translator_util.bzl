@@ -9,13 +9,24 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@pypackaging.bzl", "pypackaging")
 
 def is_external_member_path(path):
-    """Return True if a member path escapes the lock directory or is absolute."""
-    norm = paths.normalize(path.replace("\\", "/"))
-    return (
-        paths.is_absolute(norm) or
-        paths.starts_with(norm, "..") or
-        (len(norm) >= 2 and norm[1] == ":")
-    )
+    """Return True if a member path escapes the lock directory or is absolute.
+
+    Checks Windows drive-letter prefixes (such as `C:\\libs\\ext`, `C:\\..\\ext`,
+    or `C:/foo/../../ext`) before POSIX normalization so `..` segments cannot
+    erase the drive prefix, while relative paths containing colons (such as
+    `./a:b` or `1:2/pkg`) stay internal.
+
+    Args:
+        path: Member path string from a lockfile.
+
+    Returns:
+        True if the path is absolute or escapes the lock directory, False otherwise.
+    """
+    slash_path = path.replace("\\", "/")
+    if len(slash_path) >= 2 and slash_path[0].isalpha() and slash_path[1] == ":":
+        return True
+    norm = paths.normalize(slash_path)
+    return norm.startswith("/") or paths.starts_with(norm, "..")
 
 def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""

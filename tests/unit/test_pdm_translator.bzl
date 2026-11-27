@@ -1,6 +1,7 @@
 """Tests for the Starlark PDM translator."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
@@ -611,6 +612,11 @@ def _test_discover_pdm_all_members_impl(env, target):
         "editable = true",
         'path = "../../libs/ext"',
         "[[package]]",
+        'name = "non-string-path"',
+        'version = "0.1.0"',
+        "editable = true",
+        "path = true",
+        "[[package]]",
         'name = "non-editable"',
         'version = "0.1.0"',
         'path = "vendor/pkg"',
@@ -741,10 +747,38 @@ def _test_pdm_versionless_local_package_impl(env, target):
     result = translate_pdm(project, lock, _lock_model())
     env.expect.that_collection(result["pins"].keys()).contains_exactly(["core"])
     env.expect.that_str(result["pins"]["core"]).equals("core@1.0.0")
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["core@1.0.0"])
 
 def _test_pdm_versionless_local_package(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_versionless_local_package_impl)
+
+def _pdm_versionless_non_local_subject_impl(_ctx):
+    project = _minimal_project(deps = ["broken"])
+    lock = _minimal_lock([
+        {
+            "name": "broken",
+            "files": [_whl("broken-1.0.0-py3-none-any.whl", "1")],
+        },
+    ])
+    translate_pdm(project, lock, _lock_model())
+    return []
+
+_pdm_versionless_non_local_subject = rule(implementation = _pdm_versionless_non_local_subject_impl)
+
+def _test_pdm_versionless_non_local_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Package 'broken' in pdm.lock is missing a 'version' field"),
+    )
+
+def _test_pdm_versionless_non_local_fails(name):
+    util.helper_target(_pdm_versionless_non_local_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_pdm_versionless_non_local_fails_impl,
+    )
 
 # --- Test suite ---
 
@@ -771,5 +805,6 @@ def pdm_translator_test_suite(name):
             _test_discover_pdm_all_members,
             _test_pdm_workspace_cache_matches_standalone,
             _test_pdm_versionless_local_package,
+            _test_pdm_versionless_non_local_fails,
         ],
     )
