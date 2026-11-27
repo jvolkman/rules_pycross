@@ -41,9 +41,8 @@ def _default_value(default):
     return list(default) if type(default) == "list" else default
 
 def _file_key(f):
-    if not f.get("sha256"):
-        fail("PackageFile missing sha256: " + str(f))
-    key = "{}/{}".format(f["name"], f["sha256"][:8])
+    sha256 = f.get("sha256", "")
+    key = "{}/{}".format(f["name"], sha256[:8] if sha256 else "nohash")
     extra = ""
     if f.get("urls"):
         extra += ",".join(f["urls"])

@@ -58,9 +58,10 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
     else:
         fail("UV file entry has no 'file', 'filename', or 'url' member: {}".format(file_info))
 
+    raw_hash = file_info.get("hash", "")
     return make_file_entry(
         filename,
-        strip_sha256_prefix(file_info["hash"]),
+        strip_sha256_prefix(raw_hash) if raw_hash else "",
         package_name,
         package_version,
         urls = urls,
@@ -147,11 +148,12 @@ def _parse_sdist_file(sdist, source, package_name, package_version, registry):
         return None
     if "url" not in sdist and "file" not in sdist and "url" in source:
         # URL-based source with subdirectory
+        raw_hash = sdist.get("hash", "")
         return make_archive_file_entry(
             package_name,
             package_version,
             source["url"],
-            strip_sha256_prefix(sdist["hash"]),
+            strip_sha256_prefix(raw_hash) if raw_hash else "",
             index = registry,
         )
     elif "git" not in source or "url" in sdist or "file" in sdist:

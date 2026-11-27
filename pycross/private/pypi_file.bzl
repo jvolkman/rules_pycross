@@ -312,14 +312,14 @@ def _pypi_file_impl(ctx):
     if not hasattr(ctx, "repo_metadata"):
         return None
 
-    # sha256 is mandatory, so the downloaded file is pinned and the generated
-    # BUILD file depends only on attrs.
-    return ctx.repo_metadata(reproducible = True)
+    # When sha256 is set, the downloaded file is pinned and the generated BUILD
+    # file depends only on attrs; without a sha256, remote bytes can change.
+    return ctx.repo_metadata(reproducible = bool(ctx.attr.sha256))
 
 _pypi_file_attrs = {
     "sha256": attr.string(
-        doc = "The expected SHA-256 of the file downloaded.",
-        mandatory = True,
+        doc = "Optional expected SHA-256 of the file downloaded.",
+        default = "",
     ),
     "indexes": attr.string_list(
         doc = "Simple Repository API (PEP 503/691) index URLs, tried in order until one lists the file.",

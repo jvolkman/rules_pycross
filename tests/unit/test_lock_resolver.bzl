@@ -2659,6 +2659,44 @@ def _test_resolve_workspace_shared_packages_matches_standalone(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_resolve_workspace_shared_packages_matches_standalone_impl)
 
+# buildifier: disable=unused-variable
+def _test_resolve_unhashed_files_impl(env, target):
+    """Files with empty sha256 resolve cleanly using deterministic `nohash` file keys."""
+    lock_data = {
+        "packages": {
+            "pkg-a@1.0": _make_pkg(
+                "pkg-a",
+                "1.0",
+                [
+                    {
+                        "name": "pkg_a-1.0-py3-none-any.whl",
+                        "sha256": "",
+                        "urls": ["https://index.example.com/pkg_a-1.0-py3-none-any.whl"],
+                    },
+                    {
+                        "name": "pkg-a-1.0.tar.gz",
+                        "sha256": "",
+                        "urls": ["https://index.example.com/pkg-a-1.0.tar.gz"],
+                    },
+                ],
+            ),
+        },
+        "pins": {"pkg-a": "pkg-a@1.0"},
+    }
+    res = resolve(lock_data)
+    pkg = res.packages["pkg-a@1.0"]
+    env.expect.that_int(len(pkg["wheel_candidates"])).equals(1)
+    whl_key = pkg["wheel_candidates"][0]["file_reference"]["key"]
+    sdist_key = pkg["sdist_file"]["key"]
+    env.expect.that_str(whl_key).contains("pkg_a-1.0-py3-none-any.whl/nohash/")
+    env.expect.that_str(sdist_key).contains("pkg-a-1.0.tar.gz/nohash/")
+    env.expect.that_str(res.remote_files[whl_key]["sha256"]).equals("")
+    env.expect.that_str(res.remote_files[sdist_key]["sha256"]).equals("")
+
+def _test_resolve_unhashed_files(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_resolve_unhashed_files_impl)
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
@@ -2742,5 +2780,6 @@ def lock_resolver_test_suite(name):
             _test_multi_source_annotation_bad_source_fails,
             _test_malformed_package_spec_fails,
             _test_resolve_workspace_shared_packages_matches_standalone,
+            _test_resolve_unhashed_files,
         ],
     )

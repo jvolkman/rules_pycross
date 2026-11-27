@@ -2605,6 +2605,45 @@ def _test_discover_uv_all_members(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_discover_uv_all_members_impl)
 
 # buildifier: disable=unused-variable
+def _test_uv_optional_file_hash_impl(env, target):
+    """Custom-index wheels and sdists without a `hash` field translate with an empty sha256."""
+    custom_idx = {"registry": "https://index.example.com/simple"}
+    lock = _lock(
+        packages = [
+            {
+                "name": "app",
+                "version": "0.1.0",
+                "source": {"editable": "."},
+                "dependencies": [_dep("unhashed-whl", "1.0.0"), _dep("unhashed-sdist", "2.0.0")],
+            },
+            _pkg(
+                "unhashed-whl",
+                "1.0.0",
+                source = custom_idx,
+                wheels = [{"url": "https://index.example.com/wheels/unhashed_whl-1.0.0-py3-none-any.whl"}],
+            ),
+            {
+                "name": "unhashed-sdist",
+                "version": "2.0.0",
+                "source": {"url": "https://index.example.com/sdist/unhashed-sdist-2.0.0.tar.gz"},
+                "sdist": {"size": 123},
+            },
+        ],
+    )
+    raw = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"]))
+    whl_files = raw["packages"]["unhashed-whl@1.0.0"]["files"]
+    sdist_files = raw["packages"]["unhashed-sdist@2.0.0"]["files"]
+    env.expect.that_int(len(whl_files)).equals(1)
+    env.expect.that_str(whl_files[0]["sha256"]).equals("")
+    env.expect.that_str(whl_files[0]["name"]).equals("unhashed_whl-1.0.0-py3-none-any.whl")
+    env.expect.that_int(len(sdist_files)).equals(1)
+    env.expect.that_str(sdist_files[0]["sha256"]).equals("")
+
+def _test_uv_optional_file_hash(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_optional_file_hash_impl)
+
+# buildifier: disable=unused-variable
 def _test_uv_workspace_cache_and_resolve_workspace_parity_impl(env, target):
     """Hoisted UV workspace translation and resolve_workspace match standalone per-member runs byte-for-byte."""
     pypi = {"registry": "https://pypi.org/simple"}
@@ -2785,6 +2824,7 @@ def uv_translator_test_suite(name):
             _test_uv_local_member_edge_cases,
             _test_uv_multi_source_same_version,
             _test_discover_uv_all_members,
+            _test_uv_optional_file_hash,
             _test_uv_workspace_cache_and_resolve_workspace_parity,
         ],
     )
