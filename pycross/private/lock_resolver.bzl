@@ -41,9 +41,8 @@ def _default_value(default):
     return list(default) if type(default) == "list" else default
 
 def _file_key(f):
-    if not f.get("sha256"):
-        fail("PackageFile missing sha256: " + str(f))
-    key = "{}/{}".format(f["name"], f["sha256"][:8])
+    sha256 = f.get("sha256", "")
+    key = "{}/{}".format(f["name"], sha256[:8] if sha256 else "nohash")
     extra = ""
     if f.get("urls"):
         extra += ",".join(f["urls"])
@@ -263,13 +262,22 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
         if existing != None and "file" in existing:
             existing_file = existing["file"]
 
-            # Two files sharing a name but not a hash cannot be silently
-            # collapsed: keeping whichever entry is seen last makes wheel
-            # selection non-deterministic and is a supply-chain hazard. This
-            # commonly happens when a package is listed under more than one
-            # index. Fail and require the user to disambiguate. Multiple sdists
-            # with the same name are left unhandled.
-            if existing_file["name"].endswith(".whl") and existing_file.get("sha256") != f.get("sha256"):
+            # Two files sharing a name with different hashes (or two unhashed
+            # entries from different sources) cannot be silently collapsed:
+            # keeping whichever entry is seen last makes wheel selection
+            # non-deterministic and is a supply-chain hazard. This commonly
+            # happens when a package is listed under more than one index. Fail
+            # and require the user to disambiguate. Multiple sdists with the
+            # same name are left unhandled.
+            existing_sha = existing_file.get("sha256") or ""
+            new_sha = f.get("sha256") or ""
+            sources_differ = (
+                (existing_file.get("urls") or []) != (f.get("urls") or []) or
+                (existing_file.get("index") or "") != (f.get("index") or "")
+            )
+            if existing_file["name"].endswith(".whl") and (
+                existing_sha != new_sha or (not existing_sha and not new_sha and sources_differ)
+            ):
                 fail(
                     ("package {name}=={version} has multiple distinct files named {filename} " +
                      "(sha256 {existing_sha} vs {new_sha}). This usually means the package is " +
@@ -278,8 +286,8 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
                         name = pkg_name,
                         version = pkg_version,
                         filename = repr(f["name"]),
-                        existing_sha = existing_file.get("sha256"),
-                        new_sha = f.get("sha256"),
+                        existing_sha = existing_sha or "<none>",
+                        new_sha = new_sha or "<none>",
                     ),
                 )
         package_sources[f["name"]] = {"file": f}

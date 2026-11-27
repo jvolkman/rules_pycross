@@ -2,7 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_netrc")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:pypi_file.bzl", "DEFAULT_INDEX", "get_pypi_file_url")
+load("//pycross/private:pypi_file.bzl", "DEFAULT_INDEX", "resolve_pypi_file", "warn_unverified_download")
 
 _BUILD_TEMPLATE = """\
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
@@ -31,26 +31,38 @@ def _render_wheel_file_build(filename, inspection_data):
     )
 
 def _pycross_wheel_file_impl(rctx):
+    if not rctx.attr.urls and not rctx.attr.package_name:
+        fail("pycross_wheel_file requires either 'urls' or 'package_name' to be set.")
+
     netrc = read_user_netrc(rctx)
 
     urls = rctx.attr.urls
+    download_sha256 = rctx.attr.sha256
     if not urls:
-        urls = [get_pypi_file_url(
+        resolved = resolve_pypi_file(
             rctx,
             netrc,
             rctx.attr.indexes,
             rctx.attr.package_name,
             rctx.attr.filename,
             rctx.attr.sha256,
-        )]
+        )
+        urls = [resolved.url]
+        download_sha256 = rctx.attr.sha256 or resolved.sha256
 
     # Download the wheel file directly
-    rctx.download(
+    download_info = rctx.download(
         urls,
         rctx.attr.filename,
-        rctx.attr.sha256,
+        download_sha256,
         auth = use_netrc(netrc, urls, {}),
     )
+    if not rctx.attr.sha256:
+        warn_unverified_download(
+            rctx.attr.filename,
+            download_info,
+            verified_by_index = bool(download_sha256),
+        )
 
     # Inspect the wheel for site_paths, bin_paths, data_paths, and include_paths
     exec_internal_tool(
@@ -73,19 +85,18 @@ def _pycross_wheel_file_impl(rctx):
     if not hasattr(rctx, "repo_metadata"):
         return None
 
-    # Everything this repo contains is determined by the recorded inputs:
-    # the wheel itself is pinned by the mandatory sha256, and inspection.json
-    # plus BUILD.bazel are derived from the wheel bytes and the rule's attrs.
-    # inspect_package.py reads only the zip entry names and entry_points.txt
-    # and sorts every list it emits, so its output does not vary between runs
-    # or machines for a given wheel.
-    return rctx.repo_metadata(reproducible = True)
+    # Everything this repo contains is determined by the recorded inputs when
+    # the wheel is pinned by a sha256: inspection.json and BUILD.bazel are
+    # derived from the wheel bytes and the rule's attrs, and inspect_package.py
+    # sorts every list it emits. Without a sha256, remote bytes can change, so
+    # the repo must not be marked reproducible.
+    return rctx.repo_metadata(reproducible = bool(rctx.attr.sha256))
 
 pycross_wheel_file = repository_rule(
     implementation = _pycross_wheel_file_impl,
     attrs = {
         "urls": attr.string_list(doc = "Direct download URLs. If empty, the file is looked up in `indexes`."),
-        "sha256": attr.string(mandatory = True),
+        "sha256": attr.string(default = "", doc = "Optional expected SHA-256 digest of the wheel."),
         "filename": attr.string(mandatory = True, doc = "The wheel filename."),
         "package_name": attr.string(doc = "Package name (required for index lookup)."),
         "indexes": attr.string_list(default = [DEFAULT_INDEX], doc = "Simple Repository API index URLs, tried in order."),

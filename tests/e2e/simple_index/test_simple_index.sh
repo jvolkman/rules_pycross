@@ -17,7 +17,7 @@ for f in "$@"; do
     checked=$((checked + 1))
 done
 
-if [[ "$checked" != 2 ]]; then
-    echo "Expected 2 wheels, checked $checked: $*"
+if [[ "$checked" != 3 ]]; then
+    echo "Expected 3 wheels, checked $checked: $*"
     exit 1
 fi

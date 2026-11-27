@@ -120,12 +120,19 @@ def _create_remote_file_repo(remote_file_repo, file, indexes):
                 url = urls[0],
                 filename = file["name"],
             )
-        else:
+        elif file["sha256"]:
             http_file(
                 name = remote_file_repo,
                 urls = urls,
                 sha256 = file["sha256"],
                 downloaded_file_path = file["name"],
+            )
+        else:
+            pypi_file(
+                name = remote_file_repo,
+                urls = urls,
+                filename = file["name"],
+                sha256 = "",
             )
         return remote_file_label
 
@@ -413,8 +420,8 @@ def create_repos(
                 "whldir_name": whldir_name(pkg_key),
             }
             remote_file = merged_remote_files.get(sdist_file_key, {})
-            sdist_urls = remote_file.get("urls", [])
-            if remote_file.get("sha256") and not (sdist_urls and sdist_urls[0].startswith("git+")):
+            is_git_sdist = bool(remote_file.get("urls") and remote_file["urls"][0].startswith("git+"))
+            if remote_file.get("sha256") and not is_git_sdist:
                 sdist_repo_attrs["sdist_sha256"] = remote_file["sha256"]
             if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
                 sdist_repo_attrs["extra_build_tools"] = _extra_build_tool_names(pkg["extra_build_tools"])

@@ -6,11 +6,17 @@ load(":util.bzl", "url_filename")
 
 _PYPI_FILE_BUILD = """\
 package(default_visibility = ["//visibility:public"])
+
+exports_files([{filename}])
+
 filegroup(
     name = "file",
-    srcs = ["{}"],
+    srcs = [{filename}],
 )
 """
+
+def _render_pypi_file_build(filename):
+    return _PYPI_FILE_BUILD.format(filename = repr(filename))
 
 DEFAULT_INDEX = "https://pypi.org/simple"
 
@@ -40,7 +46,7 @@ def _sha256_from_fragment(url):
         return None
     for part in url.split("#", 1)[1].split("&"):
         if part.startswith("sha256="):
-            return part[len("sha256="):].lower()
+            return part[len("sha256="):].lower() or None
     return None
 
 def _find_tag_end(content, pos):
@@ -218,7 +224,8 @@ def find_simple_index_file(content, page_url, filename, sha256):
             are ignored.
 
     Returns:
-        A struct with `url` (None if not found) and `reason` (why not).
+        A struct with `url` (None if not found), `sha256` (advertised sha256
+        or None), and `reason` (why not found).
     """
     mismatch = None
     for f in parse_simple_index(content):
@@ -228,13 +235,13 @@ def find_simple_index_file(content, page_url, filename, sha256):
         if f["sha256"] and sha256 and f["sha256"] != sha256.lower():
             mismatch = f["sha256"]
             continue
-        return struct(url = resolve_url(page_url, f["url"]), reason = None)
+        return struct(url = resolve_url(page_url, f["url"]), sha256 = f["sha256"], reason = None)
     if mismatch:
-        return struct(url = None, reason = "listed with sha256 {}, expected {}".format(mismatch, sha256))
-    return struct(url = None, reason = "file not listed")
+        return struct(url = None, sha256 = None, reason = "listed with sha256 {}, expected {}".format(mismatch, sha256))
+    return struct(url = None, sha256 = None, reason = "file not listed")
 
-def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256):
-    """Resolves the URL of a file through the Simple Repository API.
+def resolve_pypi_file(rctx, netrc, indexes, package_name, filename, sha256):
+    """Resolves the URL and index-advertised sha256 of a file through the Simple Repository API.
 
     Each index is tried in order until one lists `filename`.
 
@@ -247,7 +254,8 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256):
         sha256: The expected sha256 of the file.
 
     Returns:
-        The URL to the file.
+        A struct with `url` (the resolved file URL) and `sha256` (the
+        index-advertised sha256 digest, or `""` if none was advertised).
     """
     project = pypackaging.utils.canonicalize_name(package_name)
     tried = []
@@ -275,7 +283,7 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256):
         rctx.delete(output)
         if found.url:
             rctx.delete("simple_index")
-            return found.url
+            return struct(url = found.url, sha256 = found.sha256 or "")
         tried.append("{}: {}".format(index_url, found.reason))
 
     fail(
@@ -288,46 +296,105 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256):
         ),
     )
 
+def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256):
+    """Resolves the URL of a file through the Simple Repository API.
+
+    Each index is tried in order until one lists `filename`.
+
+    Args:
+        rctx: The repository context.
+        netrc: The parsed netrc file.
+        indexes: Simple API root URLs (e.g. https://pypi.org/simple), in priority order.
+        package_name: The name of the package.
+        filename: The filename to find.
+        sha256: The expected sha256 of the file.
+
+    Returns:
+        The URL to the file.
+    """
+    return resolve_pypi_file(rctx, netrc, indexes, package_name, filename, sha256).url
+
+def _format_unverified_download_warning(filename, download_info = None, verified_by_index = False):
+    """Format the fetch-time warning when downloading a file without a lockfile sha256."""
+    observed = getattr(download_info, "sha256", "") if download_info != None else ""
+    observed_note = " (downloaded sha256: {})".format(observed) if observed else ""
+    if verified_by_index:
+        detail = "verified only against the index-advertised hash, not pinned by the lock file"
+    else:
+        detail = "integrity was not verified"
+    return "WARNING: Downloading '{}' without a sha256 hash in the lock file{}; {}.".format(
+        filename,
+        observed_note,
+        detail,
+    )
+
+def warn_unverified_download(filename, download_info = None, verified_by_index = False):
+    """Emit a fetch-time warning when downloading a file without a lockfile sha256."""
+
+    # buildifier: disable=print
+    print(_format_unverified_download_warning(
+        filename,
+        download_info,
+        verified_by_index = verified_by_index,
+    ))
+
 def _pypi_file_impl(ctx):
     """Implementation of the pypi_file rule."""
+    if not ctx.attr.urls and not ctx.attr.package_name:
+        fail("pypi_file requires either 'urls' or 'package_name' to be set.")
 
     netrc = read_user_netrc(ctx)
-    url = get_pypi_file_url(
-        ctx,
-        netrc,
-        ctx.attr.indexes,
-        ctx.attr.package_name,
-        ctx.attr.filename,
-        ctx.attr.sha256,
-    )
+    if ctx.attr.urls:
+        urls = ctx.attr.urls
+        download_sha256 = ctx.attr.sha256
+    else:
+        resolved = resolve_pypi_file(
+            ctx,
+            netrc,
+            ctx.attr.indexes,
+            ctx.attr.package_name,
+            ctx.attr.filename,
+            ctx.attr.sha256,
+        )
+        urls = [resolved.url]
+        download_sha256 = ctx.attr.sha256 or resolved.sha256
 
-    ctx.download(
-        url,
+    download_info = ctx.download(
+        urls,
         "file/" + ctx.attr.filename,
-        ctx.attr.sha256,
-        auth = use_netrc(netrc, [url], {}),
+        download_sha256,
+        auth = use_netrc(netrc, urls, {}),
     )
-    ctx.file("file/BUILD.bazel", _PYPI_FILE_BUILD.format(ctx.attr.filename))
+    if not ctx.attr.sha256:
+        warn_unverified_download(
+            ctx.attr.filename,
+            download_info,
+            verified_by_index = bool(download_sha256),
+        )
+    ctx.file("file/BUILD.bazel", _render_pypi_file_build(ctx.attr.filename))
 
     if not hasattr(ctx, "repo_metadata"):
         return None
 
-    # sha256 is mandatory, so the downloaded file is pinned and the generated
-    # BUILD file depends only on attrs.
-    return ctx.repo_metadata(reproducible = True)
+    # When sha256 is set, the downloaded file is pinned and the generated BUILD
+    # file depends only on attrs; without a sha256, remote bytes can change.
+    return ctx.repo_metadata(reproducible = bool(ctx.attr.sha256))
 
 _pypi_file_attrs = {
+    "urls": attr.string_list(
+        doc = "Optional direct download URLs. When set, downloads directly instead of querying Simple API indexes.",
+    ),
     "sha256": attr.string(
-        doc = "The expected SHA-256 of the file downloaded.",
-        mandatory = True,
+        doc = "Optional expected SHA-256 of the file downloaded.",
+        default = "",
     ),
     "indexes": attr.string_list(
         doc = "Simple Repository API (PEP 503/691) index URLs, tried in order until one lists the file.",
         default = [DEFAULT_INDEX],
     ),
     "package_name": attr.string(
-        doc = "The package name.",
-        mandatory = True,
+        doc = "The package name (required when `urls` is empty).",
+        default = "",
     ),
     "filename": attr.string(
         doc = "The name of the file to download.",
@@ -340,3 +407,7 @@ pypi_file = repository_rule(
     attrs = _pypi_file_attrs,
     doc = "Downloads a file from a PyPI-compatible package index.",
 )
+
+# Visible for testing
+render_pypi_file_build_for_testing = _render_pypi_file_build
+format_unverified_download_warning_for_testing = _format_unverified_download_warning

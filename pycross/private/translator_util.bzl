@@ -62,15 +62,18 @@ def strip_sha256_prefix(file_hash, required = True):
 
     Args:
         file_hash: Hash string (for example, `"sha256:abcd..."`).
-        required: If True, fail when the `sha256:` prefix is absent.
+        required: If True, fail when the `sha256:` prefix is absent or the
+            digest is empty.
 
     Returns:
         Hex digest without prefix, or `""` when not required and absent.
     """
     if file_hash and file_hash.startswith("sha256:"):
-        return file_hash[len("sha256:"):]
+        digest = file_hash[len("sha256:"):]
+        if digest:
+            return digest
     if required:
-        fail("Expected sha256: prefix on hash: {}".format(file_hash))
+        fail("Expected sha256: prefix with non-empty digest on hash: {}".format(file_hash))
     return ""
 
 def make_file_entry(name, sha256, package_name, package_version, urls = None, index = None):

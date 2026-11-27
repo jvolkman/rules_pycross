@@ -59,9 +59,10 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
     else:
         fail("UV file entry has no 'file', 'filename', or 'url' member: {}".format(file_info))
 
+    raw_hash = file_info.get("hash", "")
     return make_file_entry(
         filename,
-        strip_sha256_prefix(file_info["hash"]),
+        strip_sha256_prefix(raw_hash) if raw_hash else "",
         package_name,
         package_version,
         urls = urls,
@@ -168,18 +169,21 @@ def _parse_uv_dependency(dep, token_replacements = ()):
 
 def _parse_sdist_file(sdist, source, package_name, package_version, registry):
     """Parse an sdist entry from a UV lock package, or return None."""
-    if not sdist:
+    if sdist == None:
         return None
     if "url" not in sdist and "file" not in sdist and "url" in source:
-        # URL-based source with subdirectory
+        # URL-based source with subdirectory or empty sdist table
+        raw_hash = sdist.get("hash", "")
         return make_archive_file_entry(
             package_name,
             package_version,
             source["url"],
-            strip_sha256_prefix(sdist["hash"]),
+            strip_sha256_prefix(raw_hash) if raw_hash else "",
             index = registry,
         )
-    elif "git" not in source or "url" in sdist or "file" in sdist:
+    if not sdist:
+        return None
+    if "git" not in source or "url" in sdist or "file" in sdist:
         return _parse_file_info(sdist, package_name, package_version, registry)
     return None
 
@@ -211,7 +215,7 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags, pkg_ide
         for w in lock_pkg.get("wheels", []):
             files.append(_parse_file_info(w, package_name, package_version, registry))
 
-        sdist_file = _parse_sdist_file(lock_pkg.get("sdist", {}), source, package_name, package_version, registry)
+        sdist_file = _parse_sdist_file(lock_pkg.get("sdist"), source, package_name, package_version, registry)
         if sdist_file:
             files.append(sdist_file)
 
