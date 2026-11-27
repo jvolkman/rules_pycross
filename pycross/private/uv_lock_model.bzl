@@ -473,6 +473,8 @@ def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
         is_build_tools_repo = is_build_tools_repo,
     )
 
+    tokens_cache = {}
+    fold_cache = {}
     expanded_edges = expand_root_edges(
         base.graph,
         root_edges,
@@ -481,6 +483,8 @@ def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
             conflicts,
             repo_pins,
             parse_cache = marker_parse_cache,
+            tokens_cache = tokens_cache,
+            fold_cache = fold_cache,
         ),
     )
     resolved_pins = resolve_uv_pins(
@@ -490,6 +494,8 @@ def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
         fork_constraints = base.fork_constraints,
         resolution_marker_exprs = resolution_marker_exprs,
         parse_cache = marker_parse_cache,
+        tokens_cache = tokens_cache,
+        fold_cache = fold_cache,
     )
 
     return finalize_lock_graph(

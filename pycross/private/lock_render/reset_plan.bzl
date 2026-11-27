@@ -78,7 +78,6 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
     nomatch = {}  # marker evaluator names that need an `_nomatch` config_setting
     edge_gates = {}  # (eval_name, dep_key) -> label, shared across packages
     variant_marker_cache = {}  # marker -> bool for this conflict_pairs
-    parse_cache = {}  # marker -> parsed AST
 
     cycle_members_by_group = {}  # group_name -> sorted list of member pkg_keys
     total_edges = 0
@@ -126,7 +125,6 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
                 md["marker"],
                 conflict_pairs,
                 cache = variant_marker_cache,
-                parse_cache = parse_cache,
             ):
                 return no
             dep = plan.get(md["key"])
@@ -219,7 +217,6 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
                         md["marker"],
                         conflict_pairs,
                         cache = variant_marker_cache,
-                        parse_cache = parse_cache,
                     ):
                         scc_ok = False
                         break

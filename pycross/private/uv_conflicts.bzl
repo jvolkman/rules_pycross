@@ -327,7 +327,7 @@ def _fold_with_cache(marker, constraint_key, conflicts, repo_pins, parse_cache, 
         fold_cache[cache_key] = ev
     return ev
 
-def make_pin_marker_folder(conflicts, repo_pins, parse_cache = None):
+def make_pin_marker_folder(conflicts, repo_pins, parse_cache = None, tokens_cache = None, fold_cache = None):
     """Build a `fold_pin_marker(constraint, marker)` closure for `expand_root_edges`.
 
     Jointly evaluates `__variant_` tokens against both the edge's enclosing
@@ -342,40 +342,36 @@ def make_pin_marker_folder(conflicts, repo_pins, parse_cache = None):
         conflicts: Struct returned by `parse_uv_conflicts`.
         repo_pins: List of `repo_pin` qnames active in this repo.
         parse_cache: Optional dict memoizing `{marker: parsed_ast}` across folds.
+        tokens_cache: Optional dict memoizing `{constraint: active_tokens}` for
+            this `(conflicts, repo_pins)`.
+        fold_cache: Optional dict memoizing `{(constraint, marker): fold_result}`
+            for this `(conflicts, repo_pins)`.
 
     Returns:
         Callable `fold(constraint, marker) -> str | None`.
     """
-    conflict_pairs = conflicts.conflict_pairs
-    set_qnames = conflicts.set_qnames
-    tokens_by_constraint = {}
-    fold_cache = {}
+    if tokens_cache == None:
+        tokens_cache = {}
+    if fold_cache == None:
+        fold_cache = {}
 
     def _fold(constraint, marker):
         if not marker or "__variant_" not in marker:
             return marker
-        cache_key = (constraint, marker)
-        if cache_key in fold_cache:
-            return fold_cache[cache_key]
-        tokens = tokens_by_constraint.get(constraint)
-        if tokens == None:
-            active = ([constraint] if constraint else []) + repo_pins
-            tokens = variant_active_tokens(active, set_qnames)
-            tokens_by_constraint[constraint] = tokens
-        ev = fold_variant_marker(
+        ev = _fold_with_cache(
             marker,
-            conflict_pairs = conflict_pairs,
-            parse_cache = parse_cache,
-            active_tokens = tokens,
+            constraint,
+            conflicts,
+            repo_pins,
+            parse_cache,
+            tokens_cache,
+            fold_cache,
         )
         if ev == "F":
-            result = None
-        elif ev == "T" and constraint:
-            result = ""
-        else:
-            result = marker
-        fold_cache[cache_key] = result
-        return result
+            return None
+        if ev == "T" and constraint:
+            return ""
+        return marker
 
     return _fold
 
@@ -464,7 +460,15 @@ def _prune_plain_branches(branches, conflicts, repo_pins, parse_cache = None, to
 
     return kept
 
-def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, resolution_marker_exprs, parse_cache = None):
+def resolve_uv_pins(
+        expanded_edges,
+        conflicts,
+        repo_pins,
+        fork_constraints,
+        resolution_marker_exprs,
+        parse_cache = None,
+        tokens_cache = None,
+        fold_cache = None):
     """Aggregate expanded UV root edges into pins, markers, and testonly sets.
 
     Aggregates edges by `(pin_name, raw_constraint, pkg_key)`, prunes plain
@@ -480,6 +484,10 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
         resolution_marker_exprs: Dict of constraint name -> marker expr or
             compound dict, mutated in place with newly needed edge constraints.
         parse_cache: Optional dict memoizing `{marker: parsed_ast}` across folds.
+        tokens_cache: Optional dict memoizing `{constraint: active_tokens}` for
+            this `(conflicts, repo_pins)`.
+        fold_cache: Optional dict memoizing `{(constraint, marker): fold_result}`
+            for this `(conflicts, repo_pins)`.
 
     Returns:
         Struct with `pinned_keys`, `root_dependency_markers`, `testonly_pins`,
@@ -496,8 +504,10 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
     direct_testonly = {}
     expanded_testonly = {}
     non_testonly = {}
-    tokens_cache = {}
-    fold_cache = {}
+    if tokens_cache == None:
+        tokens_cache = {}
+    if fold_cache == None:
+        fold_cache = {}
 
     for pin_name, grouped in by_pin.items():
         base_name = pin_name.split("[")[0]
