@@ -272,7 +272,17 @@ def _build_poetry_workspace_base(lock_dict):
     packages = []
     for lock_pkg in lock_dict.get("package", []):
         package_name = canonicalize_name(lock_pkg["name"])
-        package_version = lock_pkg["version"]
+        source = lock_pkg.get("source", {})
+        source_type = source.get("type", "")
+
+        # Treat git as remote.
+        is_local = source_type == "directory"
+        package_version = lock_pkg.get("version")
+        if not package_version:
+            if is_local:
+                package_version = "0.0.0"
+            else:
+                fail("Package '{}' in poetry.lock is missing a 'version' field".format(lock_pkg.get("name", "<unknown>")))
 
         deps = []
         for dep_name, dep_list in lock_pkg.get("dependencies", {}).items():
@@ -296,11 +306,6 @@ def _build_poetry_workspace_base(lock_dict):
                     "extras": extras if extras else [None],
                 })
 
-        source = lock_pkg.get("source", {})
-        source_type = source.get("type", "")
-
-        # Treat git as remote.
-        is_local = source_type == "directory"
         registry = source.get("url") if source_type == "legacy" else None
 
         source_urls = []

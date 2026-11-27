@@ -8,7 +8,6 @@ Handles UV-specific features: workspace members, conflicts/variants,
 resolution markers, git sources, and editable packages.
 """
 
-load("@bazel_skylib//lib:paths.bzl", "paths")
 load(":lock_common.bzl", "read_toml_cached")
 load(
     ":translator_graph.bzl",
@@ -25,6 +24,7 @@ load(
 load(
     ":translator_util.bzl",
     "canonicalize_name",
+    "is_external_member_path",
     "make_archive_file_entry",
     "make_file_entry",
     "make_git_file_entry",
@@ -108,15 +108,6 @@ def _manifest_member_names(lock_data):
     if not members:
         return None
     return {canonicalize_name(m): True for m in members}
-
-def _is_external_member_path(path):
-    """Return True if a member path escapes the lock directory or is absolute."""
-    norm = paths.normalize(path.replace("\\", "/"))
-    return (
-        paths.is_absolute(norm) or
-        paths.starts_with(norm, "..") or
-        (len(norm) >= 2 and norm[1] == ":")
-    )
 
 def _compute_source_tags(packages_list):
     """Assign deterministic `~<tag>` suffixes ONLY to `(name, version)` pairs with >1 distinct source."""
@@ -339,7 +330,7 @@ def _build_uv_workspace_base(lock_dict):
                 continue
         else:
             member_path = source.get("editable") if "editable" in source else source.get("virtual")
-            if type(member_path) == "string" and _is_external_member_path(member_path):
+            if type(member_path) == "string" and is_external_member_path(member_path):
                 continue
         base_workspace_members[canon_name] = lock_pkg
 
@@ -559,14 +550,14 @@ def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
             continue
         source = pkg.get("source", {})
         if "editable" in source and type(source["editable"]) == "string":
-            if manifest_members == None and _is_external_member_path(source["editable"]):
+            if manifest_members == None and is_external_member_path(source["editable"]):
                 continue
             members.append(struct(
                 name = pkg["name"],
                 path = source["editable"],
             ))
         elif "virtual" in source and type(source["virtual"]) == "string":
-            if manifest_members == None and _is_external_member_path(source["virtual"]):
+            if manifest_members == None and is_external_member_path(source["virtual"]):
                 continue
 
             # Only include virtual members that have actual dependencies.

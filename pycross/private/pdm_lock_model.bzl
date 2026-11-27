@@ -23,6 +23,7 @@ load(
 load(
     ":translator_util.bzl",
     "canonicalize_name",
+    "is_external_member_path",
     "make_file_entry",
     "make_git_file_entry",
     "parse_pep508_requirement",
@@ -81,7 +82,13 @@ def _build_pdm_workspace_base(lock_dict):
     packages = []
     for lock_pkg in lock_dict.get("package", []):
         name = canonicalize_name(lock_pkg["name"])
-        version = lock_pkg["version"]
+        is_local = "path" in lock_pkg and "files" not in lock_pkg
+        version = lock_pkg.get("version")
+        if not version:
+            if is_local:
+                version = "0.0.0"
+            else:
+                fail("Package '{}' in pdm.lock is missing a 'version' field".format(lock_pkg.get("name", "<unknown>")))
         pkg_extras = lock_pkg.get("extras", [])
 
         # Read package-level markers (PDM multi-target lock files)
@@ -122,8 +129,6 @@ def _build_pdm_workspace_base(lock_dict):
             if not revision:
                 fail("PDM git package {}=={} has no revision".format(name, version))
             files.append(make_git_file_entry(name, version, lock_pkg["git"], revision))
-
-        is_local = "path" in lock_pkg and "files" not in lock_pkg
 
         pkg = {
             "name": name,
@@ -287,6 +292,8 @@ def discover_pdm_all_members(mctx, lock_file_label, toml_cache = None):
     for pkg in lock_data.get("package", []):
         # PDM marks workspace members with editable = true and a path.
         if pkg.get("editable") and "path" in pkg:
+            if type(pkg["path"]) == "string" and is_external_member_path(pkg["path"]):
+                continue
             members.append(struct(
                 name = pkg["name"],
                 path = pkg["path"],

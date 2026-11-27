@@ -839,6 +839,30 @@ def _test_poetry_workspace_cache_matches_standalone(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_workspace_cache_matches_standalone_impl)
 
+# --- test_poetry_versionless_directory_package ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_versionless_directory_package_impl(env, target):
+    project = {"project": {"name": "my-app", "dependencies": ["local-lib"]}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            {
+                "name": "local-lib",
+                "source": {"type": "directory", "url": "libs/local"},
+                "dependencies": {"core": "1.0.0"},
+            },
+            _pkg("core", "1.0.0", files = [_whl("core-1.0.0-py3-none-any.whl", "1")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["core"])
+    env.expect.that_str(result["pins"]["core"]).equals("core@1.0.0")
+
+def _test_poetry_versionless_directory_package(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_versionless_directory_package_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -867,5 +891,6 @@ def poetry_translator_test_suite(name):
             _test_poetry_forked_transitive_dep,
             _test_poetry_mixed_dev_group_order,
             _test_poetry_workspace_cache_matches_standalone,
+            _test_poetry_versionless_directory_package,
         ],
     )

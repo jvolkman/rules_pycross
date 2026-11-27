@@ -5,7 +5,17 @@ PEP 508 requirement parsing, marker combination, root marker and edge
 testonly classification, and raw lock serialization.
 """
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@pypackaging.bzl", "pypackaging")
+
+def is_external_member_path(path):
+    """Return True if a member path escapes the lock directory or is absolute."""
+    norm = paths.normalize(path.replace("\\", "/"))
+    return (
+        paths.is_absolute(norm) or
+        paths.starts_with(norm, "..") or
+        (len(norm) >= 2 and norm[1] == ":")
+    )
 
 def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
