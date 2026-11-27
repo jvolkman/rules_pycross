@@ -2,7 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_netrc")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:pypi_file.bzl", "DEFAULT_INDEX", "get_pypi_file_url", "warn_unverified_download")
+load("//pycross/private:pypi_file.bzl", "DEFAULT_INDEX", "resolve_pypi_file", "warn_unverified_download")
 
 _BUILD_TEMPLATE = """\
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
@@ -31,28 +31,38 @@ def _render_wheel_file_build(filename, inspection_data):
     )
 
 def _pycross_wheel_file_impl(rctx):
+    if not rctx.attr.urls and not rctx.attr.package_name:
+        fail("pycross_wheel_file requires either 'urls' or 'package_name' to be set.")
+
     netrc = read_user_netrc(rctx)
 
     urls = rctx.attr.urls
+    download_sha256 = rctx.attr.sha256
     if not urls:
-        urls = [get_pypi_file_url(
+        resolved = resolve_pypi_file(
             rctx,
             netrc,
             rctx.attr.indexes,
             rctx.attr.package_name,
             rctx.attr.filename,
             rctx.attr.sha256,
-        )]
+        )
+        urls = [resolved.url]
+        download_sha256 = rctx.attr.sha256 or resolved.sha256
 
     # Download the wheel file directly
     download_info = rctx.download(
         urls,
         rctx.attr.filename,
-        rctx.attr.sha256,
+        download_sha256,
         auth = use_netrc(netrc, urls, {}),
     )
     if not rctx.attr.sha256:
-        warn_unverified_download(rctx.attr.filename, download_info)
+        warn_unverified_download(
+            rctx.attr.filename,
+            download_info,
+            verified_by_index = bool(download_sha256),
+        )
 
     # Inspect the wheel for site_paths, bin_paths, data_paths, and include_paths
     exec_internal_tool(

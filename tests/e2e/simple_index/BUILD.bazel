@@ -6,9 +6,11 @@ sh_test(
     args = [
         "$(rootpaths @wheel_html_fallback//:wheel)",
         "$(rootpaths @file_json//file)",
+        "$(rootpath @file_json//file:cowsay-6.1-py3-none-any.whl)",
     ],
     data = [
         "@file_json//file",
+        "@file_json//file:cowsay-6.1-py3-none-any.whl",
         "@wheel_html_fallback//:wheel",
     ],
 )

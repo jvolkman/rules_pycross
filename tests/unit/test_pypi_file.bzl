@@ -4,7 +4,14 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:pypi_file.bzl", "find_simple_index_file", "parse_simple_index", "resolve_url")
+load(
+    "//pycross/private:pypi_file.bzl",
+    "find_simple_index_file",
+    "format_unverified_download_warning_for_testing",
+    "parse_simple_index",
+    "render_pypi_file_build_for_testing",
+    "resolve_url",
+)
 
 _SHA_A = "a" * 64
 _SHA_B = "b" * 64
@@ -60,7 +67,7 @@ def _test_parse_html_impl(env, target):
     quoted_html = (
         '<a data-yanked data-requires-python=">=3.8" data-note="not href=bad" ' +
         'href="https://files.example.com/bar-1.0.whl#sha256=' + _SHA_A + '">bar-1.0.whl</a>' +
-        "<a data-requires-python='>=3.9' data-note='href=bad' href='baz-1.0.whl'>baz-1.0.whl</a>"
+        "<a data-requires-python='>=3.9' data-note='href=bad' href='baz-1.0.whl#sha256='>baz-1.0.whl</a>"
     )
     env.expect.that_collection(parse_simple_index(quoted_html)).contains_exactly([
         {
@@ -70,7 +77,7 @@ def _test_parse_html_impl(env, target):
         },
         {
             "filename": "baz-1.0.whl",
-            "url": "baz-1.0.whl",
+            "url": "baz-1.0.whl#sha256=",
             "sha256": None,
         },
     ]).in_order()
@@ -128,23 +135,41 @@ def _test_find_file_impl(env, target):
     # HTML, matched by anchor text, resolved relative to the page.
     found = find_simple_index_file(_HTML_PAGE, page, "foo-1.0-py3-none-any.whl", _SHA_B)
     env.expect.that_str(found.url).equals("https://example.com/packages/foo-1.0-py3-none-any.whl?a=1&b=2")
+    env.expect.that_str(found.sha256).equals(_SHA_B)
 
     # JSON, upper-case advertised hash still matches.
     found = find_simple_index_file(_JSON_PAGE, page, "foo-1.0.tar.gz", _SHA_A)
     env.expect.that_str(found.url).equals("https://files.example.com/foo-1.0.tar.gz")
+    env.expect.that_str(found.sha256).equals(_SHA_A)
+
+    # Empty expected sha256 returns the index-advertised sha256 when present, or None when absent.
+    found = find_simple_index_file(_HTML_PAGE, page, "foo-1.0.tar.gz", "")
+    env.expect.that_str(found.url).equals("https://files.example.com/packages/ab/cd/foo-1.0.tar.gz")
+    env.expect.that_str(found.sha256).equals(_SHA_A)
+
+    found = find_simple_index_file(_JSON_PAGE, page, "foo-1.0.tar.gz", "")
+    env.expect.that_str(found.url).equals("https://files.example.com/foo-1.0.tar.gz")
+    env.expect.that_str(found.sha256).equals(_SHA_A)
+
+    found = find_simple_index_file(_HTML_PAGE, page, "foo-0.9.tar.gz", "")
+    env.expect.that_str(found.url).equals("https://example.com/abs/foo-0.9.tar.gz")
+    env.expect.that_bool(found.sha256 == None).equals(True)
 
     # No advertised hash: accepted; the download itself verifies sha256.
     found = find_simple_index_file(_HTML_PAGE, page, "foo-0.9.tar.gz", _SHA_A)
     env.expect.that_str(found.url).equals("https://example.com/abs/foo-0.9.tar.gz")
+    env.expect.that_bool(found.sha256 == None).equals(True)
 
     # Advertised hash differs from the lock: skipped with a reason.
     found = find_simple_index_file(_HTML_PAGE, page, "foo-1.0.tar.gz", _SHA_B)
     env.expect.that_bool(found.url == None).equals(True)
+    env.expect.that_bool(found.sha256 == None).equals(True)
     env.expect.that_str(found.reason).contains("listed with sha256 " + _SHA_A)
 
     # Not listed.
     found = find_simple_index_file(_JSON_PAGE, page, "foo-2.0.tar.gz", _SHA_A)
     env.expect.that_bool(found.url == None).equals(True)
+    env.expect.that_bool(found.sha256 == None).equals(True)
     env.expect.that_str(found.reason).equals("file not listed")
 
     # Matched by the percent-decoded URL basename when the anchor text differs.
@@ -155,6 +180,24 @@ def _test_find_file_impl(env, target):
 def _test_find_file(name):
     _unit_test(name, _test_find_file_impl)
 
+# buildifier: disable=unused-variable
+def _test_render_build_and_warning_impl(env, target):
+    build = render_pypi_file_build_for_testing("foo-1.0.tar.gz")
+    env.expect.that_str(build).contains('exports_files(["foo-1.0.tar.gz"])')
+    env.expect.that_str(build).contains('srcs = ["foo-1.0.tar.gz"]')
+
+    info = struct(sha256 = _SHA_A)
+    unverified_msg = format_unverified_download_warning_for_testing("foo-1.0.tar.gz", info, verified_by_index = False)
+    env.expect.that_str(unverified_msg).contains("downloaded sha256: " + _SHA_A)
+    env.expect.that_str(unverified_msg).contains("integrity was not verified.")
+
+    index_msg = format_unverified_download_warning_for_testing("foo-1.0.tar.gz", info, verified_by_index = True)
+    env.expect.that_str(index_msg).contains("downloaded sha256: " + _SHA_A)
+    env.expect.that_str(index_msg).contains("verified only against the index-advertised hash, not pinned by the lock file.")
+
+def _test_render_build_and_warning(name):
+    _unit_test(name, _test_render_build_and_warning_impl)
+
 def pypi_file_test_suite(name):
     test_suite(
         name = name,
@@ -163,5 +206,6 @@ def pypi_file_test_suite(name):
             _test_parse_json,
             _test_resolve_url,
             _test_find_file,
+            _test_render_build_and_warning,
         ],
     )

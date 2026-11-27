@@ -1,6 +1,7 @@
 """Tests for the Starlark UV translator."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 load("@toml.bzl//toml:toml.bzl", "decode")
 
@@ -12,6 +13,9 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:translator_project.bzl", "read_project_dict_for_testing")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:translator_util.bzl", "strip_sha256_prefix")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "parse_package_key")
@@ -2614,7 +2618,11 @@ def _test_uv_optional_file_hash_impl(env, target):
                 "name": "app",
                 "version": "0.1.0",
                 "source": {"editable": "."},
-                "dependencies": [_dep("unhashed-whl", "1.0.0"), _dep("unhashed-sdist", "2.0.0")],
+                "dependencies": [
+                    _dep("unhashed-whl", "1.0.0"),
+                    _dep("unhashed-sdist", "2.0.0"),
+                    _dep("empty-sdist-table", "3.0.0"),
+                ],
             },
             _pkg(
                 "unhashed-whl",
@@ -2628,20 +2636,54 @@ def _test_uv_optional_file_hash_impl(env, target):
                 "source": {"url": "https://index.example.com/sdist/unhashed-sdist-2.0.0.tar.gz"},
                 "sdist": {"size": 123},
             },
+            {
+                "name": "empty-sdist-table",
+                "version": "3.0.0",
+                "source": {"url": "https://index.example.com/sdist/empty-sdist-table-3.0.0.tar.gz"},
+                "sdist": {},
+            },
         ],
     )
     raw = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"]))
     whl_files = raw["packages"]["unhashed-whl@1.0.0"]["files"]
     sdist_files = raw["packages"]["unhashed-sdist@2.0.0"]["files"]
+    empty_sdist_files = raw["packages"]["empty-sdist-table@3.0.0"]["files"]
     env.expect.that_int(len(whl_files)).equals(1)
     env.expect.that_str(whl_files[0]["sha256"]).equals("")
     env.expect.that_str(whl_files[0]["name"]).equals("unhashed_whl-1.0.0-py3-none-any.whl")
     env.expect.that_int(len(sdist_files)).equals(1)
     env.expect.that_str(sdist_files[0]["sha256"]).equals("")
+    env.expect.that_int(len(empty_sdist_files)).equals(1)
+    env.expect.that_str(empty_sdist_files[0]["name"]).equals("empty-sdist-table-3.0.0.tar.gz")
+    env.expect.that_collection(empty_sdist_files[0]["urls"]).contains_exactly([
+        "https://index.example.com/sdist/empty-sdist-table-3.0.0.tar.gz",
+    ])
+    env.expect.that_str(empty_sdist_files[0]["sha256"]).equals("")
+    env.expect.that_str(strip_sha256_prefix("sha256:", required = False)).equals("")
 
 def _test_uv_optional_file_hash(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_optional_file_hash_impl)
+
+def _bare_sha256_subject_impl(_ctx):
+    strip_sha256_prefix("sha256:", required = True)
+    return []
+
+_bare_sha256_subject = rule(implementation = _bare_sha256_subject_impl)
+
+def _test_strip_sha256_prefix_bare_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Expected sha256: prefix with non-empty digest"),
+    )
+
+def _test_strip_sha256_prefix_bare_fails(name):
+    util.helper_target(_bare_sha256_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_strip_sha256_prefix_bare_fails_impl,
+        expect_failure = True,
+    )
 
 # buildifier: disable=unused-variable
 def _test_uv_workspace_cache_and_resolve_workspace_parity_impl(env, target):
@@ -2825,6 +2867,7 @@ def uv_translator_test_suite(name):
             _test_uv_multi_source_same_version,
             _test_discover_uv_all_members,
             _test_uv_optional_file_hash,
+            _test_strip_sha256_prefix_bare_fails,
             _test_uv_workspace_cache_and_resolve_workspace_parity,
         ],
     )

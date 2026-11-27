@@ -1775,16 +1775,135 @@ def _test_duplicate_wheel_filename_same_hash_ok_impl(env, target):
                     _make_file("foo-1.0-py3-none-any.whl", sha256 = "same_hash"),
                 ],
             ),
+            "same-url@1.0": _make_pkg(
+                "same-url",
+                "1.0",
+                [
+                    {"name": "same_url-1.0-py3-none-any.whl", "sha256": "", "urls": ["https://a.example.com/same_url-1.0-py3-none-any.whl"]},
+                    {"name": "same_url-1.0-py3-none-any.whl", "sha256": "", "urls": ["https://a.example.com/same_url-1.0-py3-none-any.whl"]},
+                ],
+            ),
+            "same-index@1.0": _make_pkg(
+                "same-index",
+                "1.0",
+                [
+                    {"name": "same_index-1.0-py3-none-any.whl", "sha256": "", "index": "https://a.example.com/simple"},
+                    {"name": "same_index-1.0-py3-none-any.whl", "sha256": "", "index": "https://a.example.com/simple"},
+                ],
+            ),
         },
-        "pins": {"foo": "foo@1.0"},
+        "pins": {
+            "foo": "foo@1.0",
+            "same-url": "same-url@1.0",
+            "same-index": "same-index@1.0",
+        },
     }
 
     res = resolve(lock_model_data)
-    env.expect.that_collection(res.packages.keys()).contains_exactly(["foo@1.0"])
+    env.expect.that_collection(res.packages.keys()).contains_exactly(["foo@1.0", "same-url@1.0", "same-index@1.0"])
 
 def _test_duplicate_wheel_filename_same_hash_ok(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_duplicate_wheel_filename_same_hash_ok_impl)
+
+def _test_duplicate_unhashed_wheel_different_urls_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("has multiple distinct files named"),
+    )
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("(sha256 <none> vs <none>)"),
+    )
+
+def _test_duplicate_unhashed_wheel_different_urls_fails(name):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg(
+                "foo",
+                "1.0",
+                [
+                    {"name": "foo-1.0-py3-none-any.whl", "sha256": "", "urls": ["https://a.example.com/foo-1.0-py3-none-any.whl"]},
+                    {"name": "foo-1.0-py3-none-any.whl", "sha256": "", "urls": ["https://b.example.com/foo-1.0-py3-none-any.whl"]},
+                ],
+            ),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(lock_model_data),
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_duplicate_unhashed_wheel_different_urls_fails_impl,
+        expect_failure = True,
+    )
+
+def _test_duplicate_unhashed_wheel_different_indexes_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("has multiple distinct files named"),
+    )
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("(sha256 <none> vs <none>)"),
+    )
+
+def _test_duplicate_unhashed_wheel_different_indexes_fails(name):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg(
+                "foo",
+                "1.0",
+                [
+                    {"name": "foo-1.0-py3-none-any.whl", "sha256": "", "index": "https://a.example.com/simple"},
+                    {"name": "foo-1.0-py3-none-any.whl", "sha256": "", "index": "https://b.example.com/simple"},
+                ],
+            ),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(lock_model_data),
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_duplicate_unhashed_wheel_different_indexes_fails_impl,
+        expect_failure = True,
+    )
+
+def _test_duplicate_wheel_mixed_hash_shows_none_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("(sha256 aaaa vs <none>)"),
+    )
+
+def _test_duplicate_wheel_mixed_hash_shows_none_fails(name):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg(
+                "foo",
+                "1.0",
+                [
+                    _make_file("foo-1.0-py3-none-any.whl", sha256 = "aaaa"),
+                    _make_file("foo-1.0-py3-none-any.whl", sha256 = ""),
+                ],
+            ),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(lock_model_data),
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_duplicate_wheel_mixed_hash_shows_none_fails_impl,
+        expect_failure = True,
+    )
 
 def _test_pinned_package_not_in_packages_impl(env, target):
     env.expect.that_target(target).failures().contains_predicate(
@@ -2680,8 +2799,44 @@ def _test_resolve_unhashed_files_impl(env, target):
                     },
                 ],
             ),
+            "pkg-b@1.0": _make_pkg(
+                "pkg-b",
+                "1.0",
+                [
+                    {
+                        "name": "pkg_b-1.0-py3-none-any.whl",
+                        "sha256": "",
+                    },
+                ],
+            ),
+            "pkg-c@1.0~a": _make_pkg(
+                "pkg-c",
+                "1.0",
+                [
+                    {
+                        "name": "pkg_c-1.0-py3-none-any.whl",
+                        "sha256": "",
+                        "urls": ["https://a.example.com/pkg_c-1.0-py3-none-any.whl"],
+                    },
+                ],
+            ),
+            "pkg-c@1.0~b": _make_pkg(
+                "pkg-c",
+                "1.0",
+                [
+                    {
+                        "name": "pkg_c-1.0-py3-none-any.whl",
+                        "sha256": "",
+                        "urls": ["https://b.example.com/pkg_c-1.0-py3-none-any.whl"],
+                    },
+                ],
+            ),
         },
-        "pins": {"pkg-a": "pkg-a@1.0"},
+        "pins": {
+            "pkg-a": "pkg-a@1.0",
+            "pkg-b": "pkg-b@1.0",
+            "pkg-c": {"a": "pkg-c@1.0~a", "b": "pkg-c@1.0~b"},
+        },
     }
     res = resolve(lock_data)
     pkg = res.packages["pkg-a@1.0"]
@@ -2692,6 +2847,17 @@ def _test_resolve_unhashed_files_impl(env, target):
     env.expect.that_str(sdist_key).contains("pkg-a-1.0.tar.gz/nohash/")
     env.expect.that_str(res.remote_files[whl_key]["sha256"]).equals("")
     env.expect.that_str(res.remote_files[sdist_key]["sha256"]).equals("")
+
+    # Filename-only unhashed entry gets exact `<name>/nohash` key.
+    pkg_b_key = res.packages["pkg-b@1.0"]["wheel_candidates"][0]["file_reference"]["key"]
+    env.expect.that_str(pkg_b_key).equals("pkg_b-1.0-py3-none-any.whl/nohash")
+
+    # Distinct unhashed URLs for the same filename produce distinct file keys.
+    pkg_c_key_a = res.packages["pkg-c@1.0~a"]["wheel_candidates"][0]["file_reference"]["key"]
+    pkg_c_key_b = res.packages["pkg-c@1.0~b"]["wheel_candidates"][0]["file_reference"]["key"]
+    env.expect.that_str(pkg_c_key_a).contains("pkg_c-1.0-py3-none-any.whl/nohash/")
+    env.expect.that_str(pkg_c_key_b).contains("pkg_c-1.0-py3-none-any.whl/nohash/")
+    env.expect.that_bool(pkg_c_key_a != pkg_c_key_b).equals(True)
 
 def _test_resolve_unhashed_files(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -2758,6 +2924,9 @@ def lock_resolver_test_suite(name):
             _test_build_mode_always_without_sdist_raises_error,
             _test_duplicate_wheel_filename_raises_error,
             _test_duplicate_wheel_filename_same_hash_ok,
+            _test_duplicate_unhashed_wheel_different_urls_fails,
+            _test_duplicate_unhashed_wheel_different_indexes_fails,
+            _test_duplicate_wheel_mixed_hash_shows_none_fails,
             _test_empty_lock,
             _test_pinned_package_not_in_packages,
             _test_wildcard_always_build_end_to_end,
