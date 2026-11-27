@@ -2,10 +2,23 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# Main-repo native dep with a source include dir (exercises include-dir
-# absolutization in the cc layer).
+# Main-repo native dep with a source include dir and transitive linkopts
+# (exercises include-dir absolutization, user_link_flags propagation, and
+# relative RPATH preservation in the cc layer).
 cc_library(
     name = "probe_hdr",
     hdrs = ["include/probe_hdr.h"],
     includes = ["include"],
+    linkopts = select({
+        "@platforms//os:linux": [
+            "-lm",
+            "-Wl,-rpath,../lib",
+        ],
+        "@platforms//os:macos": [
+            "-framework",
+            "Security",
+            "-Wl,-rpath,../lib",
+        ],
+        "//conditions:default": [],
+    }),
 )

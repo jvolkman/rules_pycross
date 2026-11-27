@@ -28,6 +28,14 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **`native_deps` transitive `linkopts` propagation.** On POSIX toolchains,
+  transitive `linkopts` and `additional_linker_inputs` from `native_deps` now
+  forward verbatim to sdist links (both extension links and feature-probe
+  executables) before rule-level `linkopts`, while preserving relative runtime
+  paths (`-rpath`, `-install_name`, `-soname`). Flags incompatible with Python
+  extensions (such as `-Wl,-z,defs`, symbol-hiding version scripts, or
+  `-static`) are not filtered, matching `cc_binary(linkshared = True)`. Native
+  MSVC builds do not forward them.
 - **Sdist-built package imports.** Under `venvs_site_packages=yes`, sdist-built
   packages now stay on `sys.path` instead of using repo-time layout guesses for
   venv symlinks unless `site_paths` is explicitly annotated; exact and annotated
