@@ -176,11 +176,30 @@ def get_flags_info(
         cxx_linker_executable = _convert_flags(cc_toolchain.compiler, cxx_linker_executable + link_opts),
     )
 
+_MSVC_NOT_FOUND = "msvc_not_found"
+
+def _clean_msvc_env_value(value):
+    """Strip rules_cc msvc_not_found placeholder segments from an MSVC env value.
+
+    Args:
+        value: A semicolon-delimited string from a toolchain env entry, or None.
+
+    Returns:
+        The cleaned string, or None when no non-empty segment remains.
+    """
+    if not value:
+        return None
+    parts = [entry for entry in value.split(";") if entry.strip().lower() != _MSVC_NOT_FOUND]
+    if not any([part.strip() for part in parts]):
+        return None
+    return ";".join(parts)
+
 def create_msvc_environment(cc_toolchain, feature_configuration):
-    """Create a new dictionary of MSVC toolchain paths without inheriting the process environment.
+    """Create a dictionary of MSVC toolchain paths without inheriting the process environment.
 
     Reads PATH and INCLUDE from the compile action and LIB from the shared-link
-    action for the build setup to merge into its environment.
+    action so the build setup can merge them into its environment. Omits keys
+    that are empty or contain only rules_cc's msvc_not_found placeholder.
 
     Args:
         cc_toolchain: The selected C++ toolchain.
@@ -210,13 +229,20 @@ def create_msvc_environment(cc_toolchain, feature_configuration):
         ),
     )
 
-    # Custom toolchains may provide only part of the SDK environment. Normalize
-    # Windows' case-insensitive keys, then emit whichever paths are available.
+    # Custom toolchains may provide only part of the SDK environment, and
+    # rules_cc writes "msvc_not_found" when MSVC detection fails. Normalize
+    # Windows' case-insensitive keys, then emit only keys with real paths.
     compile_env = {key.upper(): value for key, value in compile_env.items()}
     link_env = {key.upper(): value for key, value in link_env.items()}
-    environment = {key: compile_env[key] for key in ["PATH", "INCLUDE"] if key in compile_env}
-    if "LIB" in link_env:
-        environment["LIB"] = link_env["LIB"]
+    environment = {}
+    for key, raw_value in [
+        ("PATH", compile_env.get("PATH")),
+        ("INCLUDE", compile_env.get("INCLUDE")),
+        ("LIB", link_env.get("LIB")),
+    ]:
+        cleaned = _clean_msvc_env_value(raw_value)
+        if cleaned:
+            environment[key] = cleaned
     return environment
 
 def _convert_flags(compiler, flags):

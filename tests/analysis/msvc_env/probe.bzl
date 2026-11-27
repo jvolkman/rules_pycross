@@ -26,16 +26,39 @@ def _config_impl(ctx):
     link_actions = [ACTION_NAMES.cpp_link_dynamic_library]
     actions = compile_actions + link_actions + [ACTION_NAMES.cpp_link_executable, ACTION_NAMES.cpp_link_static_library]
     features = [feature(name = "no_legacy_features")]
-    if ctx.attr.env_style != "none":
-        mixed_case = ctx.attr.env_style in ["mixed", "partial"]
+    style = ctx.attr.env_style
+    if style == "not_found":
+        features.append(feature(name = "wrapper_environment", enabled = True, env_sets = [
+            env_set(actions = compile_actions, env_entries = [
+                env_entry(key = "PATH", value = "msvc_not_found"),
+                env_entry(key = "INCLUDE", value = "MSVC_NOT_FOUND"),
+            ]),
+            env_set(actions = link_actions, env_entries = [
+                env_entry(key = "LIB", value = "msvc_not_found;msvc_not_found"),
+            ]),
+        ]))
+    elif style == "mixed_not_found":
+        features.append(feature(name = "wrapper_environment", enabled = True, env_sets = [
+            env_set(actions = compile_actions, env_entries = [
+                env_entry(key = "PATH", value = "external/review_msvc/bin;msvc_not_found"),
+                env_entry(key = "INCLUDE", value = "external/msvc_not_found_sdk/include"),
+            ]),
+            env_set(actions = link_actions, env_entries = [
+                env_entry(key = "LIB", value = "msvc_not_found"),
+            ]),
+        ]))
+    elif style != "none":
+        mixed_case = style in ["mixed", "partial"]
         keys = ["Path", "Include", "Lib"] if mixed_case else ["PATH", "INCLUDE", "LIB"]
-        compile_entries = [env_entry(key = keys[0], value = "external/review_msvc/bin")]
-        compile_entries.append(env_entry(key = keys[1], value = "external/review_msvc/include"))
+        compile_entries = [
+            env_entry(key = keys[0], value = "external/review_msvc/bin"),
+            env_entry(key = keys[1], value = "external/review_msvc/include"),
+        ]
         features.append(feature(name = "wrapper_environment", enabled = True, env_sets = [
             env_set(actions = compile_actions, env_entries = compile_entries),
             env_set(
                 actions = link_actions,
-                env_entries = [] if ctx.attr.env_style == "partial" else [env_entry(key = keys[2], value = "external/review_msvc/lib")],
+                env_entries = [] if style == "partial" else [env_entry(key = keys[2], value = "external/review_msvc/lib")],
             ),
         ]))
     return [cc_common.create_cc_toolchain_config_info(

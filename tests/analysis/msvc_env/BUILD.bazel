@@ -14,15 +14,19 @@ platform(
 
 filegroup(name = "empty")
 
-[probe_config(
-    name = "config_" + style,
-    env_style = style,
-) for style in [
+_STYLES = [
     "none",
     "mixed",
     "upper",
     "partial",
-]]
+    "not_found",
+    "mixed_not_found",
+]
+
+[probe_config(
+    name = "config_" + style,
+    env_style = style,
+) for style in _STYLES]
 
 [cc_toolchain(
     name = "cc_" + style,
@@ -36,12 +40,7 @@ filegroup(name = "empty")
     strip_files = ":empty",
     toolchain_config = ":config_" + style,
     toolchain_identifier = "msvc-review",
-) for style in [
-    "none",
-    "mixed",
-    "upper",
-    "partial",
-]]
+) for style in _STYLES]
 
 [toolchain(
     name = "tc_" + style,
@@ -51,12 +50,7 @@ filegroup(name = "empty")
     ],
     toolchain = ":cc_" + style,
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
-) for style in [
-    "none",
-    "mixed",
-    "upper",
-    "partial",
-]]
+) for style in _STYLES]
 
 probe(name = "subject")
 
