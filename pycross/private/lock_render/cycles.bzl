@@ -47,7 +47,8 @@ def render_marker_cycle_member_deps(
         packages,
         has_variants = False,
         unique_markers = None,
-        loads = None):
+        loads = None,
+        marker_extra_cache = None):
     """Plans and renders cycle member proxies and fallback reachability evaluators.
 
     For each cycle SCC, computes unconditional deps and grouped conditional deps
@@ -68,9 +69,11 @@ def render_marker_cycle_member_deps(
         unique_markers: Optional iterable of `(marker_str, extra)` tuples whose
             pre-rendered `_marker_eval_*_match` config_settings can be reused.
         loads: Optional dict tracking emitted helper loads (`"cycle_dep_needed"`).
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
     """
     available_eval_matches = {
-        marker_match_target_name(marker_evaluator_name(m, e)): True
+        marker_match_target_name(marker_evaluator_name(m, e, extra_cache = marker_extra_cache)): True
         for m, e in (unique_markers or [])
     }
 
@@ -88,7 +91,10 @@ def render_marker_cycle_member_deps(
                 lines.extend(alias(pkg_key, ":" + raw_target_name(pkg_key), indent = 1, use_native = True))
             continue
 
-        plans = {pkg_key: plan_cycle_member_deps(pkg_key, edges) for pkg_key in resolved_members}
+        plans = {
+            pkg_key: plan_cycle_member_deps(pkg_key, edges, marker_extra_cache = marker_extra_cache)
+            for pkg_key in resolved_members
+        }
 
         # Collect deduplicated fallback evaluators needed for this group.
         new_evaluators = []

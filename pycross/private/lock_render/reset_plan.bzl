@@ -37,7 +37,7 @@ def marker_depends_on_variants(marker, conflict_pairs):
     """
     return fold_variant_marker(marker, conflict_pairs = conflict_pairs) == "V"
 
-def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = None):
+def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = None, marker_extra_cache = None):
     """Decides which packages install with reset variant settings, and their gates.
 
     For cycle members, `_raw_<pkg>` excludes intra-SCC edges, so each member's
@@ -53,6 +53,8 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
         conflict_pairs: {(token, token): True} (see `variant_conflict_pairs`).
         gate_lines: Output lines for the gate config_setting(_group)s.
         loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
+        marker_extra_cache: Optional dict shared across lock rendering to
+            memoize `marker_uses_extra` lookups.
 
     Returns:
         `{pkg_key: struct(ok, gate)}` describing whether each package's wheel
@@ -138,7 +140,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             if not dep or not dep.ok:
                 # Conditional non-variant edge to a non-resettable dep: safe to
                 # reset whenever the marker does not match.
-                eval_name = marker_evaluator_name(md["marker"], parts.extra)
+                eval_name = marker_evaluator_name(md["marker"], parts.extra, extra_cache = marker_extra_cache)
                 nomatch[eval_name] = True
                 items.append(":{}_nomatch".format(eval_name))
                 continue
@@ -149,7 +151,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
                 continue
 
             # A conditional edge only needs the dep's gate where the edge applies.
-            eval_name = marker_evaluator_name(md["marker"], parts.extra)
+            eval_name = marker_evaluator_name(md["marker"], parts.extra, extra_cache = marker_extra_cache)
             nomatch[eval_name] = True
             edge_key = (eval_name, md["key"])
             if edge_key not in edge_gates:

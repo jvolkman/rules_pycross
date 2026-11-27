@@ -21,25 +21,37 @@ def sanitize_name(val):
             out.append("_")
     return "".join(out)
 
-def marker_uses_extra(marker_str):
+def marker_uses_extra(marker_str, cache = None):
     """Returns True if `marker_str` references the PEP 508 `extra` variable.
 
     Args:
         marker_str: The PEP 508 marker expression string.
+        cache: Optional dict mapping marker strings to booleans. When provided,
+            parsed results are read from and stored in this dict so repeated
+            calls for the same marker string avoid re-parsing.
 
     Returns:
         Bool indicating whether the marker AST references `extra`.
     """
     if not marker_str or "extra" not in marker_str:
         return False
-    return "extra" in pypackaging.markers.variables(pypackaging.markers.parse(marker_str))
+    if cache != None:
+        cached = cache.get(marker_str)
+        if cached != None:
+            return cached
+    result = "extra" in pypackaging.markers.variables(pypackaging.markers.parse(marker_str))
+    if cache != None:
+        cache[marker_str] = result
+    return result
 
-def marker_evaluator_name(marker_str, extra = ""):
+def marker_evaluator_name(marker_str, extra = "", extra_cache = None):
     """Generate a deterministic target name for a PEP 508 marker evaluator.
 
     Args:
         marker_str: The PEP 508 marker expression.
         extra: The PEP 508 extra value (e.g. 'test'), or '' for no extra.
+        extra_cache: Optional dict passed to `marker_uses_extra` to memoize
+            whether each marker string references `extra`.
 
     Returns:
         The deterministic target name string (e.g. '_marker_eval_<san>_<hash>').
@@ -47,7 +59,7 @@ def marker_evaluator_name(marker_str, extra = ""):
 
     # Starlark's hash() is deterministic within a build invocation.
     # We sanitize the marker string for readability and add the hash for uniqueness.
-    effective_extra = extra if (extra and marker_uses_extra(marker_str)) else ""
+    effective_extra = extra if (extra and marker_uses_extra(marker_str, cache = extra_cache)) else ""
     key = marker_str if not effective_extra else "{}|extra={}".format(marker_str, effective_extra)
     san_chars = []
     for c in key.lower().elems():
