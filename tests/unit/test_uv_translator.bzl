@@ -2605,6 +2605,139 @@ def _test_discover_uv_all_members(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_discover_uv_all_members_impl)
 
 # buildifier: disable=unused-variable
+def _test_uv_versionless_editable_package_impl(env, target):
+    """Editable packages with dynamic versioning (omitted `version` in uv.lock) translate and expand deps."""
+    pypi = {"registry": "https://pypi.org/simple"}
+    lock = _lock(
+        packages = [
+            {
+                "name": "app",
+                "version": "0.1.0",
+                "source": {"editable": "."},
+                "dependencies": [{"name": "dyn-lib", "extra": ["feat"]}],
+            },
+            {
+                "name": "dyn-lib",
+                "source": {"editable": "libs/dyn"},
+                "dependencies": [_dep("core", "1.0.0")],
+                "optional-dependencies": {
+                    "feat": [_dep("extra-dep", "2.0.0")],
+                },
+            },
+            _pkg("core", "1.0.0", source = pypi, wheels = [_whl("core-1.0.0-py3-none-any.whl", "c1")]),
+            _pkg("extra-dep", "2.0.0", source = pypi, wheels = [_whl("extra_dep-2.0.0-py3-none-any.whl", "e1")]),
+        ],
+    )
+    raw = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"]))
+    env.expect.that_dict(raw["pins"]).contains_exactly({
+        "core": "core@1.0.0",
+        "extra-dep": "extra-dep@2.0.0",
+    })
+    env.expect.that_bool("dyn-lib@0.0.0" in raw["packages"]).equals(False)
+
+def _test_uv_versionless_editable_package(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_versionless_editable_package_impl)
+
+# buildifier: disable=unused-variable
+def _test_uv_manifest_members_and_external_editables_impl(env, target):
+    """[manifest].members and parent-escaping editable paths filter workspace members while keeping local dep expansion."""
+
+    # 1. With [manifest].members: only listed members are discovered; non-member editables are skipped.
+    manifest_toml = "\n".join([
+        "version = 1",
+        "[manifest]",
+        'members = ["ws-root", "app-a"]',
+        "[[package]]",
+        'name = "ws-root"',
+        'version = "0.1.0"',
+        'source = { virtual = "." }',
+        "[[package]]",
+        'name = "app-a"',
+        'version = "0.1.0"',
+        'source = { editable = "apps/a" }',
+        "[[package]]",
+        'name = "vendor-lib"',
+        'version = "0.1.0"',
+        'source = { editable = "vendor/lib" }',
+        "[[package]]",
+        'name = "ext-lib"',
+        'version = "0.1.0"',
+        'source = { editable = "../../libs/ext" }',
+    ])
+    mctx_manifest = struct(
+        path = lambda _lbl: struct(exists = True),
+        read = lambda _path: manifest_toml,
+    )
+    members = discover_uv_all_members(mctx_manifest, Label("//:uv.lock"))
+    env.expect.that_collection([(m.name, m.path) for m in members]).contains_exactly([
+        ("app-a", "apps/a"),
+    ]).in_order()
+
+    # 2. Without [manifest].members: external (../, absolute, drive-letter) editables are excluded.
+    standalone_toml = "\n".join([
+        "version = 1",
+        "[[package]]",
+        'name = "app"',
+        'version = "0.1.0"',
+        'source = { editable = "." }',
+        "[[package]]",
+        'name = "ext-rel"',
+        'version = "0.1.0"',
+        'source = { editable = "../../libs/ext" }',
+        "[[package]]",
+        'name = "ext-abs"',
+        'version = "0.1.0"',
+        'source = { editable = "/opt/ext" }',
+        "[[package]]",
+        'name = "ext-win"',
+        'version = "0.1.0"',
+        'source = { editable = "..\\\\ext" }',
+    ])
+    mctx_standalone = struct(
+        path = lambda _lbl: struct(exists = True),
+        read = lambda _path: standalone_toml,
+    )
+    standalone_members = discover_uv_all_members(mctx_standalone, Label("//:uv.lock"))
+    env.expect.that_collection([(m.name, m.path) for m in standalone_members]).contains_exactly([
+        ("app", "."),
+    ]).in_order()
+
+    # 3. translate_uv with projects=["*"] excludes external editables from target projects
+    #    while still expanding their transitive third-party dependencies.
+    pypi = {"registry": "https://pypi.org/simple"}
+    lock = _lock(
+        packages = [
+            {
+                "name": "app",
+                "version": "0.1.0",
+                "source": {"editable": "."},
+                "dependencies": [_dep("ext-used", "0.1.0")],
+            },
+            {
+                "name": "ext-used",
+                "version": "0.1.0",
+                "source": {"editable": "../../libs/used"},
+                "dependencies": [_dep("from-used", "1.0.0")],
+            },
+            {
+                "name": "ext-unused",
+                "version": "0.1.0",
+                "source": {"editable": "../../libs/unused"},
+                "dependencies": [_dep("from-unused", "1.0.0")],
+            },
+            _pkg("from-used", "1.0.0", source = pypi, wheels = [_whl("from_used-1.0.0-py3-none-any.whl", "u1")]),
+            _pkg("from-unused", "1.0.0", source = pypi, wheels = [_whl("from_unused-1.0.0-py3-none-any.whl", "u2")]),
+        ],
+    )
+    raw = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["*"]))
+    env.expect.that_dict(raw["pins"]).contains_exactly({"from-used": "from-used@1.0.0"})
+
+def _test_uv_manifest_members_and_external_editables(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_manifest_members_and_external_editables_impl)
+
+# buildifier: disable=unused-variable
 def _test_uv_workspace_cache_and_resolve_workspace_parity_impl(env, target):
     """Hoisted UV workspace translation and resolve_workspace match standalone per-member runs byte-for-byte."""
     pypi = {"registry": "https://pypi.org/simple"}
@@ -2785,6 +2918,8 @@ def uv_translator_test_suite(name):
             _test_uv_local_member_edge_cases,
             _test_uv_multi_source_same_version,
             _test_discover_uv_all_members,
+            _test_uv_versionless_editable_package,
+            _test_uv_manifest_members_and_external_editables,
             _test_uv_workspace_cache_and_resolve_workspace_parity,
         ],
     )

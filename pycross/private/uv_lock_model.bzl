@@ -8,6 +8,7 @@ Handles UV-specific features: workspace members, conflicts/variants,
 resolution markers, git sources, and editable packages.
 """
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load(":lock_common.bzl", "read_toml_cached")
 load(
     ":translator_graph.bzl",
@@ -84,6 +85,39 @@ def _source_value(source):
             return "{}#subdirectory={}".format(val, sub) if sub and "subdirectory=" not in val else val
     return _canonical_source(source)
 
+def _is_local_source(source):
+    """Return True when a UV lock `source` table refers to a local package."""
+    return (
+        ("editable" in source and type(source.get("editable")) == "string") or
+        ("virtual" in source and type(source.get("virtual")) == "string") or
+        "directory" in source
+    )
+
+def _lock_pkg_version(lock_pkg):
+    """Return a package's version, defaulting missing versions on local packages to '0.0.0'."""
+    version = lock_pkg.get("version")
+    if version:
+        return version
+    if _is_local_source(lock_pkg.get("source", {})):
+        return "0.0.0"
+    fail("Package '{}' in uv.lock is missing a 'version' field".format(lock_pkg.get("name", "<unknown>")))
+
+def _manifest_member_names(lock_data):
+    """Return a set of canonical member names from `[manifest].members`, or None if absent/empty."""
+    members = lock_data.get("manifest", {}).get("members", [])
+    if not members:
+        return None
+    return {canonicalize_name(m): True for m in members}
+
+def _is_external_member_path(path):
+    """Return True if a member path escapes the lock directory or is absolute."""
+    norm = paths.normalize(path.replace("\\", "/"))
+    return (
+        paths.is_absolute(norm) or
+        paths.starts_with(norm, "..") or
+        (len(norm) >= 2 and norm[1] == ":")
+    )
+
 def _compute_source_tags(packages_list):
     """Assign deterministic `~<tag>` suffixes ONLY to `(name, version)` pairs with >1 distinct source."""
     sources_by_nv = {}  # (canonical_name, version) -> {canon_source: True}
@@ -92,7 +126,7 @@ def _compute_source_tags(packages_list):
         name = canonicalize_name(lock_pkg["name"])
         canon = _canonical_source(lock_pkg.get("source", {}))
         pkg_identities.append((name, canon))
-        sources_by_nv.setdefault((name, lock_pkg["version"]), {})[canon] = True
+        sources_by_nv.setdefault((name, _lock_pkg_version(lock_pkg)), {})[canon] = True
 
     source_tags = {}  # (canonical_name, version, canon_source) -> tag
     for (name, version), canon_sources in sources_by_nv.items():
@@ -164,7 +198,7 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags, pkg_ide
     fork_versions = {}  # {canonical_name: {(version, tag): [marker_expr, ...]}}
 
     for lock_pkg, (package_name, canon_source) in zip(packages_list, pkg_identities):
-        package_version = lock_pkg["version"]
+        package_version = _lock_pkg_version(lock_pkg)
         source = lock_pkg.get("source", {})
         source_tag = source_tags.get((package_name, package_version, canon_source), "")
 
@@ -211,11 +245,7 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags, pkg_ide
                     full_url = "git+" + git_url,
                 ))
 
-        is_local = (
-            ("editable" in source and type(source.get("editable")) == "string") or
-            ("virtual" in source and type(source.get("virtual")) == "string") or
-            "directory" in source
-        )
+        is_local = _is_local_source(source)
 
         base_pkg = {
             "name": package_name,
@@ -295,14 +325,23 @@ def _build_uv_workspace_base(lock_dict):
         strict_dependencies = True,
     )
 
+    manifest_members = _manifest_member_names(lock_dict)
     base_workspace_members = {}
     packages_by_canon_name = {}
     for lock_pkg, (canon_name, _) in zip(packages_list, pkg_identities):
         if canon_name not in packages_by_canon_name:
             packages_by_canon_name[canon_name] = lock_pkg
         source = lock_pkg.get("source", {})
-        if "virtual" in source or source.get("editable"):
-            base_workspace_members[canon_name] = lock_pkg
+        if "virtual" not in source and not source.get("editable"):
+            continue
+        if manifest_members != None:
+            if canon_name not in manifest_members:
+                continue
+        else:
+            member_path = source.get("editable") if "editable" in source else source.get("virtual")
+            if type(member_path) == "string" and _is_external_member_path(member_path):
+                continue
+        base_workspace_members[canon_name] = lock_pkg
 
     return struct(
         base_conflicts = base_conflicts,
@@ -512,16 +551,24 @@ def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
 
     # uv.lock uses "package" (newer) or "distribution" (older) for the package list.
     packages_list = lock_data.get("package", lock_data.get("distribution", []))
+    manifest_members = _manifest_member_names(lock_data)
 
     members = []
     for pkg in packages_list:
+        if manifest_members != None and canonicalize_name(pkg["name"]) not in manifest_members:
+            continue
         source = pkg.get("source", {})
-        if "editable" in source:
+        if "editable" in source and type(source["editable"]) == "string":
+            if manifest_members == None and _is_external_member_path(source["editable"]):
+                continue
             members.append(struct(
                 name = pkg["name"],
                 path = source["editable"],
             ))
-        elif "virtual" in source:
+        elif "virtual" in source and type(source["virtual"]) == "string":
+            if manifest_members == None and _is_external_member_path(source["virtual"]):
+                continue
+
             # Only include virtual members that have actual dependencies.
             # A virtual workspace root with no dependencies is just the workspace
             # definition and shouldn't produce a lock repo.

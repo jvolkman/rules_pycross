@@ -89,6 +89,7 @@ bzl_library(
         ":translator_util",
         ":util",
         ":uv_conflicts",
+        "@bazel_skylib//lib:paths",
     ],
 )
 
