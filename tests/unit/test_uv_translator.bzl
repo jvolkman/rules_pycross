@@ -20,7 +20,7 @@ load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extra
 load("//pycross/private:uv_lock_model.bzl", "discover_uv_all_members", "translate_uv")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:variant_util.bzl", "fold_variant_marker")
+load("//pycross/private:variant_util.bzl", "fold_variant_marker", "variant_active_tokens", "variant_conflict_pairs")
 
 def _lock_model(
         projects = ["*"],
@@ -1947,6 +1947,83 @@ def _test_fold_variant_marker(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_fold_variant_marker_impl)
 
+# --- test_fold_variant_marker_memoization ---
+
+# buildifier: disable=unused-variable
+def _test_fold_variant_marker_memoization_impl(env, target):
+    sets = [["group_app_cpu", "group_app_cuda"], ["extra_app_x", "extra_app_y"]]
+    pairs = variant_conflict_pairs(sets)
+
+    empty_tokens = variant_active_tokens((), sets)
+    env.expect.that_dict(empty_tokens.true_tokens).contains_exactly({})
+    env.expect.that_dict(empty_tokens.false_tokens).contains_exactly({})
+    env.expect.that_bool(empty_tokens.contradicted).equals(False)
+
+    cpu_tokens = variant_active_tokens(["group_app_cpu"], sets)
+    env.expect.that_dict(cpu_tokens.true_tokens).contains_exactly({"-variant-group-app-cpu": True})
+    env.expect.that_dict(cpu_tokens.false_tokens).contains_exactly({"-variant-group-app-cuda": True})
+    env.expect.that_bool(cpu_tokens.contradicted).equals(False)
+
+    cuda_tokens = variant_active_tokens(["group_app_cuda"], sets)
+    contradicted_tokens = variant_active_tokens(["group_app_cpu", "group_app_cuda"], sets)
+    env.expect.that_bool(contradicted_tokens.contradicted).equals(True)
+
+    # Cached folds with precomputed active_tokens match uncached results across all outcomes.
+    markers = [
+        "",
+        "sys_platform == 'linux'",
+        "extra == '__variant_group_app_cpu'",
+        "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
+        "((extra == '__variant_group_app_cpu' or extra == '__variant_extra_app_x') and sys_platform == 'linux')",
+    ]
+    token_cases = [
+        ((), empty_tokens),
+        (["group_app_cpu"], cpu_tokens),
+        (["group_app_cuda"], cuda_tokens),
+        (["group_app_cpu", "group_app_cuda"], contradicted_tokens),
+    ]
+    parse_cache = {}
+    ast_snapshots = {}
+    for active_qnames, active_tokens in token_cases:
+        for marker in markers:
+            expected = fold_variant_marker(marker, active_qnames = active_qnames, conflict_sets = sets)
+            actual = fold_variant_marker(
+                marker,
+                conflict_pairs = pairs,
+                parse_cache = parse_cache,
+                active_tokens = active_tokens,
+            )
+            env.expect.that_str(actual).equals(expected)
+            if marker in parse_cache:
+                snap = str(parse_cache[marker])
+                if marker in ast_snapshots:
+                    env.expect.that_str(snap).equals(ast_snapshots[marker])
+                else:
+                    ast_snapshots[marker] = snap
+
+    # Only variant-bearing markers populate parse_cache (fast-path markers stay uncached).
+    env.expect.that_collection(parse_cache.keys()).contains_exactly(markers[2:])
+
+    # Pre-populated parse_cache entries bypass pypackaging.markers.parse.
+    sentinel = "invalid syntax __variant_sentinel ==="
+    parse_cache[sentinel] = parse_cache["extra == '__variant_group_app_cpu'"]
+    env.expect.that_str(fold_variant_marker(
+        sentinel,
+        conflict_pairs = pairs,
+        parse_cache = parse_cache,
+        active_tokens = cpu_tokens,
+    )).equals("T")
+    env.expect.that_str(fold_variant_marker(
+        sentinel,
+        conflict_pairs = pairs,
+        parse_cache = parse_cache,
+        active_tokens = cuda_tokens,
+    )).equals("F")
+
+def _test_fold_variant_marker_memoization(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_fold_variant_marker_memoization_impl)
+
 # --- test_uv_local_member_conflict_markers ---
 
 # buildifier: disable=unused-variable
@@ -2689,6 +2766,10 @@ def _test_uv_workspace_cache_and_resolve_workspace_parity_impl(env, target):
         ))
 
     env.expect.that_bool(ws_cache.get("shared_packages", False)).equals(True)
+    env.expect.that_collection(ws_cache.get("marker_parse_cache", {}).keys()).contains_at_least([
+        "extra == '__variant_group_app-a_cpu'",
+        "extra == '__variant_group_app-a_cuda'",
+    ])
 
     # Compare only after all cached translations finish so any cross-repo mutation
     # of an earlier repo's returned dicts or lists is caught.
@@ -2778,6 +2859,7 @@ def uv_translator_test_suite(name):
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
             _test_fold_variant_marker,
+            _test_fold_variant_marker_memoization,
             _test_uv_local_member_conflict_markers,
             _test_uv_local_member_chain_and_empty_pin_pruning,
             _test_uv_asymmetric_fork_with_independent_member,

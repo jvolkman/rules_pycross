@@ -23,6 +23,7 @@ load(
     "excluded_variant_items",
     "fold_variant_marker",
     "marker_mentions_variant",
+    "variant_active_tokens",
     "variant_conflict_pairs",
     "variant_item_qname",
 )
@@ -303,7 +304,30 @@ def apply_repo_variant_pins_and_defaults(
 
     return repo_pins
 
-def make_pin_marker_folder(conflicts, repo_pins):
+def _fold_with_cache(marker, constraint_key, conflicts, repo_pins, parse_cache, tokens_cache, fold_cache):
+    """Fold `marker` under `[constraint_key] + repo_pins`, reusing cached tokens and results."""
+    cache_key = (constraint_key, marker)
+    if fold_cache != None:
+        cached = fold_cache.get(cache_key)
+        if cached != None:
+            return cached
+    tokens = tokens_cache.get(constraint_key) if tokens_cache != None else None
+    if tokens == None:
+        active = ([constraint_key] if constraint_key else []) + repo_pins
+        tokens = variant_active_tokens(active, conflicts.set_qnames)
+        if tokens_cache != None:
+            tokens_cache[constraint_key] = tokens
+    ev = fold_variant_marker(
+        marker,
+        conflict_pairs = conflicts.conflict_pairs,
+        parse_cache = parse_cache,
+        active_tokens = tokens,
+    )
+    if fold_cache != None:
+        fold_cache[cache_key] = ev
+    return ev
+
+def make_pin_marker_folder(conflicts, repo_pins, parse_cache = None):
     """Build a `fold_pin_marker(constraint, marker)` closure for `expand_root_edges`.
 
     Jointly evaluates `__variant_` tokens against both the edge's enclosing
@@ -317,28 +341,41 @@ def make_pin_marker_folder(conflicts, repo_pins):
     Args:
         conflicts: Struct returned by `parse_uv_conflicts`.
         repo_pins: List of `repo_pin` qnames active in this repo.
+        parse_cache: Optional dict memoizing `{marker: parsed_ast}` across folds.
 
     Returns:
         Callable `fold(constraint, marker) -> str | None`.
     """
     conflict_pairs = conflicts.conflict_pairs
     set_qnames = conflicts.set_qnames
+    tokens_by_constraint = {}
+    fold_cache = {}
 
     def _fold(constraint, marker):
         if not marker or "__variant_" not in marker:
             return marker
-        active = ([constraint] if constraint else []) + repo_pins
+        cache_key = (constraint, marker)
+        if cache_key in fold_cache:
+            return fold_cache[cache_key]
+        tokens = tokens_by_constraint.get(constraint)
+        if tokens == None:
+            active = ([constraint] if constraint else []) + repo_pins
+            tokens = variant_active_tokens(active, set_qnames)
+            tokens_by_constraint[constraint] = tokens
         ev = fold_variant_marker(
             marker,
             conflict_pairs = conflict_pairs,
-            active_qnames = active,
-            conflict_sets = set_qnames,
+            parse_cache = parse_cache,
+            active_tokens = tokens,
         )
         if ev == "F":
-            return None
-        if ev == "T" and constraint:
-            return ""
-        return marker
+            result = None
+        elif ev == "T" and constraint:
+            result = ""
+        else:
+            result = marker
+        fold_cache[cache_key] = result
+        return result
 
     return _fold
 
@@ -347,7 +384,7 @@ def _edge_constraint_name(base_dep_name, version, marker, tag = ""):
     prefix = resolution_marker_constraint_name(base_dep_name, version, tag) if version else "res_{}".format(sanitize_name(base_dep_name))
     return "%s__edge_%x" % (prefix, hash(marker) & 0xffffffff)
 
-def _prune_plain_branches(branches, conflicts, repo_pins):
+def _prune_plain_branches(branches, conflicts, repo_pins, parse_cache = None, tokens_cache = None, fold_cache = None):
     """Drop or narrow plain (`raw_constraint == ""`) conflict-gated branches on one pin.
 
     A plain branch carrying `__variant_` tokens (e.g. from an unconflicted
@@ -372,6 +409,11 @@ def _prune_plain_branches(branches, conflicts, repo_pins):
 
     if not variant_specs:
         return branches
+
+    if tokens_cache == None:
+        tokens_cache = {}
+    if fold_cache == None:
+        fold_cache = {}
 
     set_pin_by_idx = [vs.get("repo_pin", "") for vs in conflicts.variant_sets]
     kept = []
@@ -398,11 +440,14 @@ def _prune_plain_branches(branches, conflicts, repo_pins):
             sat_uncovered = [
                 q
                 for q in uncovered
-                if fold_variant_marker(
+                if _fold_with_cache(
                     expr,
-                    conflict_pairs = conflicts.conflict_pairs,
-                    active_qnames = [q] + repo_pins,
-                    conflict_sets = conflicts.set_qnames,
+                    q,
+                    conflicts,
+                    repo_pins,
+                    parse_cache,
+                    tokens_cache,
+                    fold_cache,
                 ) != "F"
             ]
             if not sat_uncovered:
@@ -419,7 +464,7 @@ def _prune_plain_branches(branches, conflicts, repo_pins):
 
     return kept
 
-def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, resolution_marker_exprs):
+def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, resolution_marker_exprs, parse_cache = None):
     """Aggregate expanded UV root edges into pins, markers, and testonly sets.
 
     Aggregates edges by `(pin_name, raw_constraint, pkg_key)`, prunes plain
@@ -434,6 +479,7 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
         fork_constraints: Dict `{base_name: {(version, tag): fork_constraint_name}}`.
         resolution_marker_exprs: Dict of constraint name -> marker expr or
             compound dict, mutated in place with newly needed edge constraints.
+        parse_cache: Optional dict memoizing `{marker: parsed_ast}` across folds.
 
     Returns:
         Struct with `pinned_keys`, `root_dependency_markers`, `testonly_pins`,
@@ -450,6 +496,8 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
     direct_testonly = {}
     expanded_testonly = {}
     non_testonly = {}
+    tokens_cache = {}
+    fold_cache = {}
 
     for pin_name, grouped in by_pin.items():
         base_name = pin_name.split("[")[0]
@@ -469,17 +517,19 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
             effective_marker = agg_marker or resolution_marker_exprs.get(fork_constraint, "")
             multi_spec = len(specs_per_group[(pin_name, raw_constraint)]) > 1
 
-            active = ([raw_constraint] if raw_constraint else []) + repo_pins
             needs_marker = bool(effective_marker) and (
                 multi_spec or
                 fork_constraint != None or
                 (
                     "__variant_" in effective_marker and
-                    fold_variant_marker(
+                    _fold_with_cache(
                         effective_marker,
-                        conflict_pairs = conflicts.conflict_pairs,
-                        active_qnames = active,
-                        conflict_sets = conflicts.set_qnames,
+                        raw_constraint,
+                        conflicts,
+                        repo_pins,
+                        parse_cache,
+                        tokens_cache,
+                        fold_cache,
                     ) == "V"
                 )
             )
@@ -494,7 +544,14 @@ def resolve_uv_pins(expanded_edges, conflicts, repo_pins, fork_constraints, reso
                 "entries": entries,
             })
 
-        surviving = _prune_plain_branches(branches, conflicts, repo_pins)
+        surviving = _prune_plain_branches(
+            branches,
+            conflicts,
+            repo_pins,
+            parse_cache = parse_cache,
+            tokens_cache = tokens_cache,
+            fold_cache = fold_cache,
+        )
         for branch in surviving:
             raw_constraint = branch["raw_constraint"]
             if branch["needs_marker"]:

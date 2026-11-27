@@ -348,7 +348,8 @@ def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
         lock_dict: Parsed uv.lock as a dict.
         lock_model: A struct containing the lock model attributes.
         workspace_cache: Optional dict shared across repos in the same workspace
-            to reuse parsed lock packages, conflict metadata, and the lock graph.
+            to reuse parsed lock packages, conflict metadata, parsed marker ASTs,
+            and the lock graph.
 
     Returns:
         A dict in raw_lock.json format.
@@ -359,8 +360,10 @@ def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
             base = _build_uv_workspace_base(lock_dict)
             workspace_cache["uv_base"] = base
             workspace_cache["shared_packages"] = True
+        marker_parse_cache = workspace_cache.setdefault("marker_parse_cache", {})
     else:
         base = _build_uv_workspace_base(lock_dict)
+        marker_parse_cache = {}
 
     uv_default_groups = project_dict.get("tool", {}).get("uv", {}).get("default-groups", [])
 
@@ -474,7 +477,11 @@ def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
         base.graph,
         root_edges,
         strict_dependencies = True,
-        fold_pin_marker = make_pin_marker_folder(conflicts, repo_pins),
+        fold_pin_marker = make_pin_marker_folder(
+            conflicts,
+            repo_pins,
+            parse_cache = marker_parse_cache,
+        ),
     )
     resolved_pins = resolve_uv_pins(
         expanded_edges,
@@ -482,6 +489,7 @@ def translate_uv(project_dict, lock_dict, lock_model, workspace_cache = None):
         repo_pins = repo_pins,
         fork_constraints = base.fork_constraints,
         resolution_marker_exprs = resolution_marker_exprs,
+        parse_cache = marker_parse_cache,
     )
 
     return finalize_lock_graph(
