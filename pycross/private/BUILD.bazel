@@ -518,7 +518,10 @@ bzl_library(
 bzl_library(
     name = "translator_util",
     srcs = ["translator_util.bzl"],
-    deps = ["@pypackaging.bzl//:pypackaging"],
+    deps = [
+        "@bazel_skylib//lib:paths",
+        "@pypackaging.bzl//:pypackaging",
+    ],
 )
 
 bzl_library(

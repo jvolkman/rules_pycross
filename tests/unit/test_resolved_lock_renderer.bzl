@@ -1889,12 +1889,42 @@ def _test_render_lock_with_meta_has_reset(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_render_lock_with_meta_has_reset_impl)
 
+# buildifier: disable=unused-variable
+def _test_reset_edge_dedup_identical_nomatch_impl(env, target):
+    """When a dep's reset gate equals the edge's own `_nomatch` label, reuse it without emitting a duplicate match_any."""
+    res = _reset_lock({
+        "sdist-leaf@1.0": {
+            "sdist_file": {"key": "leaf_sdist"},
+        },
+        "mid@1.0": {
+            "wheel_candidates": [_whl("mid_whl", "mid-1.0-py3-none-any.whl")],
+            "marker_dependencies": [
+                {"key": "sdist-leaf@1.0", "marker": "sys_platform == 'linux'"},
+            ],
+        },
+        "top@1.0": {
+            "wheel_candidates": [_whl("top_whl", "top-1.0-py3-none-any.whl")],
+            "marker_dependencies": [
+                {"key": "mid@1.0", "marker": "sys_platform == 'linux'"},
+            ],
+        },
+    })
+    linux_eval = marker_evaluator_name("sys_platform == 'linux'")
+    nomatch_label = '":{}_nomatch"'.format(linux_eval)
+    env.expect.that_str(res).contains('name = "top@1.0",\n        reset_gate = ' + nomatch_label)
+    env.expect.that_bool("_reset_edge_{}_mid@1.0".format(linux_eval) in res).equals(False)
+
+def _test_reset_edge_dedup_identical_nomatch(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_reset_edge_dedup_identical_nomatch_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_render_lock,
             _test_render_lock_with_meta_has_reset,
+            _test_reset_edge_dedup_identical_nomatch,
             _test_reset_plan,
             _test_marker_depends_on_variants_cache,
             _test_reset_cycles,

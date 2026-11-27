@@ -1,6 +1,7 @@
 """Tests for the Starlark Poetry translator."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
@@ -839,6 +840,61 @@ def _test_poetry_workspace_cache_matches_standalone(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_workspace_cache_matches_standalone_impl)
 
+# --- test_poetry_versionless_directory_package ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_versionless_directory_package_impl(env, target):
+    project = {"project": {"name": "my-app", "dependencies": ["local-lib"]}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            {
+                "name": "local-lib",
+                "source": {"type": "directory", "url": "libs/local"},
+                "dependencies": {"core": "1.0.0"},
+            },
+            _pkg("core", "1.0.0", files = [_whl("core-1.0.0-py3-none-any.whl", "1")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["core"])
+    env.expect.that_str(result["pins"]["core"]).equals("core@1.0.0")
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["core@1.0.0"])
+
+def _test_poetry_versionless_directory_package(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_versionless_directory_package_impl)
+
+def _poetry_versionless_non_local_subject_impl(_ctx):
+    project = {"project": {"name": "my-app", "dependencies": ["broken"]}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            {
+                "name": "broken",
+                "files": [_whl("broken-1.0.0-py3-none-any.whl", "1")],
+            },
+        ],
+    }
+    translate_poetry(project, lock, _lock_model())
+    return []
+
+_poetry_versionless_non_local_subject = rule(implementation = _poetry_versionless_non_local_subject_impl)
+
+def _test_poetry_versionless_non_local_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Package 'broken' in poetry.lock is missing a 'version' field"),
+    )
+
+def _test_poetry_versionless_non_local_fails(name):
+    util.helper_target(_poetry_versionless_non_local_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_poetry_versionless_non_local_fails_impl,
+    )
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -867,5 +923,7 @@ def poetry_translator_test_suite(name):
             _test_poetry_forked_transitive_dep,
             _test_poetry_mixed_dev_group_order,
             _test_poetry_workspace_cache_matches_standalone,
+            _test_poetry_versionless_directory_package,
+            _test_poetry_versionless_non_local_fails,
         ],
     )

@@ -167,12 +167,16 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             # A conditional edge only needs the dep's gate where the edge applies.
             eval_name = marker_evaluator_name(md["marker"], parts.extra, extra_cache = marker_extra_cache)
             nomatch[eval_name] = True
+            nomatch_label = ":{}_nomatch".format(eval_name)
+            if dep.gate == nomatch_label:
+                items.append(nomatch_label)
+                continue
             edge_key = (eval_name, md["key"])
             if edge_key not in edge_gates:
                 edge_gates[edge_key] = group(
                     "_reset_edge_{}_{}".format(eval_name, md["key"]),
                     "match_any",
-                    [":{}_nomatch".format(eval_name), dep.gate],
+                    [nomatch_label, dep.gate],
                 )
             items.append(edge_gates[edge_key])
 
