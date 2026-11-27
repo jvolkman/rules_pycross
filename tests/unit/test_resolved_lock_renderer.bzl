@@ -12,6 +12,9 @@ load("//pycross/private:util.bzl", "marker_evaluator_name", "sanitize_name")
 # buildifier: disable=bzl-visibility
 load("//pycross/private/lock_render:cycles.bzl", "build_cycle_edges_dict")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private/lock_render:reset_plan.bzl", "conflict_pairs", "marker_depends_on_variants")
+
 # buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
     """Verify basic rendering with wheel_candidates (wheel selection via pycross_wheel_chooser)."""
@@ -1072,6 +1075,35 @@ def _test_reset_plan(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_reset_plan_impl)
 
 # buildifier: disable=unused-variable
+def _test_marker_depends_on_variants_cache_impl(env, target):
+    """marker_depends_on_variants memoizes results and parsed ASTs."""
+    pairs = conflict_pairs(_RESET_SETS)
+    cache = {}
+    parse_cache = {}
+    markers = [
+        ("extra == '__variant_extra_app_cpu'", True),
+        ("sys_platform == 'win32' or (extra == '__variant_extra_app_cpu' and extra == '__variant_extra_app_gpu')", False),
+        ("sys_platform == 'linux'", False),
+    ]
+    for marker, expected in markers:
+        env.expect.that_bool(marker_depends_on_variants(marker, pairs, cache = cache, parse_cache = parse_cache)).equals(expected)
+        env.expect.that_bool(marker_depends_on_variants(marker, pairs, cache = cache, parse_cache = parse_cache)).equals(expected)
+    env.expect.that_dict(cache).contains_exactly({m: exp for m, exp in markers})
+    env.expect.that_collection(parse_cache.keys()).contains_exactly([markers[0][0], markers[1][0]])
+
+    # Pre-populated cache entries return directly without parsing.
+    sentinel_t = "invalid syntax __variant_t ==="
+    sentinel_f = "invalid syntax __variant_f ==="
+    cache[sentinel_t] = True
+    cache[sentinel_f] = False
+    env.expect.that_bool(marker_depends_on_variants(sentinel_t, pairs, cache = cache, parse_cache = parse_cache)).equals(True)
+    env.expect.that_bool(marker_depends_on_variants(sentinel_f, pairs, cache = cache, parse_cache = parse_cache)).equals(False)
+
+def _test_marker_depends_on_variants_cache(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_marker_depends_on_variants_cache_impl)
+
+# buildifier: disable=unused-variable
 def _test_reset_cycles_impl(env, target):
     """Cycle members reset their _raw_ installs independently; callers reset across pure SCCs."""
     res = _reset_lock({
@@ -1857,13 +1889,44 @@ def _test_render_lock_with_meta_has_reset(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_render_lock_with_meta_has_reset_impl)
 
+# buildifier: disable=unused-variable
+def _test_reset_edge_dedup_identical_nomatch_impl(env, target):
+    """When a dep's reset gate equals the edge's own `_nomatch` label, reuse it without emitting a duplicate match_any."""
+    res = _reset_lock({
+        "sdist-leaf@1.0": {
+            "sdist_file": {"key": "leaf_sdist"},
+        },
+        "mid@1.0": {
+            "wheel_candidates": [_whl("mid_whl", "mid-1.0-py3-none-any.whl")],
+            "marker_dependencies": [
+                {"key": "sdist-leaf@1.0", "marker": "sys_platform == 'linux'"},
+            ],
+        },
+        "top@1.0": {
+            "wheel_candidates": [_whl("top_whl", "top-1.0-py3-none-any.whl")],
+            "marker_dependencies": [
+                {"key": "mid@1.0", "marker": "sys_platform == 'linux'"},
+            ],
+        },
+    })
+    linux_eval = marker_evaluator_name("sys_platform == 'linux'")
+    nomatch_label = '":{}_nomatch"'.format(linux_eval)
+    env.expect.that_str(res).contains('name = "top@1.0",\n        reset_gate = ' + nomatch_label)
+    env.expect.that_bool("_reset_edge_{}_mid@1.0".format(linux_eval) in res).equals(False)
+
+def _test_reset_edge_dedup_identical_nomatch(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_reset_edge_dedup_identical_nomatch_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_render_lock,
             _test_render_lock_with_meta_has_reset,
+            _test_reset_edge_dedup_identical_nomatch,
             _test_reset_plan,
+            _test_marker_depends_on_variants_cache,
             _test_reset_cycles,
             _test_reset_gates,
             _test_reset_bzl,

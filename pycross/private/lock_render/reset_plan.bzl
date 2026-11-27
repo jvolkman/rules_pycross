@@ -21,7 +21,7 @@ load("//pycross/private:variant_util.bzl", "fold_variant_marker", "variant_confl
 load(":common.bzl", "is_in_same_cycle")
 load(":wheels.bzl", "resolved_wheel_candidates", "wheel_match_condition")
 
-def marker_depends_on_variants(marker, conflict_pairs):
+def marker_depends_on_variants(marker, conflict_pairs, cache = None, parse_cache = None):
     """Whether a marker's value can depend on the selected variants.
 
     Clauses that require two items of one conflict set (which uv emits, e.g.
@@ -31,11 +31,20 @@ def marker_depends_on_variants(marker, conflict_pairs):
     Args:
         marker: PEP 508 marker expression string.
         conflict_pairs: `{(token, token): True}` of mutually exclusive variant tokens.
+        cache: Optional dict memoizing `{marker: bool}` for this `conflict_pairs`.
+        parse_cache: Optional dict memoizing `{marker: parsed_ast}` across folds.
 
     Returns:
         True if the marker's result can vary with the selected variants.
     """
-    return fold_variant_marker(marker, conflict_pairs = conflict_pairs) == "V"
+    if cache != None:
+        cached = cache.get(marker)
+        if cached != None:
+            return cached
+    result = fold_variant_marker(marker, conflict_pairs = conflict_pairs, parse_cache = parse_cache) == "V"
+    if cache != None:
+        cache[marker] = result
+    return result
 
 def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = None, marker_extra_cache = None):
     """Decides which packages install with reset variant settings, and their gates.
@@ -68,6 +77,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
     raw_plan = {}  # pkg_key -> target-facing struct(ok, gate)
     nomatch = {}  # marker evaluator names that need an `_nomatch` config_setting
     edge_gates = {}  # (eval_name, dep_key) -> label, shared across packages
+    variant_marker_cache = {}  # marker -> bool for this conflict_pairs
 
     cycle_members_by_group = {}  # group_name -> sorted list of member pkg_keys
     total_edges = 0
@@ -111,7 +121,11 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             if not (ignore_same_cycle and is_in_same_cycle(md["key"], pkg, packages))
         ]
         for md in deps:
-            if md.get("marker") and marker_depends_on_variants(md["marker"], conflict_pairs):
+            if md.get("marker") and marker_depends_on_variants(
+                md["marker"],
+                conflict_pairs,
+                cache = variant_marker_cache,
+            ):
                 return no
             dep = plan.get(md["key"])
             if not dep or not dep.ok:
@@ -153,12 +167,16 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             # A conditional edge only needs the dep's gate where the edge applies.
             eval_name = marker_evaluator_name(md["marker"], parts.extra, extra_cache = marker_extra_cache)
             nomatch[eval_name] = True
+            nomatch_label = ":{}_nomatch".format(eval_name)
+            if dep.gate == nomatch_label:
+                items.append(nomatch_label)
+                continue
             edge_key = (eval_name, md["key"])
             if edge_key not in edge_gates:
                 edge_gates[edge_key] = group(
                     "_reset_edge_{}_{}".format(eval_name, md["key"]),
                     "match_any",
-                    [":{}_nomatch".format(eval_name), dep.gate],
+                    [nomatch_label, dep.gate],
                 )
             items.append(edge_gates[edge_key])
 
@@ -199,7 +217,11 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = N
             pkg = packages[m]
             for md in pkg.get("marker_dependencies", []):
                 if is_in_same_cycle(md["key"], pkg, packages) and md.get("marker"):
-                    if marker_depends_on_variants(md["marker"], conflict_pairs):
+                    if marker_depends_on_variants(
+                        md["marker"],
+                        conflict_pairs,
+                        cache = variant_marker_cache,
+                    ):
                         scc_ok = False
                         break
             if not scc_ok:

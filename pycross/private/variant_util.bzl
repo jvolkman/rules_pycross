@@ -167,7 +167,46 @@ def _fold_variant_level(elements, true_tokens, false_tokens, conflict_pairs):
         return "F"
     return "V" if "V" in kept else "N"
 
-def fold_variant_marker(marker, conflict_pairs = None, active_qnames = (), conflict_sets = None):
+def variant_active_tokens(active_qnames, conflict_sets = None):
+    """Precompute active and excluded normalized variant tokens for `fold_variant_marker`.
+
+    Args:
+        active_qnames: Iterable of variant qualified names assumed active
+            simultaneously (empty strings are ignored).
+        conflict_sets: Optional iterable of lists of variant qualified names
+            used to derive rivals excluded by `active_qnames`.
+
+    Returns:
+        Struct with `true_tokens` (`{norm_token: True}`), `false_tokens`
+        (`{norm_token: True}`), and `contradicted` (True when two active
+        variants conflict).
+    """
+    true_tokens = {}
+    false_tokens = {}
+    contradicted = False
+    active = [q for q in active_qnames if q]
+    if active:
+        for q in active:
+            true_tokens[pypackaging.utils.canonicalize_name("__variant_" + q)] = True
+        for rival in excluded_variant_items(conflict_sets or [], active).keys():
+            false_tokens[pypackaging.utils.canonicalize_name("__variant_" + rival)] = True
+        for token in true_tokens:
+            if token in false_tokens:
+                contradicted = True
+                break
+    return struct(
+        true_tokens = true_tokens,
+        false_tokens = false_tokens,
+        contradicted = contradicted,
+    )
+
+def fold_variant_marker(
+        marker,
+        conflict_pairs = None,
+        active_qnames = (),
+        conflict_sets = None,
+        parse_cache = None,
+        active_tokens = None):
     """Fold a PEP 508 marker over uv conflict variant tokens into `"T"`, `"F"`, `"V"`, or `"N"`.
 
     Evaluates `__variant_<qname>` comparisons under optional fixed variant
@@ -180,10 +219,13 @@ def fold_variant_marker(marker, conflict_pairs = None, active_qnames = (), confl
         conflict_pairs: Optional precomputed `{(token_a, token_b): True}` from
             `variant_conflict_pairs`. Computed from `conflict_sets` if omitted.
         active_qnames: Optional iterable of variant qualified names assumed
-            active simultaneously.
+            active simultaneously (ignored when `active_tokens` is provided).
         conflict_sets: Optional iterable of lists of variant qualified names
-            (used to derive rivals of `active_qnames`, and `conflict_pairs` when
-            not provided).
+            (used to derive rivals of `active_qnames` when `active_tokens` is
+            omitted, and `conflict_pairs` when not provided).
+        parse_cache: Optional dict memoizing `{marker: parsed_ast}` across calls
+            to avoid repeated `pypackaging.markers.parse` calls.
+        active_tokens: Optional precomputed struct from `variant_active_tokens`.
 
     Returns:
         - `"T"` if always true under the given assumptions.
@@ -197,21 +239,21 @@ def fold_variant_marker(marker, conflict_pairs = None, active_qnames = (), confl
     if "__variant_" not in marker_lower and _VARIANT_TOKEN_PREFIX not in marker_lower:
         return "N"
 
-    true_tokens = {}
-    false_tokens = {}
-    active = [q for q in active_qnames if q]
-    if active:
-        for q in active:
-            true_tokens[pypackaging.utils.canonicalize_name("__variant_" + q)] = True
-        for rival in excluded_variant_items(conflict_sets or [], active).keys():
-            false_tokens[pypackaging.utils.canonicalize_name("__variant_" + rival)] = True
-        for token in true_tokens:
-            if token in false_tokens:
-                return "F"
+    tokens = active_tokens if active_tokens != None else variant_active_tokens(active_qnames, conflict_sets)
+    if tokens.contradicted:
+        return "F"
+    true_tokens = tokens.true_tokens
+    false_tokens = tokens.false_tokens
 
     pairs = conflict_pairs if conflict_pairs != None else variant_conflict_pairs(conflict_sets or [])
 
-    tree = pypackaging.markers.parse(marker)
+    if parse_cache != None:
+        tree = parse_cache.get(marker)
+        if tree == None:
+            tree = pypackaging.markers.parse(marker)
+            parse_cache[marker] = tree
+    else:
+        tree = pypackaging.markers.parse(marker)
     stack = [[tree, 0, []]]
     for _ in range(2 * len(marker) + 1):
         frame = stack[-1]

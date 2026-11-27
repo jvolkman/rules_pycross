@@ -15,16 +15,19 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 load("//pycross/private:translator_project.bzl", "read_project_dict_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:translator_util.bzl", "strip_sha256_prefix")
+load("//pycross/private:translator_util.bzl", "is_external_member_path", "strip_sha256_prefix")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "parse_package_key")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:uv_conflicts.bzl", "make_pin_marker_folder", "parse_uv_conflicts", "resolve_uv_pins")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", "discover_uv_all_members", "translate_uv")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:variant_util.bzl", "fold_variant_marker")
+load("//pycross/private:variant_util.bzl", "fold_variant_marker", "variant_active_tokens", "variant_conflict_pairs")
 
 def _lock_model(
         projects = ["*"],
@@ -57,10 +60,12 @@ def _project(name = "my-app", version = "0.1.0", deps = None, opt_deps = None, d
         p["tool"] = {"uv": tool_uv}
     return p
 
-def _lock(packages, requires_python = ">=3.8", conflicts = None):
+def _lock(packages, requires_python = ">=3.8", conflicts = None, manifest = None):
     d = {"version": 1, "requires-python": requires_python, "package": packages}
     if conflicts:
         d["conflicts"] = conflicts
+    if manifest != None:
+        d["manifest"] = manifest
     return d
 
 def _vpkg(name, version = "0.1.0", deps = None, opt_deps = None, dev_deps = None):
@@ -1951,6 +1956,237 @@ def _test_fold_variant_marker(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_fold_variant_marker_impl)
 
+# --- test_fold_variant_marker_memoization ---
+
+# buildifier: disable=unused-variable
+def _test_fold_variant_marker_memoization_impl(env, target):
+    sets = [["group_app_cpu", "group_app_cuda"], ["extra_app_x", "extra_app_y"]]
+    pairs = variant_conflict_pairs(sets)
+
+    empty_tokens = variant_active_tokens((), sets)
+    env.expect.that_dict(empty_tokens.true_tokens).contains_exactly({})
+    env.expect.that_dict(empty_tokens.false_tokens).contains_exactly({})
+    env.expect.that_bool(empty_tokens.contradicted).equals(False)
+
+    cpu_tokens = variant_active_tokens(["group_app_cpu"], sets)
+    env.expect.that_dict(cpu_tokens.true_tokens).contains_exactly({"-variant-group-app-cpu": True})
+    env.expect.that_dict(cpu_tokens.false_tokens).contains_exactly({"-variant-group-app-cuda": True})
+    env.expect.that_bool(cpu_tokens.contradicted).equals(False)
+
+    cuda_tokens = variant_active_tokens(["group_app_cuda"], sets)
+    contradicted_tokens = variant_active_tokens(["group_app_cpu", "group_app_cuda"], sets)
+    env.expect.that_bool(contradicted_tokens.contradicted).equals(True)
+
+    # Cached folds with precomputed active_tokens match explicit expected outcomes and uncached folds.
+    markers = [
+        "",
+        "sys_platform == 'linux'",
+        "extra == '__variant_group_app_cpu'",
+        "(sys_platform == 'darwin' and extra == '__variant_group_app_cpu') or (extra == '__variant_group_app_cpu' and extra == '__variant_group_app_cuda')",
+        "((extra == '__variant_group_app_cpu' or extra == '__variant_extra_app_x') and sys_platform == 'linux')",
+    ]
+    token_cases = [
+        ((), empty_tokens, ["T", "N", "V", "V", "V"]),
+        (["group_app_cpu"], cpu_tokens, ["T", "N", "T", "N", "N"]),
+        (["group_app_cuda"], cuda_tokens, ["T", "N", "F", "F", "V"]),
+        (["group_app_cpu", "group_app_cuda"], contradicted_tokens, ["T", "N", "F", "F", "F"]),
+    ]
+    parse_cache = {}
+    ast_snapshots = {}
+    for active_qnames, active_tokens, expected_outcomes in token_cases:
+        for marker, expected in zip(markers, expected_outcomes):
+            uncached = fold_variant_marker(marker, active_qnames = active_qnames, conflict_sets = sets)
+            actual = fold_variant_marker(
+                marker,
+                conflict_pairs = pairs,
+                parse_cache = parse_cache,
+                active_tokens = active_tokens,
+            )
+            env.expect.that_str(uncached).equals(expected)
+            env.expect.that_str(actual).equals(expected)
+            if marker in parse_cache:
+                snap = str(parse_cache[marker])
+                if marker in ast_snapshots:
+                    env.expect.that_str(snap).equals(ast_snapshots[marker])
+                else:
+                    ast_snapshots[marker] = snap
+
+    # Only variant-bearing markers populate parse_cache (fast-path markers stay uncached).
+    env.expect.that_collection(parse_cache.keys()).contains_exactly(markers[2:])
+
+    # Pre-populated parse_cache entries bypass pypackaging.markers.parse.
+    sentinel = "invalid syntax __variant_sentinel ==="
+    parse_cache[sentinel] = parse_cache["extra == '__variant_group_app_cpu'"]
+    env.expect.that_str(fold_variant_marker(
+        sentinel,
+        conflict_pairs = pairs,
+        parse_cache = parse_cache,
+        active_tokens = cpu_tokens,
+    )).equals("T")
+    env.expect.that_str(fold_variant_marker(
+        sentinel,
+        conflict_pairs = pairs,
+        parse_cache = parse_cache,
+        active_tokens = cuda_tokens,
+    )).equals("F")
+
+def _test_fold_variant_marker_memoization(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_fold_variant_marker_memoization_impl)
+
+# --- test_pin_marker_folder_and_shared_caches ---
+
+# buildifier: disable=unused-variable
+def _test_pin_marker_folder_and_shared_caches_impl(env, target):
+    conflicts = parse_uv_conflicts(
+        [
+            [{"package": "app", "group": "cpu"}, {"package": "app", "group": "cuda"}],
+            [{"package": "app", "extra": "x"}, {"package": "app", "extra": "y"}],
+        ],
+        target_projects = ["app"],
+    )
+    m_cpu = "extra == '__variant_group_app_cpu'"
+    m_cuda = "extra == '__variant_group_app_cuda'"
+    m_x = "extra == '__variant_extra_app_x'"
+    m_cpu_linux = "extra == '__variant_group_app_cpu' and sys_platform == 'linux'"
+    m_plain = "sys_platform == 'linux'"
+
+    parse_cache = {}
+    tokens_cache = {}
+    fold_cache = {}
+    folder = make_pin_marker_folder(
+        conflicts,
+        ["group_app_cpu"],
+        parse_cache = parse_cache,
+        tokens_cache = tokens_cache,
+        fold_cache = fold_cache,
+    )
+
+    # Empty and non-variant markers return untouched without populating caches.
+    env.expect.that_str(folder("group_app_cpu", "")).equals("")
+    env.expect.that_str(folder("group_app_cpu", m_plain)).equals(m_plain)
+    env.expect.that_dict(tokens_cache).contains_exactly({})
+    env.expect.that_dict(fold_cache).contains_exactly({})
+
+    # "F" -> None (both with and without constraint); "T" with constraint -> "";
+    # "T" without constraint keeps marker; "V" and "N" keep marker.
+    env.expect.that_bool(folder("group_app_cpu", m_cuda) == None).equals(True)
+    env.expect.that_bool(folder("", m_cuda) == None).equals(True)
+    env.expect.that_str(folder("group_app_cpu", m_cpu)).equals("")
+    env.expect.that_str(folder("", m_cpu)).equals(m_cpu)
+    env.expect.that_str(folder("group_app_cpu", m_x)).equals(m_x)
+    env.expect.that_str(folder("", m_x)).equals(m_x)
+    env.expect.that_str(folder("group_app_cpu", m_cpu_linux)).equals(m_cpu_linux)
+
+    env.expect.that_collection(tokens_cache.keys()).contains_exactly(["group_app_cpu", ""])
+    env.expect.that_dict(fold_cache).contains_exactly({
+        ("group_app_cpu", m_cuda): "F",
+        ("", m_cuda): "F",
+        ("group_app_cpu", m_cpu): "T",
+        ("", m_cpu): "T",
+        ("group_app_cpu", m_x): "V",
+        ("", m_x): "V",
+        ("group_app_cpu", m_cpu_linux): "N",
+    })
+
+    # Pre-populated fold_cache entries bypass parsing inside make_pin_marker_folder.
+    sentinel_f = "invalid syntax __variant_cached_f ==="
+    sentinel_t = "invalid syntax __variant_cached_t ==="
+    fold_cache[("group_app_cpu", sentinel_f)] = "F"
+    fold_cache[("group_app_cpu", sentinel_t)] = "T"
+    fold_cache[("", sentinel_t)] = "T"
+    env.expect.that_bool(folder("group_app_cpu", sentinel_f) == None).equals(True)
+    env.expect.that_str(folder("group_app_cpu", sentinel_t)).equals("")
+    env.expect.that_str(folder("", sentinel_t)).equals(sentinel_t)
+    env.expect.that_collection(parse_cache.keys()).contains_exactly([m_cuda, m_cpu, m_x, m_cpu_linux])
+
+    # Shared tokens_cache and fold_cache flow from make_pin_marker_folder into
+    # resolve_uv_pins and _prune_plain_branches without re-parsing.
+    shared_parse = {}
+    shared_tokens = {}
+    shared_fold = {}
+    unpinned_folder = make_pin_marker_folder(
+        conflicts,
+        [],
+        parse_cache = shared_parse,
+        tokens_cache = shared_tokens,
+        fold_cache = shared_fold,
+    )
+    env.expect.that_str(unpinned_folder("", m_cuda)).equals(m_cuda)
+    env.expect.that_str(unpinned_folder("group_app_cuda", m_cuda)).equals("")
+
+    def _edge(pin_name, pkg_key, constraint, pin_marker):
+        return struct(
+            pin_name = pin_name,
+            pkg_key = pkg_key,
+            constraint = constraint,
+            is_testonly = False,
+            pin_marker = pin_marker,
+            avail_marker = "",
+            from_local = False,
+        )
+
+    fresh_parse = {}
+    exprs = {}
+    resolved = resolve_uv_pins(
+        [
+            _edge("torch", "torch@1.0", "group_app_cpu", ""),
+            _edge("torch", "torch@2.0", "", m_cuda),
+        ],
+        conflicts = conflicts,
+        repo_pins = [],
+        fork_constraints = {},
+        resolution_marker_exprs = exprs,
+        parse_cache = fresh_parse,
+        tokens_cache = shared_tokens,
+        fold_cache = shared_fold,
+    )
+    env.expect.that_dict(fresh_parse).contains_exactly({})
+    env.expect.that_str(resolved.pinned_keys["torch"]["group_app_cpu"]).equals("torch@1.0")
+    plain_keys = [k for k in resolved.pinned_keys["torch"].keys() if k != "group_app_cpu"]
+    env.expect.that_collection(plain_keys).has_size(1)
+    env.expect.that_str(resolved.pinned_keys["torch"][plain_keys[0]]).equals("torch@2.0")
+    env.expect.that_str(exprs[plain_keys[0]]).contains("(extra == '__variant_group_app_cuda') and ")
+
+    # _prune_plain_branches honors fold_cache hits directly for both drop ("F") and narrow ("T").
+    sentinel_drop = "extra == '__variant_group_app_cuda' and invalid drop ==="
+    sentinel_keep = "extra == '__variant_group_app_cuda' and invalid keep ==="
+    prune_parse = {}
+    prune_fold = {
+        ("", sentinel_drop): "V",
+        ("group_app_cuda", sentinel_drop): "F",
+        ("", sentinel_keep): "V",
+        ("group_app_cuda", sentinel_keep): "T",
+    }
+    prune_exprs = {}
+    pruned = resolve_uv_pins(
+        [
+            _edge("drop-pkg", "drop-pkg@1.0", "group_app_cpu", ""),
+            _edge("drop-pkg", "drop-pkg@2.0", "", sentinel_drop),
+            _edge("keep-pkg", "keep-pkg@1.0", "group_app_cpu", ""),
+            _edge("keep-pkg", "keep-pkg@2.0", "", sentinel_keep),
+        ],
+        conflicts = conflicts,
+        repo_pins = [],
+        fork_constraints = {},
+        resolution_marker_exprs = prune_exprs,
+        parse_cache = prune_parse,
+        tokens_cache = {},
+        fold_cache = prune_fold,
+    )
+    env.expect.that_dict(prune_parse).contains_exactly({})
+    env.expect.that_dict(pruned.pinned_keys["drop-pkg"]).contains_exactly({"group_app_cpu": "drop-pkg@1.0"})
+    keep_plain_keys = [k for k in pruned.pinned_keys["keep-pkg"].keys() if k != "group_app_cpu"]
+    env.expect.that_collection(keep_plain_keys).has_size(1)
+    env.expect.that_str(pruned.pinned_keys["keep-pkg"][keep_plain_keys[0]]).equals("keep-pkg@2.0")
+    env.expect.that_str(prune_exprs[keep_plain_keys[0]]).equals(
+        "(extra == '__variant_group_app_cuda') and ({})".format(sentinel_keep),
+    )
+
+def _test_pin_marker_folder_and_shared_caches(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_marker_folder_and_shared_caches_impl)
+
 # --- test_uv_local_member_conflict_markers ---
 
 # buildifier: disable=unused-variable
@@ -2686,6 +2922,262 @@ def _test_strip_sha256_prefix_bare_fails(name):
     )
 
 # buildifier: disable=unused-variable
+def _test_uv_versionless_editable_package_impl(env, target):
+    """Editable packages with dynamic versioning (omitted `version` in uv.lock) translate and expand deps."""
+    pypi = {"registry": "https://pypi.org/simple"}
+    lock = _lock(
+        packages = [
+            {
+                "name": "app",
+                "version": "0.1.0",
+                "source": {"editable": "."},
+                "dependencies": [{"name": "dyn-lib", "extra": ["feat"]}],
+            },
+            {
+                "name": "dyn-lib",
+                "source": {"editable": "libs/dyn"},
+                "dependencies": [_dep("core", "1.0.0")],
+                "optional-dependencies": {
+                    "feat": [_dep("extra-dep", "2.0.0")],
+                },
+            },
+            _pkg("core", "1.0.0", source = pypi, wheels = [_whl("core-1.0.0-py3-none-any.whl", "c1")]),
+            _pkg("extra-dep", "2.0.0", source = pypi, wheels = [_whl("extra_dep-2.0.0-py3-none-any.whl", "e1")]),
+        ],
+    )
+    raw = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"]))
+    env.expect.that_dict(raw["pins"]).contains_exactly({
+        "core": "core@1.0.0",
+        "extra-dep": "extra-dep@2.0.0",
+    })
+    env.expect.that_collection(raw["packages"].keys()).contains_exactly([
+        "core@1.0.0",
+        "extra-dep@2.0.0",
+    ])
+
+def _test_uv_versionless_editable_package(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_versionless_editable_package_impl)
+
+def _uv_versionless_non_local_subject_impl(_ctx):
+    pypi = {"registry": "https://pypi.org/simple"}
+    lock = _lock(
+        packages = [
+            {
+                "name": "app",
+                "version": "0.1.0",
+                "source": {"editable": "."},
+                "dependencies": [{"name": "broken"}],
+            },
+            {
+                "name": "broken",
+                "source": pypi,
+                "wheels": [_whl("broken-1.0.0-py3-none-any.whl", "b1")],
+            },
+        ],
+    )
+    translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"]))
+    return []
+
+_uv_versionless_non_local_subject = rule(implementation = _uv_versionless_non_local_subject_impl)
+
+def _test_uv_versionless_non_local_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Package 'broken' in uv.lock is missing a 'version' field"),
+    )
+
+def _test_uv_versionless_non_local_fails(name):
+    util.helper_target(_uv_versionless_non_local_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_uv_versionless_non_local_fails_impl,
+    )
+
+# buildifier: disable=unused-variable
+def _test_is_external_member_path_impl(env, target):
+    """Windows drive letters, UNC/POSIX absolutes, and parent escapes are external; relative paths with colons stay internal."""
+    cases = [
+        ("C:\\libs\\ext", True),
+        ("C:\\..\\ext", True),
+        ("C:/foo/../../ext", True),
+        ("c:rel", True),
+        ("/abs/pkg", True),
+        ("\\\\server\\share\\pkg", True),
+        ("//server/share/pkg", True),
+        ("../ext", True),
+        ("..", True),
+        ("..\\ext", True),
+        ("a/../../ext", True),
+        ("./a:b", False),
+        ("1:2/pkg", False),
+        ("packages/sub", False),
+        (".", False),
+        ("", False),
+        ("..foo", False),
+    ]
+    for path, expected in cases:
+        env.expect.where(path = path).that_bool(is_external_member_path(path)).equals(expected)
+
+def _test_is_external_member_path(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_is_external_member_path_impl)
+
+# buildifier: disable=unused-variable
+def _test_uv_manifest_members_and_external_editables_impl(env, target):
+    """[manifest].members and parent-escaping editable paths filter workspace members while keeping local dep expansion."""
+
+    # 1. With [manifest].members: only listed members are discovered; non-member editables are skipped.
+    manifest_toml = "\n".join([
+        "version = 1",
+        "[manifest]",
+        'members = ["ws-root", "app-a"]',
+        "[[package]]",
+        'name = "ws-root"',
+        'version = "0.1.0"',
+        'source = { virtual = "." }',
+        "[[package]]",
+        'name = "app-a"',
+        'version = "0.1.0"',
+        'source = { editable = "apps/a" }',
+        "[[package]]",
+        'name = "vendor-lib"',
+        'version = "0.1.0"',
+        'source = { editable = "vendor/lib" }',
+        "[[package]]",
+        'name = "ext-lib"',
+        'version = "0.1.0"',
+        'source = { editable = "../../libs/ext" }',
+    ])
+    mctx_manifest = struct(
+        path = lambda _lbl: struct(exists = True),
+        read = lambda _path: manifest_toml,
+    )
+    members = discover_uv_all_members(mctx_manifest, Label("//:uv.lock"))
+    env.expect.that_collection([(m.name, m.path) for m in members]).contains_exactly([
+        ("app-a", "apps/a"),
+    ]).in_order()
+
+    # 2. Without [manifest].members: external (../, absolute, drive-letter) editables and non-string
+    #    editable/virtual flags are excluded.
+    standalone_toml = "\n".join([
+        "version = 1",
+        "[[package]]",
+        'name = "app"',
+        'version = "0.1.0"',
+        'source = { editable = "." }',
+        "[[package]]",
+        'name = "ext-rel"',
+        'version = "0.1.0"',
+        'source = { editable = "../../libs/ext" }',
+        "[[package]]",
+        'name = "ext-abs"',
+        'version = "0.1.0"',
+        'source = { editable = "/opt/ext" }',
+        "[[package]]",
+        'name = "ext-win"',
+        'version = "0.1.0"',
+        'source = { editable = "..\\\\ext" }',
+        "[[package]]",
+        'name = "bool-editable"',
+        'version = "0.1.0"',
+        "source = { editable = true }",
+        "[[package]]",
+        'name = "bool-virtual"',
+        'version = "0.1.0"',
+        "source = { virtual = true }",
+    ])
+    mctx_standalone = struct(
+        path = lambda _lbl: struct(exists = True),
+        read = lambda _path: standalone_toml,
+    )
+    standalone_members = discover_uv_all_members(mctx_standalone, Label("//:uv.lock"))
+    env.expect.that_collection([(m.name, m.path) for m in standalone_members]).contains_exactly([
+        ("app", "."),
+    ]).in_order()
+
+    # 3. translate_uv with projects=["*"] excludes external editables and non-string
+    #    editable/virtual values from target projects while expanding transitive deps.
+    pypi = {"registry": "https://pypi.org/simple"}
+    lock = _lock(
+        packages = [
+            {
+                "name": "app",
+                "version": "0.1.0",
+                "source": {"editable": "."},
+                "dependencies": [_dep("ext-used", "0.1.0")],
+            },
+            {
+                "name": "ext-used",
+                "version": "0.1.0",
+                "source": {"editable": "../../libs/used"},
+                "dependencies": [_dep("from-used", "1.0.0")],
+            },
+            {
+                "name": "ext-unused",
+                "version": "0.1.0",
+                "source": {"editable": "../../libs/unused"},
+                "dependencies": [_dep("from-unused", "1.0.0")],
+            },
+            {
+                "name": "bool-editable",
+                "version": "0.1.0",
+                "source": {"editable": True},
+                "dependencies": [_dep("from-unused", "1.0.0")],
+            },
+            {
+                "name": "bool-virtual",
+                "version": "0.1.0",
+                "source": {"virtual": True},
+                "dependencies": [_dep("from-unused", "1.0.0")],
+            },
+            _pkg("from-used", "1.0.0", source = pypi, wheels = [_whl("from_used-1.0.0-py3-none-any.whl", "u1")]),
+            _pkg("from-unused", "1.0.0", source = pypi, wheels = [_whl("from_unused-1.0.0-py3-none-any.whl", "u2")]),
+        ],
+    )
+    raw = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["*"]))
+    env.expect.that_dict(raw["pins"]).contains_exactly({"from-used": "from-used@1.0.0"})
+
+    # 4. translate_uv with [manifest].members discovers listed workspace members even when
+    #    pyproject.toml names a different root project, and ignores unlisted local editables.
+    manifest_lock = _lock(
+        packages = [
+            {
+                "name": "app-a",
+                "version": "0.1.0",
+                "source": {"editable": "apps/a"},
+                "dependencies": [_dep("from-a", "1.0.0")],
+            },
+            {
+                "name": "member-b",
+                "version": "0.1.0",
+                "source": {"editable": "../sibling/member-b"},
+                "dependencies": [_dep("from-b", "1.0.0")],
+            },
+            {
+                "name": "vendor-unused",
+                "version": "0.1.0",
+                "source": {"editable": "vendor/unused"},
+                "dependencies": [_dep("from-vendor", "1.0.0")],
+            },
+            _pkg("from-a", "1.0.0", source = pypi, wheels = [_whl("from_a-1.0.0-py3-none-any.whl", "m1")]),
+            _pkg("from-b", "1.0.0", source = pypi, wheels = [_whl("from_b-1.0.0-py3-none-any.whl", "m2")]),
+            _pkg("from-vendor", "1.0.0", source = pypi, wheels = [_whl("from_vendor-1.0.0-py3-none-any.whl", "m3")]),
+        ],
+        manifest = {"members": ["app-a", "member-b"]},
+    )
+    manifest_raw = translate_uv(_project(name = "ws-root"), manifest_lock, _lock_model(projects = ["*"]))
+    env.expect.that_dict(manifest_raw["pins"]).contains_exactly({
+        "from-a": "from-a@1.0.0",
+        "from-b": "from-b@1.0.0",
+    })
+
+def _test_uv_manifest_members_and_external_editables(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_manifest_members_and_external_editables_impl)
+
+# buildifier: disable=unused-variable
 def _test_uv_workspace_cache_and_resolve_workspace_parity_impl(env, target):
     """Hoisted UV workspace translation and resolve_workspace match standalone per-member runs byte-for-byte."""
     pypi = {"registry": "https://pypi.org/simple"}
@@ -2770,6 +3262,10 @@ def _test_uv_workspace_cache_and_resolve_workspace_parity_impl(env, target):
         ))
 
     env.expect.that_bool(ws_cache.get("shared_packages", False)).equals(True)
+    env.expect.that_collection(ws_cache.get("marker_parse_cache", {}).keys()).contains_at_least([
+        "extra == '__variant_group_app-a_cpu'",
+        "extra == '__variant_group_app-a_cuda'",
+    ])
 
     # Compare only after all cached translations finish so any cross-repo mutation
     # of an earlier repo's returned dicts or lists is caught.
@@ -2859,6 +3355,8 @@ def uv_translator_test_suite(name):
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
             _test_fold_variant_marker,
+            _test_fold_variant_marker_memoization,
+            _test_pin_marker_folder_and_shared_caches,
             _test_uv_local_member_conflict_markers,
             _test_uv_local_member_chain_and_empty_pin_pruning,
             _test_uv_asymmetric_fork_with_independent_member,
@@ -2868,6 +3366,10 @@ def uv_translator_test_suite(name):
             _test_discover_uv_all_members,
             _test_uv_optional_file_hash,
             _test_strip_sha256_prefix_bare_fails,
+            _test_uv_versionless_editable_package,
+            _test_uv_versionless_non_local_fails,
+            _test_is_external_member_path,
+            _test_uv_manifest_members_and_external_editables,
             _test_uv_workspace_cache_and_resolve_workspace_parity,
         ],
     )
