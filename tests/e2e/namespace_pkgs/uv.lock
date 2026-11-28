@@ -1165,8 +1165,8 @@ source = { editable = "." }
 dependencies = [
     { name = "backports-entry-points-selectable" },
     { name = "backports-tarfile" },
-    { name = "google-api-core", version = "2.30.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "google-api-core", version = "2.31.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "google-api-core", version = "2.30.3", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version < '3.10'" },
+    { name = "google-api-core", version = "2.31.0", source = { registry = "https://pypi.org/simple" }, extra = ["grpc"], marker = "python_full_version >= '3.10'" },
     { name = "google-cloud-pubsub", version = "2.38.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "google-cloud-pubsub", version = "2.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "google-cloud-storage", version = "3.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -1181,7 +1181,7 @@ dependencies = [
 requires-dist = [
     { name = "backports-entry-points-selectable", specifier = "==1.3.0" },
     { name = "backports-tarfile", specifier = "==1.2.0" },
-    { name = "google-api-core" },
+    { name = "google-api-core", extras = ["grpc"] },
     { name = "google-cloud-pubsub" },
     { name = "google-cloud-storage" },
     { name = "zope-event" },

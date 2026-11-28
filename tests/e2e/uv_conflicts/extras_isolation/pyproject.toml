@@ -1,0 +1,27 @@
+[project]
+name = "extras-isolation"
+version = "0.1.0"
+requires-python = ">=3.11.0"
+dependencies = [
+  "wrapper",
+]
+
+[project.optional-dependencies]
+alpha = [
+  "wrapper[v1]",
+  "idna==3.7",
+]
+beta = [
+  "idna==3.10",
+]
+
+[tool.uv.sources]
+wrapper = { path = "wrapper-1.0.0-py3-none-any.whl" }
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "alpha" },
+    { extra = "beta" },
+  ],
+]

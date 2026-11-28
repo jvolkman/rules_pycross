@@ -235,9 +235,8 @@ def slim_workspace_lock(merged_lock):
 def slim_member_lock(member_lock, merged_packages):
     """Build the minimal per-member manifest needed by `thin_package_repo`.
 
-    Keeps the exact package keys present in `member_lock` (preserving
-    `base_packages_with_extras` per member) while resolving shared wheel/sdist
-    and cycle metadata against `merged_packages` so thin repos and
+    Keeps the exact package keys present in `member_lock` while resolving shared
+    wheel/sdist and cycle metadata against `merged_packages` so thin repos and
     `package_repo` never disagree. `availability_markers` remain strictly
     per-member.
 

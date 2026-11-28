@@ -21,7 +21,7 @@ load("//pycross/private/thin_repo:selects.bzl", "variant_fallbacks")
 load("//pycross/private/thin_repo:transition.bzl", "render_transition_bzl")
 load("//pycross/private/thin_repo:variants.bzl", "collect_variants", "transition_settings", "variants_build")
 load(":lock_contract.bzl", "variant_state_label")
-load(":util.bzl", "base_packages_with_extras", "parse_package_key")
+load(":util.bzl", "parse_package_key")
 
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
@@ -49,7 +49,8 @@ def _thin_package_repo_impl(rctx):
     # Only compound {variant, marker} constraints need a variant. A plain marker
     # constraint (an unconflicted edge that uv split by conflict markers) is
     # valid with no variant selected, e.g. `extra != '__variant_package_a'`.
-    for cname, expr in lock.get("resolution_marker_exprs", {}).items():
+    resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
+    for cname, expr in resolution_marker_exprs.items():
         if type(expr) == "dict" and expr.get("variant") in sets_by_constraint:
             sets_by_constraint[cname] = sets_by_constraint[expr["variant"]]
     no_variant_fallbacks = variant_fallbacks(sets_by_constraint)
@@ -131,7 +132,7 @@ def _thin_package_repo_impl(rctx):
         pins_by_set = pins_by_set,
         defaults_by_set = defaults_by_set,
         excluded = excluded,
-        resolution_marker_exprs = lock.get("resolution_marker_exprs", {}),
+        resolution_marker_exprs = resolution_marker_exprs,
     )
     unselected_groups.update(mm.unselected_groups)
     if mm.needs_selects:
@@ -169,21 +170,19 @@ def _thin_package_repo_impl(rctx):
     if mm.maybe_mapping_targets:
         rctx.file("__maybe/BUILD.bazel", render_maybe_build(mm.maybe_mapping_targets, packages, workspace_repo))
 
-    extras_by_base = base_packages_with_extras(packages)
-
-    append_root_aliases(root_build_lines, grouped_pins, extras_by_base)
+    append_root_aliases(root_build_lines, grouped_pins)
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     unselected_groups.update(emit_pin_directories(
         rctx,
         grouped_pins,
         packages,
-        extras_by_base,
         workspace_repo,
         no_variant_fallbacks,
         target_platform,
         has_flags,
         testonly_pins_set,
+        resolution_marker_exprs = resolution_marker_exprs,
     ))
     emit_backend_files(rctx, rctx.attr.backend_names, workspace_repo)
 
@@ -206,6 +205,7 @@ def _thin_package_repo_impl(rctx):
                 no_variant_fallbacks = no_variant_fallbacks,
                 hook_backends = hook_backends,
                 subdir = subdir,
+                resolution_marker_exprs = resolution_marker_exprs,
             )
             if hook_result:
                 unselected_groups.update(hook_result.unselected_groups)

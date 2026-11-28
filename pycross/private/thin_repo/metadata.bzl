@@ -108,7 +108,7 @@ def emit_backend_files(rctx, backend_names, workspace_repo):
         ]
         rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
-def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None, hook_backends = None, subdir = "_cargo"):
+def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None, hook_backends = None, subdir = "_cargo", resolution_marker_exprs = None):
     """Render `<subdir>/BUILD.bazel` aliases for packages with hook-backed overrides, or None.
 
     Args:
@@ -119,6 +119,7 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
         no_variant_fallbacks: Result of `variant_fallbacks`, or None.
         hook_backends: List of backend names that contribute to `subdir`, or None for legacy cargo fallback.
         subdir: Subdirectory name under the repo (default `"_cargo"`).
+        resolution_marker_exprs: Optional lock `resolution_marker_exprs` dict.
 
     Returns:
         `struct(build, unselected_groups)` with generated `<subdir>/BUILD.bazel` content
@@ -133,11 +134,16 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
         "",
     ]
 
+    variant_constraints = no_variant_fallbacks.sets if no_variant_fallbacks else None
     has_targets = False
     unselected_groups = {}
     for base_pin_name in sorted(grouped_pins.keys()):
         us_name = underscore_name(base_pin_name)
-        target_dict = effective_base_target_dict(grouped_pins[base_pin_name])
+        target_dict = effective_base_target_dict(
+            grouped_pins[base_pin_name],
+            resolution_marker_exprs = resolution_marker_exprs,
+            variant_constraints = variant_constraints,
+        )
         if not target_dict:
             continue
 

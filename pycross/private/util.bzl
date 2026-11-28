@@ -239,23 +239,6 @@ def canonicalize_package_key(spec, allow_wildcard = False):
         has_tag = False,
     )
 
-def base_packages_with_extras(packages):
-    """Group extra package keys in `packages` by their base `name@version[~tag]` key.
-
-    Args:
-        packages: Lock packages dict keyed by package key.
-
-    Returns:
-        Dict mapping base package key -> list of extra package keys.
-    """
-    result = {}
-    for pkg_key in packages.keys():
-        parts = parse_package_key(pkg_key)
-        if not parts.extra:
-            continue
-        result.setdefault(base_package_key(pkg_key), []).append(pkg_key)
-    return result
-
 def sdist_builds_disallowed(pkg):
     """Whether build_mode = "never" forbids building this resolved package's sdist.
 

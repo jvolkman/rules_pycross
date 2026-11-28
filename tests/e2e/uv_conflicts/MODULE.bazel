@@ -25,6 +25,7 @@ use_repo(python, "python_versions")
 
 config = use_extension("@rules_python//python/extensions:config.bzl", "config")
 config.add_transition_setting(setting = "@project//_variants")
+config.add_transition_setting(setting = "@extras_multi//_variants")
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 uv.workspace(
@@ -133,4 +134,52 @@ uv.repo(
     projects = ["project"],
     workspace = "shared",
 )
-use_repo(uv, "project", "project_auto", "project_flags", "project_pinned", "project_settings", "project_str_flags", "project_str_settings")
+
+# Per-repo and per-variant extras isolation: alpha requests wrapper[v1] -> idna==3.7,
+# while beta requests wrapper bare + idna==3.10.
+uv.workspace(
+    name = "extras_ws",
+    local_wheels = ["//extras_isolation:wrapper-1.0.0-py3-none-any.whl"],
+    lock_file = "//extras_isolation:uv.lock",
+)
+uv.repo(
+    name = "extras_alpha",
+    dependency_groups = [
+        "default",
+        "optional:alpha",
+    ],
+    projects = ["extras-isolation"],
+    workspace = "extras_ws",
+)
+uv.repo(
+    name = "extras_beta",
+    dependency_groups = [
+        "default",
+        "optional:beta",
+    ],
+    projects = ["extras-isolation"],
+    workspace = "extras_ws",
+)
+uv.repo(
+    name = "extras_multi",
+    dependency_groups = [
+        "default",
+        "optional:alpha",
+        "optional:beta",
+    ],
+    projects = ["extras-isolation"],
+    workspace = "extras_ws",
+)
+use_repo(
+    uv,
+    "extras_alpha",
+    "extras_beta",
+    "extras_multi",
+    "project",
+    "project_auto",
+    "project_flags",
+    "project_pinned",
+    "project_settings",
+    "project_str_flags",
+    "project_str_settings",
+)

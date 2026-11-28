@@ -18,7 +18,7 @@ load("//pycross/private:translator_project.bzl", "read_project_dict_for_testing"
 load("//pycross/private:translator_util.bzl", "is_external_member_path", "strip_sha256_prefix")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "parse_package_key")
+load("//pycross/private:util.bzl", "base_package_key", "format_package_key", "parse_package_key")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:uv_conflicts.bzl", "make_pin_marker_folder", "parse_uv_conflicts", "resolve_uv_pins")
@@ -2621,9 +2621,6 @@ def _test_uv_multi_source_same_version_impl(env, target):
     env.expect.that_str(parsed.tag).equals("abcd1234")
     env.expect.that_str(format_package_key("torch", "2.9.1", extra = "opt", tag = "abcd1234")).equals("torch[opt]@2.9.1~abcd1234")
     env.expect.that_str(base_package_key("torch[opt]@2.9.1~abcd1234")).equals("torch@2.9.1~abcd1234")
-    env.expect.that_dict(base_packages_with_extras({"torch@2.9.1~abcd1234": {}, "torch[opt]@2.9.1~abcd1234": {}})).contains_exactly({
-        "torch@2.9.1~abcd1234": ["torch[opt]@2.9.1~abcd1234"],
-    })
 
     # 1. Two registries ship torch==2.9.1 with the same macOS wheel filename and
     #    different sha256 hashes + deps, plus a non-colliding torch==2.9.1+cpu.
@@ -3304,6 +3301,74 @@ def _test_uv_workspace_cache_and_resolve_workspace_parity(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_workspace_cache_and_resolve_workspace_parity_impl)
 
+# buildifier: disable=unused-variable
+def _test_uv_local_member_extra_hoisting_impl(env, target):
+    """Editable local member extras hoist into direct pins with combined markers; third-party transitive extras do not."""
+    lock = _lock([
+        _pkg(
+            "app",
+            "0.1.0",
+            source = {"editable": "."},
+            deps = [
+                _dep("sub-lib", "0.1.0", source = {"editable": "libs/sub"}, marker = "sys_platform == 'linux'"),
+                _dep("third-party", "1.0.0"),
+            ],
+        ),
+        _pkg(
+            "sub-lib",
+            "0.1.0",
+            source = {"editable": "libs/sub"},
+            deps = [
+                _dep("fsspec", "2025.1.0", extra = ["http"], marker = "python_version >= '3.11'"),
+            ],
+        ),
+        _pkg(
+            "third-party",
+            "1.0.0",
+            wheels = [_whl("third_party-1.0.0-py3-none-any.whl")],
+            deps = [
+                _dep("helper", "1.0.0", extra = ["opt"]),
+            ],
+        ),
+        _pkg(
+            "fsspec",
+            "2025.1.0",
+            wheels = [_whl("fsspec-2025.1.0-py3-none-any.whl")],
+            opt_deps = {"http": [_dep("aiohttp", "3.11.0")]},
+        ),
+        _pkg(
+            "aiohttp",
+            "3.11.0",
+            wheels = [_whl("aiohttp-3.11.0-py3-none-any.whl")],
+        ),
+        _pkg(
+            "helper",
+            "1.0.0",
+            wheels = [_whl("helper-1.0.0-py3-none-any.whl")],
+            opt_deps = {"opt": [_dep("aiohttp", "3.11.0")]},
+        ),
+    ])
+
+    res = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"]))
+    resolved = resolve(res)
+
+    # Extra from local editable member is hoisted into app's direct pins with combined markers.
+    env.expect.that_str(res["pins"].get("fsspec[http]", "")).equals("fsspec[http]@2025.1.0")
+    root_markers = res.get("root_dependency_markers", {}).get("fsspec[http]", [])
+    env.expect.that_int(len(root_markers)).equals(1)
+    env.expect.that_str(root_markers[0]).contains("sys_platform == 'linux'")
+    env.expect.that_str(root_markers[0]).contains("python_version >= '3.11'")
+    avail = resolved.packages["fsspec[http]@2025.1.0"].get("availability_markers", [])
+    env.expect.that_collection(avail).contains_exactly(root_markers)
+
+    # Extra requested only by a third-party dependency is NOT hoisted into direct pins.
+    env.expect.that_bool("helper[opt]" in res["pins"]).equals(False)
+    env.expect.that_bool("helper" in res["pins"]).equals(False)
+
+def _test_uv_local_member_extra_hoisting(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_member_extra_hoisting_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -3371,5 +3436,6 @@ def uv_translator_test_suite(name):
             _test_is_external_member_path,
             _test_uv_manifest_members_and_external_editables,
             _test_uv_workspace_cache_and_resolve_workspace_parity,
+            _test_uv_local_member_extra_hoisting,
         ],
     )
