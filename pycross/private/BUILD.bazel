@@ -131,6 +131,36 @@ bzl_library(
 )
 
 bzl_library(
+    name = "state_repo",
+    srcs = ["state_repo.bzl"],
+    deps = [
+        ":build_text",
+        ":lock_contract",
+        ":util",
+        ":variant_util",
+        "//pycross/private/lock_render:reset_plan",
+        "//pycross/private/thin_repo:metadata",
+        "@pycross_backends//:package_repo_dispatch",
+        "@pycross_backends//:registry",
+        "@pypackaging.bzl//:pypackaging",
+    ],
+)
+
+bzl_library(
+    name = "spoke_repo",
+    srcs = ["spoke_repo.bzl"],
+    deps = [
+        ":build_text",
+        ":lock_contract",
+        ":state_repo",
+        ":util",
+        "//pycross/private/lock_render:cycle_plan",
+        "@pycross_backends//:package_repo_dispatch",
+        "@pypackaging.bzl//:pypackaging",
+    ],
+)
+
+bzl_library(
     name = "variant_resolver",
     srcs = ["variant_resolver.bzl"],
     deps = [

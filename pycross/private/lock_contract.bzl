@@ -163,6 +163,117 @@ def lock_unselected_label(workspace_repo, set_suffix):
     """Return `@<workspace_repo>//_lock:_unselected_<set_suffix>`."""
     return lock_target_label(workspace_repo, unselected_target_name(set_suffix))
 
+# ---- State & spoke repository labels & target names --------------------------
+
+def state_target_label(state_repo, target):
+    """Return cross-repo `@<state_repo>//:<target>`."""
+    return "@{}//:{}".format(_require_repo(state_repo, "state_target_label"), target)
+
+def state_flag_label(state_repo):
+    """Return cross-repo `@<state_repo>//:_state`."""
+    return state_target_label(state_repo, VARIANT_STATE_TARGET)
+
+def state_variant_state_label(state_repo):
+    """Return cross-repo `@<state_repo>//:_variant_state`."""
+    return state_target_label(state_repo, "_variant_state")
+
+def state_constraint_label(state_repo, constraint):
+    """Return cross-repo `@<state_repo>//:is_<constraint>`."""
+    return state_target_label(state_repo, constraint_setting_name(constraint))
+
+def state_unselected_label(state_repo, set_suffix):
+    """Return cross-repo `@<state_repo>//:_unselected_<set_suffix>`."""
+    return state_target_label(state_repo, unselected_target_name(set_suffix))
+
+def state_reset_bzl_label(state_repo):
+    """Return cross-repo `@<state_repo>//:reset.bzl`."""
+    return state_target_label(state_repo, "reset.bzl")
+
+def _slot_sfx(slot):
+    return "_" + slot if slot else ""
+
+def spoke_pkg_target(slot = "", extra = ""):
+    """Return version-free public library target name (`pkg[_<slot>]` or `[<extra>][_<slot>]`)."""
+    base = "[{}]".format(extra) if extra else "pkg"
+    return base + _slot_sfx(slot)
+
+def spoke_raw_target(slot = "", extra = ""):
+    """Return version-free raw library target name (`_raw[_<slot>]` or `_raw_[<extra>][_<slot>]`)."""
+    base = "_raw_[{}]".format(extra) if extra else "_raw"
+    return base + _slot_sfx(slot)
+
+def spoke_wheel_target(slot = "", extra = ""):
+    """Return version-free `pycross_wheel_dir` target name (`wheel[_<slot>]`)."""
+    base = "wheel_[{}]".format(extra) if extra else "wheel"
+    return base + _slot_sfx(slot)
+
+def spoke_wheel_sel_target(slot = "", extra = ""):
+    """Return internal wheel-selector alias target name (`_wheel_sel[_<slot>]`)."""
+    base = "_wheel_sel_[{}]".format(extra) if extra else "_wheel_sel"
+    return base + _slot_sfx(slot)
+
+def spoke_sdist_target(slot = "", extra = ""):
+    """Return version-free sdist alias target name (`sdist[_<slot>]`)."""
+    base = "sdist_[{}]".format(extra) if extra else "sdist"
+    return base + _slot_sfx(slot)
+
+def spoke_dist_info_target(slot = "", extra = ""):
+    """Return version-free dist_info target name (`dist_info[_<slot>]`)."""
+    base = "dist_info_[{}]".format(extra) if extra else "dist_info"
+    return base + _slot_sfx(slot)
+
+def spoke_wheel_available_target(slot = "", extra = ""):
+    """Return version-free wheel availability config_setting name (`_wheel_available[_<slot>]`)."""
+    base = "_wheel_available_[{}]".format(extra) if extra else "_wheel_available"
+    return base + _slot_sfx(slot)
+
+def spoke_sdist_deps_target(slot = "", extra = ""):
+    """Return version-free sdist runtime deps proxy target name (`_sdist_deps[_<slot>]`)."""
+    base = "_sdist_deps_[{}]".format(extra) if extra else "_sdist_deps"
+    return base + _slot_sfx(slot)
+
+def spoke_reset_gate_target(slot = "", extra = ""):
+    """Return version-free caller-facing reset gate target name (`_reset_gate[_<slot>]`)."""
+    base = "_reset_gate_[{}]".format(extra) if extra else "_reset_gate"
+    return base + _slot_sfx(slot)
+
+def spoke_raw_reset_gate_target(slot = "", extra = ""):
+    """Return version-free cycle-member raw reset gate target name (`_raw_reset_gate[_<slot>]`)."""
+    base = "_raw_reset_gate_[{}]".format(extra) if extra else "_raw_reset_gate"
+    return base + _slot_sfx(slot)
+
+def spoke_scc_reset_gate_target(slot = "", extra = ""):
+    """Return version-free cycle-SCC aggregate reset gate target name (`_scc_reset_gate[_<slot>]`)."""
+    base = "_scc_reset_gate_[{}]".format(extra) if extra else "_scc_reset_gate"
+    return base + _slot_sfx(slot)
+
+def spoke_hook_target(slot = ""):
+    """Return version-free hook target alias name (`pkg[_<slot>]`) inside a spoke `<subdir>/`."""
+    return "pkg" + _slot_sfx(slot)
+
+def spoke_target_label(spoke_repo, target, current_spoke = ""):
+    """Return `:<target>` if `spoke_repo == current_spoke`, else `@<spoke_repo>//:<target>`."""
+    if current_spoke and spoke_repo == current_spoke:
+        return ":" + target
+    return "@{}//:{}".format(_require_repo(spoke_repo, "spoke_target_label"), target)
+
+def cycle_node_key(pkg_key, slot = ""):
+    """Return a version-free cycle node identifier preserving `.extra` for `parse_package_key`.
+
+    Formats single-version nodes as `name` / `name[extra]` and multi-version
+    fork slots as `name@s0` / `name[extra]@s0`.
+
+    Args:
+        pkg_key: Package key in the lock.
+        slot: Fork slot string (`""` or `"s0"`, `"s1"`, ...).
+
+    Returns:
+        Version-free node key string.
+    """
+    parts = parse_package_key(pkg_key)
+    base = "{}[{}]".format(parts.name, parts.extra) if parts.extra else parts.name
+    return "{}@{}".format(base, slot) if slot else base
+
 # ---- Package structure & wheel directory helpers -----------------------------
 
 def is_extras_proxy(pkg_key, pkg):
