@@ -2,7 +2,7 @@
 
 load("//pycross/private:build_text.bzl", "alias", "select_expr")
 load("//pycross/private:lock_contract.bzl", "lock_constraint_label", "lock_unselected_label")
-load(":common.bzl", "NO_MATCH_ERROR_TARGET", "NO_VARIANT_PREFIX", "aggregated_key")
+load(":common.bzl", "NO_MATCH_ERROR_TARGET", "NO_VARIANT_PREFIX")
 
 def variant_fallbacks(sets_by_constraint):
     """Build the no-variant fallback info for this repo's selects.
@@ -83,18 +83,16 @@ def unselected_branch(constraints, no_variant_fallbacks, workspace_repo):
         unselected_groups = res.groups,
     )
 
-def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+def target_select(target_dict, prefix, workspace_repo, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET):
     """Render a target label or `select({...})` mapping constraints to lock targets.
 
     Args:
         target_dict: Constraint -> package key mapping to render.
         prefix: Label prefix (e.g. `@ws//_lock:`).
         workspace_repo: Name of the workspace (backing) repo.
-        is_aggregated: Whether to rewrite base keys to `[_all_]` aggregates.
         no_variant_fallbacks: Result of variant_fallbacks, or None.
         all_target_dict: Full constraint dict when rendering a partial subset (e.g. sdists).
         fallback_target: Default target when a constraint is uncovered, or None.
-        aggregated_keys: Set/dict of base keys that have extras, or None.
 
     Returns:
         `struct(expr, label, unselected_groups)` where `expr` is the Starlark expression
@@ -104,20 +102,13 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
     """
     effective_all = all_target_dict if all_target_dict != None else target_dict
     if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
-        t = target_dict[""]
-        if is_aggregated:
-            t = aggregated_key(t, aggregated_keys)
-        label = prefix + t
+        label = prefix + target_dict[""]
         return struct(expr = json.encode(label), label = label, unselected_groups = {})
 
     branches = []
     for constraint in effective_all.keys():
         if constraint in target_dict:
-            t_base = target_dict[constraint]
-            if is_aggregated:
-                # Only versions that actually have extras get an [_all_] target.
-                t_base = aggregated_key(t_base, aggregated_keys)
-            target_label = prefix + t_base
+            target_label = prefix + target_dict[constraint]
         elif fallback_target:
             target_label = fallback_target
         else:
@@ -150,7 +141,7 @@ def target_select(target_dict, prefix, workspace_repo, is_aggregated = False, no
         unselected_groups = unselected_groups,
     )
 
-def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = NO_MATCH_ERROR_TARGET):
     """Emit an intermediate select alias if needed, returning the actual expression and label.
 
     When transitions are active (has_transition is True) and target_dict has variants
@@ -166,11 +157,9 @@ def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, 
         alias_name: Name of the intermediate alias in `__actual/<pkg>`.
         actual_pkg_ref: Package reference for `__actual/<pkg>`.
         has_transition: Whether the proxy rule applies a configuration transition.
-        is_aggregated: Whether to rewrite base keys to `[_all_]` aggregates.
         no_variant_fallbacks: Result of variant_fallbacks, or None.
         all_target_dict: Full constraint dict when rendering a partial subset.
         fallback_target: Default target when a constraint is uncovered, or None.
-        aggregated_keys: Set/dict of base keys that have extras, or None.
 
     Returns:
         `struct(expr, label, unselected_groups)` where `expr` is the Starlark expression
@@ -182,11 +171,9 @@ def proxy_actual(actual_lines, target_dict, prefix, workspace_repo, alias_name, 
         target_dict,
         prefix,
         workspace_repo,
-        is_aggregated = is_aggregated,
         no_variant_fallbacks = no_variant_fallbacks,
         all_target_dict = all_target_dict,
         fallback_target = fallback_target,
-        aggregated_keys = aggregated_keys,
     )
     if has_transition and sel.label == None:
         actual_lines.extend(alias(alias_name, sel.expr, actual_is_expr = True))

@@ -9,7 +9,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo", "PycrossUnsupportedWheelInfo")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy", "pycross_thin_library_proxy")
+load("//pycross/private:proxy.bzl", "format_proxy_label_for_testing", "pycross_file_proxy", "pycross_library_proxy", "pycross_thin_library_proxy")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:py_providers.bzl", "PY_COMMON_ATTRS")
@@ -989,6 +989,26 @@ def _test_pycross_wheel_library_venvs_disabled_skips_expected_site_paths_impl(en
     install_action = env.expect.that_target(target).action_named("PycrossWheelInstall")
     install_action.argv().not_contains("--expected-site-path")
 
+def _test_format_proxy_label_strips_actual_prefix(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_format_proxy_label_strips_actual_prefix_impl,
+    )
+
+# buildifier: disable=unused-variable
+def _test_format_proxy_label_strips_actual_prefix_impl(env, target):
+    stripped = format_proxy_label_for_testing(Label("//__actual/wrapper:pkg"))
+    env.expect.that_str(stripped).equals(str(Label("//wrapper:pkg")))
+    env.expect.that_bool("__actual/" in stripped).equals(False)
+
+    # Non-leading __actual segments and regular packages stay untouched.
+    plain = format_proxy_label_for_testing(Label("//wrapper:pkg"))
+    env.expect.that_str(plain).equals(str(Label("//wrapper:pkg")))
+    nested = format_proxy_label_for_testing(Label("//foo/__actual/bar:pkg"))
+    env.expect.that_str(nested).equals(str(Label("//foo/__actual/bar:pkg")))
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -1005,6 +1025,7 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_library_proxy_preserves_wheel_library_unsupported,
             _test_pycross_thin_library_proxy_forwards_providers,
             _test_pycross_thin_library_proxy_no_match_deferred,
+            _test_format_proxy_label_strips_actual_prefix,
             _test_no_variant_selected_fails_by_default,
             _test_no_variant_selected_deferred,
             _test_no_variant_selected_long_name_deferred,

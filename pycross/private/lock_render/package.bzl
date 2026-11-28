@@ -1,4 +1,4 @@
-"""Per-package target rendering and extras aggregation for `_lock/lock.bzl`."""
+"""Per-package target rendering for `_lock/lock.bzl`."""
 
 load("//pycross/private:build_text.bzl", "alias", "config_setting_group", "deps_plus_selects")
 load(
@@ -12,37 +12,9 @@ load(
     "sdist_target_name",
     "wheel_target_name",
 )
-load("//pycross/private:util.bzl", "base_package_key", "base_packages_with_extras", "format_package_key", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "base_package_key", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 load(":common.bzl", "ind", "is_in_same_cycle", "render_str_list_attr", "wheel_target")
 load(":wheels.bzl", "render_marker_wheel_chooser")
-
-def render_extras_aggregates(lines, packages):
-    """Renders `[_all_]` `pycross_library_proxy` targets aggregating a base package and its extras.
-
-    Args:
-        lines: Output lines list.
-        packages: Lock packages dict.
-    """
-    extras_by_base = base_packages_with_extras(packages)
-
-    for base_pkg_key, extra_keys in sorted(
-        extras_by_base.items(),
-        key = lambda item: (parse_package_key(item[0]).name, parse_package_key(item[0]).version, parse_package_key(item[0]).tag),
-    ):
-        parts = parse_package_key(base_pkg_key)
-        lines.extend([
-            ind("pycross_library_proxy("),
-            ind("name = {},".format(json.encode(format_package_key(parts.name, parts.version, extra = "_all_", tag = parts.tag))), 2),
-            ind("actual = {},".format(json.encode(":" + base_pkg_key)), 2),
-            ind("deps = [", 2),
-        ])
-        for extra_key in sorted(extra_keys):
-            lines.append(ind("{},".format(json.encode(":" + extra_key)), 3))
-        lines.extend([
-            ind("],", 2),
-            ind(")"),
-            "",
-        ])
 
 def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads = None, marker_extra_cache = None):
     """Render deps using marker-based `select()` instead of environment-based selects.

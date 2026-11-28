@@ -20,6 +20,39 @@ def _maybe_select_alias(name, avail_cond, target):
         actual_is_expr = True,
     )
 
+def markers_condition(lines, group_name, markers, workspace_repo, used = None):
+    """Return a config_setting label matching when any marker in `markers` holds, or None.
+
+    Args:
+        lines: Output list of BUILD lines for a helper `match_any` group when needed.
+        group_name: Target name for the `config_setting_group` when >1 unique markers exist.
+        markers: Iterable of PEP 508 marker strings, or None.
+        workspace_repo: Name of the workspace (backing) repo.
+        used: Optional dict where `"selects"` is set to True when `selects.config_setting_group` is emitted.
+
+    Returns:
+        Config setting label string, or None when `markers` is empty.
+    """
+    unique_evals = []
+    seen_evals = {}
+    for m in markers or []:
+        ev = marker_evaluator_name(m, "")
+        if ev not in seen_evals:
+            seen_evals[ev] = True
+            unique_evals.append(ev)
+    if not unique_evals:
+        return None
+    if len(unique_evals) == 1:
+        return lock_marker_match_label(workspace_repo, unique_evals[0])
+    lines.extend(config_setting_group(
+        group_name,
+        "match_any",
+        [lock_marker_match_label(workspace_repo, ev) for ev in unique_evals],
+    ))
+    if used != None:
+        used["selects"] = True
+    return ":{}".format(group_name)
+
 def availability_condition(lines, helper_prefix, lock_key, packages, workspace_repo, used = None):
     """Return a config_setting label for a package's availability in this thin repo.
 
@@ -68,25 +101,15 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
         marker_groups.append(("own", pkg["availability_markers"]))
 
     for tag, markers in marker_groups:
-        unique_evals = []
-        seen_evals = {}
-        for m in markers:
-            ev = marker_evaluator_name(m, "")
-            if ev not in seen_evals:
-                seen_evals[ev] = True
-                unique_evals.append(ev)
-        if len(unique_evals) == 1:
-            _add_cond(lock_marker_match_label(workspace_repo, unique_evals[0]))
-        elif len(unique_evals) > 1:
-            group_name = "{}_markers_{}_{}".format(helper_prefix, tag, key_san)
-            lines.extend(config_setting_group(
-                group_name,
-                "match_any",
-                [lock_marker_match_label(workspace_repo, ev) for ev in unique_evals],
-            ))
-            if used != None:
-                used["selects"] = True
-            _add_cond(":{}".format(group_name))
+        cond = markers_condition(
+            lines,
+            "{}_markers_{}_{}".format(helper_prefix, tag, key_san),
+            markers,
+            workspace_repo,
+            used = used,
+        )
+        if cond:
+            _add_cond(cond)
 
     if not all_conditions:
         # Unreachable for callers that filter on is_platform_specific(); kept as

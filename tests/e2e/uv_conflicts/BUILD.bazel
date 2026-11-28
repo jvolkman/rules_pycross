@@ -269,3 +269,86 @@ filegroup(
         "@project_pinned//:modules_mapping",
     ],
 )
+
+# Per-repo extras isolation: @extras_beta shares @extras_ws__pkgs with @extras_alpha
+# (which requests wrapper[v1] -> idna==3.7), so @extras_beta//wrapper must NOT pull
+# wrapper[v1] / idna==3.7 into the same build as @extras_beta//idna (3.10).
+py_test(
+    name = "test_extras_cross_repo_alpha",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "wrapper",
+        "1.0.0",
+        "idna",
+        "3.7",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@extras_alpha//wrapper"],
+)
+
+py_test(
+    name = "test_extras_cross_repo_beta",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "wrapper",
+        "1.0.0",
+        "idna",
+        "3.10",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@extras_beta//idna",
+        "@extras_beta//wrapper",
+    ],
+)
+
+# Same-repo conflicting-variant extras isolation: inside @extras_multi (which requests
+# both alpha and beta), selecting extra_alpha pulls wrapper[v1] -> idna==3.7 via
+# @extras_multi//wrapper, while selecting extra_beta must NOT pull wrapper[v1] / idna==3.7.
+py_test(
+    name = "test_extras_multi_alpha",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "wrapper",
+        "1.0.0",
+        "idna",
+        "3.7",
+    ],
+    config_settings = {
+        "@extras_multi//_variants": "extra_alpha",
+    },
+    main = "tests/test_conflict_version.py",
+    deps = ["@extras_multi//wrapper"],
+)
+
+py_test(
+    name = "test_extras_multi_beta",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "wrapper",
+        "1.0.0",
+        "idna",
+        "3.10",
+    ],
+    config_settings = {
+        "@extras_multi//_variants": "extra_beta",
+    },
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@extras_multi//idna",
+        "@extras_multi//wrapper",
+    ],
+)
+
+# With no variant selected, @extras_multi//wrapper (ungated base + variant-gated extra)
+# must resolve cleanly to bare wrapper without failing on _no_variant or pulling idna==3.7.
+py_test(
+    name = "test_extras_multi_unselected",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "wrapper",
+        "1.0.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@extras_multi//wrapper"],
+)

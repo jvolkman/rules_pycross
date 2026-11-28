@@ -30,6 +30,14 @@ py_test(
 )
 
 py_test(
+    name = "test_extras_base_only",
+    srcs = ["test_extras_base_only.py"],
+    deps = [
+        "@uv//google_api_core:[]",
+    ],
+)
+
+py_test(
     name = "test_pkgutil_namespace",
     srcs = ["test_pkgutil_namespace.py"],
     deps = [

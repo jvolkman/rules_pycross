@@ -123,6 +123,40 @@ if [[ "$out" != *"Conflicting variants are active simultaneously"* ]]; then
 fi
 echo "@project//_variants string_flag tests passed."
 
+# Test cross-repo and same-repo conflicting-variant extras isolation.
+echo "Testing per-repo and per-variant extras isolation..."
+bazel test "$@" \
+  //:test_extras_cross_repo_alpha \
+  //:test_extras_cross_repo_beta \
+  //:test_extras_multi_alpha \
+  //:test_extras_multi_beta \
+  //:test_extras_multi_unselected \
+  --test_output=errors
+
+# Verify via aquery that neither beta target nor unselected wrapper pulls in idna@3.7 from alpha's wrapper[v1].
+for target in //:test_extras_cross_repo_beta //:test_extras_multi_beta; do
+  beta_installs=$(bazel aquery "$@" "mnemonic(\"PycrossWheelInstall\", deps(${target}))" \
+    --output=text 2>/dev/null | grep "^  Outputs:")
+  if grep -q "idna@3.7" <<<"$beta_installs"; then
+    echo "Unexpected idna@3.7 install leaked into ${target}:"
+    echo "$beta_installs"
+    exit 1
+  fi
+  if ! grep -q "idna@3.10" <<<"$beta_installs"; then
+    echo "Expected idna@3.10 install in ${target}, got:"
+    echo "$beta_installs"
+    exit 1
+  fi
+done
+unselected_installs=$(bazel aquery "$@" "mnemonic(\"PycrossWheelInstall\", deps(//:test_extras_multi_unselected))" \
+  --output=text 2>/dev/null | grep "^  Outputs:")
+if grep -q "idna@" <<<"$unselected_installs"; then
+  echo "Unexpected idna install leaked into //:test_extras_multi_unselected:"
+  echo "$unselected_installs"
+  exit 1
+fi
+echo "Extras isolation tests passed."
+
 # Verify path mapping shares PycrossWheelDir and PycrossWheelInstall outputs
 # across compilation modes while keeping incompatible precompile modes separate.
 echo "Testing path mapping across compilation modes..."

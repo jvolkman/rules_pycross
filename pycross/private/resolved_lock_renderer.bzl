@@ -12,14 +12,12 @@ Naming conventions for generated targets:
     unconditional and conditional in-cycle deps.
     For extras-only packages (e.g., `name[extra]@version`), this is a `pycross_library_proxy`
     with `actual` pointing to the base package and extra-specific deps in `deps`.
-  - `<pkg_name>[_all_]@<version>`: A synthetic `pycross_library_proxy` that aggregates the
-    base package and all of its parsed extras into a single target.
 """
 
 load("//pycross/private/lock_render:common.bzl", "ind")
 load("//pycross/private/lock_render:cycles.bzl", "render_marker_cycle_member_deps")
 load("//pycross/private/lock_render:markers.bzl", "collect_unique_markers", "render_marker_evaluators", "render_resolution_marker_evaluators")
-load("//pycross/private/lock_render:package.bzl", "render_extras_aggregates", "render_marker_package")
+load("//pycross/private/lock_render:package.bzl", "render_marker_package")
 load("//pycross/private/lock_render:reset_plan.bzl", "compute_reset_plan", "conflict_pairs", _render_reset_bzl = "render_reset_bzl")
 
 render_reset_bzl = _render_reset_bzl
@@ -115,9 +113,6 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
             loads = loads,
             marker_extra_cache = marker_extra_cache,
         )
-
-    # 4. Extras aggregates ([_all_] targets)
-    render_extras_aggregates(body_lines, packages)
 
     if loads.get("cycle_dep_needed"):
         pycross_loads["cycle_dep_needed.bzl"] = ["pycross_cycle_dep_needed"]

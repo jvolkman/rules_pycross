@@ -143,20 +143,3 @@ def targets():
         pkg = ":win-only@1.0.0",
     )
 
-    pycross_library_proxy(
-        name = "only-extra[_all_]@1.0.0",
-        actual = ":only-extra@1.0.0",
-        deps = [
-            ":only-extra[opt]@1.0.0",
-        ],
-    )
-
-    pycross_library_proxy(
-        name = "pkg-a[_all_]@1.0.0",
-        actual = ":pkg-a@1.0.0",
-        deps = [
-            ":pkg-a[cli]@1.0.0",
-            ":pkg-a[fast]@1.0.0",
-        ],
-    )
-

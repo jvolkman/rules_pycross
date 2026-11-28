@@ -24,8 +24,17 @@ load(
 )
 load(":py_providers.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
+def _format_proxy_label(label):
+    pkg_id = str(label)
+    if label.package.startswith("__actual/"):
+        pkg_id = pkg_id.replace("//__actual/", "//", 1)
+    return pkg_id
+
+# Visible for testing
+format_proxy_label_for_testing = _format_proxy_label
+
 def _register_unsupported_proxy_failure(ctx):
-    pkg_id = str(ctx.label)
+    pkg_id = _format_proxy_label(ctx.label)
     out = ctx.actions.declare_file("_unsupported_%x.out" % (hash(ctx.label.name) & 0xffffffff))
     register_failure_action(
         ctx,

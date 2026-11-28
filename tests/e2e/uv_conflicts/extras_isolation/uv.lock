@@ -1,0 +1,68 @@
+version = 1
+revision = 3
+requires-python = ">=3.11.0"
+conflicts = [[
+    { package = "extras-isolation", extra = "alpha" },
+    { package = "extras-isolation", extra = "beta" },
+]]
+
+[[package]]
+name = "extras-isolation"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "wrapper" },
+]
+
+[package.optional-dependencies]
+alpha = [
+    { name = "idna", version = "3.7", source = { registry = "https://pypi.org/simple" } },
+    { name = "wrapper", extra = ["v1"], marker = "extra == 'extra-16-extras-isolation-alpha'" },
+]
+beta = [
+    { name = "idna", version = "3.10", source = { registry = "https://pypi.org/simple" } },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "idna", marker = "extra == 'alpha'", specifier = "==3.7" },
+    { name = "idna", marker = "extra == 'beta'", specifier = "==3.10" },
+    { name = "wrapper", path = "wrapper-1.0.0-py3-none-any.whl" },
+    { name = "wrapper", extras = ["v1"], marker = "extra == 'alpha'", path = "wrapper-1.0.0-py3-none-any.whl" },
+]
+provides-extras = ["alpha", "beta"]
+
+[[package]]
+name = "idna"
+version = "3.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/ed/f86a79a07470cb07819390452f178b3bef1d375f2ec021ecfc709fc7cf07/idna-3.7.tar.gz", hash = "sha256:028ff3aadf0609c1fd278d8ea3089299412a7a8b9bd005dd08b9f8285bcb5cfc", size = 189575, upload-time = "2024-04-11T03:34:43.276Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e5/3e/741d8c82801c347547f8a2a06aa57dbb1992be9e948df2ea0eda2c8b79e8/idna-3.7-py3-none-any.whl", hash = "sha256:82fee1fc78add43492d3a1898bfa6d8a904cc97d8427f683ed8e798d07761aa0", size = 66836, upload-time = "2024-04-11T03:34:41.447Z" },
+]
+
+[[package]]
+name = "idna"
+version = "3.10"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/70/7703c29685631f5a7590aa73f1f1d3fa9a380e654b86af429e0934a32f7d/idna-3.10.tar.gz", hash = "sha256:12f65c9b470abda6dc35cf8e63cc574b1c52b11df2c86030af0ac09b01b13ea9", size = 190490, upload-time = "2024-09-15T18:07:39.745Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl", hash = "sha256:946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3", size = 70442, upload-time = "2024-09-15T18:07:37.964Z" },
+]
+
+[[package]]
+name = "wrapper"
+version = "1.0.0"
+source = { path = "wrapper-1.0.0-py3-none-any.whl" }
+wheels = [
+    { filename = "wrapper-1.0.0-py3-none-any.whl", hash = "sha256:36052ea19cb1f888626b5440c23685b908f9d22026d274c391f1a9638f716eaa" },
+]
+
+[package.optional-dependencies]
+v1 = [
+    { name = "idna", version = "3.7", source = { registry = "https://pypi.org/simple" } },
+]
+
+[package.metadata]
+requires-dist = [{ name = "idna", marker = "extra == 'v1'", specifier = "==3.7" }]
+provides-extras = ["v1"]
