@@ -85,19 +85,31 @@ def _validate_override_packages(override_configs, workspaces, resolved_locks):
                     ", ".join(sorted(known_names[pkg_name].keys())),
                 ))
 
-def _remote_file_dedup_key_and_repo_name(key, file, indexes):
-    """Return (dedup_key, repo_name) for a remote file.
+def _remote_file_dedup_key(key, file, index_tuple):
+    """Return the cross-workspace deduplication key for a remote file.
 
     Filename-only entries (no explicit `urls` and no per-package `index`) resolve
     against the workspace's `pypi_indexes`, so different index lists must not
     deduplicate to the same remote file repository across workspaces.
     """
+    if file.get("urls") or file.get("index") or not index_tuple:
+        return (key, ())
+    return (key, index_tuple)
+
+def _remote_file_repo_name(key, file, indexes):
+    """Return the Bazel repository name for a remote file."""
     base_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
     if file.get("urls") or file.get("index") or not indexes:
-        return ((key, ()), base_repo)
-    index_tuple = tuple(indexes)
+        return base_repo
     idx_hash = "%x" % (hash("|".join(indexes)) & 0xffffffff)
-    return ((key, index_tuple), "{}_idx_{}".format(base_repo, idx_hash))
+    return "{}_idx_{}".format(base_repo, idx_hash)
+
+def _remote_file_dedup_key_and_repo_name(key, file, indexes):
+    """Return (dedup_key, repo_name) for a remote file."""
+    return (
+        _remote_file_dedup_key(key, file, tuple(indexes)),
+        _remote_file_repo_name(key, file, indexes),
+    )
 
 def _create_remote_file_repo(remote_file_repo, file, indexes):
     is_wheel = file["name"].endswith(".whl")
@@ -363,18 +375,21 @@ def create_repos(
     for workspace_name, ws in workspaces.items():
         workspace_repo_name = pkgs_repo_name(workspace_name)
         indexes = ws.pypi_indexes
+        index_tuple = tuple(indexes)
         merged_repo_map = {}
         merged_remote_files = {}
 
         for repo in ws.repos:
             resolved_lock = resolved_locks[repo.name]
             for key, file in resolved_lock.get("remote_files", {}).items():
-                dedup_key, remote_file_repo = _remote_file_dedup_key_and_repo_name(key, file, indexes)
+                if key in merged_repo_map:
+                    continue
+                dedup_key = _remote_file_dedup_key(key, file, index_tuple)
                 if dedup_key not in all_remote_files:
+                    remote_file_repo = _remote_file_repo_name(key, file, indexes)
                     all_remote_files[dedup_key] = _create_remote_file_repo(remote_file_repo, file, indexes)
                 merged_repo_map[key] = all_remote_files[dedup_key]
-                if key not in merged_remote_files:
-                    merged_remote_files[key] = file
+                merged_remote_files[key] = file
 
         skip_variant_members = [repo.name for repo in ws.repos if repo.is_auto_build_repo]
         merged_lock = merge_workspace_locks(
