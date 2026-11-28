@@ -16,7 +16,6 @@ load(
     ":util.bzl",
     "base_package_key",
     "format_package_key",
-    "parse_package_key",
     "resolution_marker_constraint_name",
 )
 
@@ -62,12 +61,29 @@ def find_package_marker_forks(packages, markers_by_pkg = None, allow_unmarked_fa
                 seen_unmarked = True
                 version_constraints[fversion] = ""
                 continue
-            cname = resolution_marker_constraint_name(fname, fversion)
+            cname = resolution_marker_constraint_name(marker_expr)
             version_constraints[fversion] = cname
             resolution_marker_exprs[cname] = marker_expr
         forks_by_name[fname] = version_constraints
 
     return resolution_marker_exprs, forks_by_name
+
+def fork_constraints_by_key(forks_by_name):
+    """Flatten `{name: {version: constraint_name}}` into `{name@version: constraint_name}`.
+
+    Args:
+        forks_by_name: Mapping returned by `find_package_marker_forks`.
+
+    Returns:
+        Dict mapping base package key (`name@version`) to its non-empty
+        resolution-marker constraint name.
+    """
+    result = {}
+    for fname, ver_map in forks_by_name.items():
+        for fver, cname in ver_map.items():
+            if cname:
+                result[format_package_key(fname, fver)] = cname
+    return result
 
 def apply_package_marker_forks(pins, forks_by_name, pin_value_fn = None):
     """Rewrite pins in place for packages that have resolution-marker forks.
@@ -149,11 +165,26 @@ def _version_key(version_str):
     """Parse a version string into a comparable key tuple."""
     return pypackaging.version.parse(version_str).key
 
+def _cand_fork_marker(cand, fork_constraints, resolution_marker_exprs):
+    """Return a candidate package's resolution marker expression, or empty string."""
+    marker = cand.get("markers", "")
+    if marker:
+        return marker
+    if not fork_constraints:
+        return ""
+    base_key = format_package_key(cand["name"].split("[")[0], cand["version"], tag = cand.get("tag", ""))
+    cname = fork_constraints.get(base_key)
+    if not cname:
+        return ""
+    expr = resolution_marker_exprs.get(cname)
+    return expr if type(expr) == "string" else ""
+
 def _resolve_candidates(
         candidates,
         parsed_spec,
         dep_marker,
         resolution_marker_exprs,
+        fork_constraints = None,
         req_extra = "",
         cand_extras_by_key = None,
         break_on_first = True,
@@ -173,7 +204,7 @@ def _resolve_candidates(
     marked_candidates = [
         True
         for c in candidates
-        if c.get("markers") or resolution_marker_constraint_name(c["name"].split("[")[0], c["version"], c.get("tag", "")) in resolution_marker_exprs
+        if _cand_fork_marker(c, fork_constraints, resolution_marker_exprs)
     ]
     is_exact_pin = (
         parsed_spec != None and
@@ -198,12 +229,7 @@ def _resolve_candidates(
             continue
         edge_marker = dep_marker
         if is_forked:
-            cand_marker = cand.get("markers", "")
-            if not cand_marker:
-                cname = resolution_marker_constraint_name(cand["name"].split("[")[0], cand["version"], cand.get("tag", ""))
-                expr = resolution_marker_exprs.get(cname)
-                if type(expr) == "string":
-                    cand_marker = expr
+            cand_marker = _cand_fork_marker(cand, fork_constraints, resolution_marker_exprs)
             edge_marker = combine_markers(dep_marker, cand_marker)
         matches.append((cand, edge_marker))
         if break_on_first and not is_forked:
@@ -216,6 +242,7 @@ def _resolve_with_extra_fallback(
         parsed_spec,
         marker,
         resolution_marker_exprs,
+        fork_constraints = None,
         req_extra = "",
         cand_extras_by_key = None,
         break_on_first = True,
@@ -231,6 +258,7 @@ def _resolve_with_extra_fallback(
             parsed_spec,
             marker,
             resolution_marker_exprs,
+            fork_constraints = fork_constraints,
             req_extra = req_extra,
             cand_extras_by_key = cand_extras_by_key,
             break_on_first = break_on_first,
@@ -248,6 +276,7 @@ def _resolve_with_extra_fallback(
                 parsed_spec,
                 marker,
                 resolution_marker_exprs,
+                fork_constraints = fork_constraints,
                 break_on_first = break_on_first,
                 dep_source_id = dep_source_id,
             )
@@ -256,7 +285,7 @@ def _resolve_with_extra_fallback(
 
     return [], name
 
-def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependencies = True):
+def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependencies = True, fork_constraints = None):
     """Deduplicate packages, index by name, resolve inter-package dependencies, and precompute raw lock packages.
 
     Args:
@@ -266,13 +295,17 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
         resolution_marker_exprs: Optional dict mapping constraint names to PEP
             508 marker expressions (used for resolution-marker fork expansion).
         strict_dependencies: If True, fail when a dependency matches no package.
+        fork_constraints: Optional dict mapping base package keys (`name@version[~tag]`)
+            to their resolution-marker constraint names.
 
     Returns:
         Struct with `distinct_packages`, `packages_by_name`, `resolved_deps`,
-        `resolution_marker_exprs`, and `lock_packages`.
+        `resolution_marker_exprs`, `fork_constraints`, and `lock_packages`.
     """
     if resolution_marker_exprs == None:
         resolution_marker_exprs = {}
+    if fork_constraints == None:
+        fork_constraints = {}
 
     # Deduplicate: merge packages with same key.
     distinct_packages = {}
@@ -370,6 +403,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
                     parsed_spec,
                     dep_marker,
                     resolution_marker_exprs,
+                    fork_constraints = fork_constraints,
                     req_extra = norm_req_extra,
                     cand_extras_by_key = cand_extras_by_key,
                     break_on_first = bool(dep_specifier),
@@ -423,6 +457,7 @@ def build_lock_graph(packages, resolution_marker_exprs = None, strict_dependenci
         packages_by_name = packages_by_name,
         resolved_deps = resolved_deps,
         resolution_marker_exprs = resolution_marker_exprs,
+        fork_constraints = fork_constraints,
         lock_packages = lock_packages,
     )
 
@@ -476,6 +511,7 @@ def expand_root_edges(graph, root_edges, strict_dependencies = True, fold_pin_ma
             parsed_spec,
             marker,
             resolution_marker_exprs,
+            fork_constraints = graph.fork_constraints,
             break_on_first = True,
             dep_source_id = source_id,
         )
@@ -636,6 +672,7 @@ def finalize_lock_graph(
         variants = variants,
         resolution_marker_exprs = resolution_marker_exprs,
         root_dependency_markers = root_dependency_markers,
+        fork_constraints = graph.fork_constraints,
     )
 
 def resolve_lock_graph(
@@ -717,9 +754,13 @@ def resolve_lock_graph(
         base = edge.pin_name.split("[")[0]
         constraint = edge.constraint
         if edge.from_local and not constraint:
-            edge_parts = parse_package_key(edge.pkg_key)
-            cname = resolution_marker_constraint_name(base, edge_parts.version, edge_parts.tag)
-            if cname in resolution_marker_exprs:
+            base_key = base_package_key(edge.pkg_key)
+            cname = graph.fork_constraints.get(base_key)
+            if not cname:
+                marker = graph.distinct_packages.get(base_key, {}).get("markers", "")
+                if marker:
+                    cname = resolution_marker_constraint_name(marker)
+            if cname and cname in resolution_marker_exprs:
                 constraint = cname
         pinned_keys.setdefault(edge.pin_name, {})[constraint] = edge.pkg_key
 

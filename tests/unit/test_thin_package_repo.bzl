@@ -1416,9 +1416,9 @@ def _test_modules_mapping_deps_selection_impl(env, target):
     )
     unpinned_deps = "\n".join(unpinned.deps_lines)
     unpinned_extra = "\n".join(unpinned.extra_target_lines)
-    env.expect.that_int(unpinned_deps.count('"@ws//_lock:common@1.0"')).equals(1)
-    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py311": [\n            "@ws//_lock:numpy@1.26",')
-    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py312": [\n            "@ws//_lock:numpy@2.2",')
+    env.expect.that_int(unpinned_deps.count('"@ws//_lock:_raw_common@1.0"')).equals(1)
+    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py311": [\n            "@ws//_lock:_raw_numpy@1.26",')
+    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py312": [\n            "@ws//_lock:_raw_numpy@2.2",')
     env.expect.that_bool(unpinned.needs_selects).equals(True)
     env.expect.that_str(unpinned_extra).contains('"@ws//_lock:is_extra_app_cpu"')
     env.expect.that_str(unpinned_extra).contains('"@ws//_lock:is_extra_app_gpu"')
@@ -1439,7 +1439,7 @@ def _test_modules_mapping_deps_selection_impl(env, target):
     )
     pinned_all = "\n".join(pinned.extra_target_lines + pinned.deps_lines)
     env.expect.that_bool("_unselected_" in pinned_all).equals(False)
-    env.expect.that_str(pinned_all).contains('"@ws//_lock:is_extra_app_gpu": [\n            "@ws//_lock:torch@2.0+gpu",')
+    env.expect.that_str(pinned_all).contains('"@ws//_lock:is_extra_app_gpu": [\n            "@ws//_lock:_raw_torch@2.0+gpu",')
 
     # 3. Compound {variant, marker} on unpinned set preserves the marker filter when unselected.
     comp = modules_mapping_deps(
@@ -1495,7 +1495,7 @@ def _test_modules_mapping_deps_selection_impl(env, target):
         }),
     )
     overlap_deps = "\n".join(overlap_mm.deps_lines)
-    env.expect.that_str(overlap_deps).contains('"@ws//_lock:is_extra_app_a": [\n            "@ws//_lock:pkg-a@1.0",')
+    env.expect.that_str(overlap_deps).contains('"@ws//_lock:is_extra_app_a": [\n            "@ws//_lock:_raw_pkg-a@1.0",')
     env.expect.that_bool("pkg_b_1_0" in overlap_mm.maybe_mapping_targets).equals(True)
     env.expect.that_str(overlap_deps).contains('"//__maybe:pkg_b_1_0"')
 

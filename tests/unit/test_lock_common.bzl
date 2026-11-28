@@ -179,6 +179,34 @@ def _test_duplicate_repo_fails(name):
         impl = _test_duplicate_repo_fails_impl,
     )
 
+def _reserved_repo_subject_impl(_ctx):
+    mod = struct(name = "root", is_root = True)
+    fake_mctx = struct(path = lambda _lbl: struct(exists = True))
+    ws_tag = struct(name = "ws", lock_file = Label("//:uv.lock"), local_wheels = [])
+    process_workspaces(
+        fake_mctx,
+        [struct(tag = ws_tag, module = mod, is_dev_dependency = False)],
+        [struct(tag = struct(workspace = "ws", name = "ws__pkg_requests", projects = ["app"], dependency_groups = ["default"]), module = mod)],
+        lambda _mctx, _lock, _cache: [struct(name = "app", path = "")],
+    )
+    return []
+
+_reserved_repo_subject = rule(implementation = _reserved_repo_subject_impl)
+
+def _test_reserved_repo_name_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("lock repo 'ws__pkg_requests' conflicts with reserved internal repository name for workspace 'ws'"),
+    )
+
+def _test_reserved_repo_name_fails(name):
+    util.helper_target(_reserved_repo_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_reserved_repo_name_fails_impl,
+    )
+
 def lock_common_test_suite(name):
     test_suite(
         name = name,
@@ -187,5 +215,6 @@ def lock_common_test_suite(name):
             _test_read_toml_cached,
             _test_process_workspaces,
             _test_duplicate_repo_fails,
+            _test_reserved_repo_name_fails,
         ],
     )

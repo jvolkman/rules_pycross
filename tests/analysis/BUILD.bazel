@@ -8,6 +8,7 @@ load(":pycross_wheel_library_test.bzl", "pycross_wheel_library_test_suite")
 load(":repaired_wheel_test.bzl", "repaired_wheel_test_suite")
 load(":setuptools_build_test.bzl", "setuptools_build_test_suite")
 load(":transitions_test.bzl", "transitions_test_suite")
+load(":wheel_dir_test.bzl", "wheel_dir_test_suite")
 load(":wheel_transform_test.bzl", "wheel_transform_test_suite")
 
 pycross_cc_pkg_config_test_suite(name = "pycross_cc_pkg_config_test")
@@ -25,6 +26,8 @@ meson_build_test_suite(name = "meson_build_test")
 cmake_build_test_suite(name = "cmake_build_test")
 
 setuptools_build_test_suite(name = "setuptools_build_test")
+
+wheel_dir_test_suite(name = "wheel_dir_test")
 
 wheel_transform_test_suite(name = "wheel_transform_test")
 

@@ -411,9 +411,9 @@ def _test_no_cycles_no_cycle_targets_impl(env, target):
     res = render_lock_bzl(lock, repo_map, "my_rctx")
     env.expect.that_bool("_cycle_" not in res).equals(True)
 
-    # a should use "a@1.0" not "_raw_"
+    # a should define its primary library target as "a@1.0" and expose a _raw_ alias
     env.expect.that_bool('name = "a@1.0"' in res).equals(True)
-    env.expect.that_bool("_raw_" not in res).equals(True)
+    env.expect.that_str(res).contains('name = "_raw_a@1.0",\n        actual = ":a@1.0",')
 
 def _test_no_cycles_no_cycle_targets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

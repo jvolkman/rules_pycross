@@ -11,10 +11,10 @@ pycross_modules_mapping(
     name = "modules_mapping",
     deps = [
         "//__maybe:win_only_1_0_0",
-        "@golden_extras__pkgs//_lock:only-extra[opt]@1.0.0",
-        "@golden_extras__pkgs//_lock:pkg-a@1.0.0",
-        "@golden_extras__pkgs//_lock:pkg-a[cli]@1.0.0",
-        "@golden_extras__pkgs//_lock:pkg-a[fast]@1.0.0",
+        "@golden_extras__pkgs//_lock:_raw_only-extra[opt]@1.0.0",
+        "@golden_extras__pkgs//_lock:_raw_pkg-a@1.0.0",
+        "@golden_extras__pkgs//_lock:_raw_pkg-a[cli]@1.0.0",
+        "@golden_extras__pkgs//_lock:_raw_pkg-a[fast]@1.0.0",
     ],
 )
 

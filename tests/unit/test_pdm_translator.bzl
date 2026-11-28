@@ -13,6 +13,9 @@ load("//pycross/private:pdm_lock_model.bzl", "discover_pdm_all_members", "transl
 # buildifier: disable=bzl-visibility
 load("//pycross/private:translator_project.bzl", "read_project_dicts_for_testing")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "resolution_marker_constraint_name")
+
 def _lock_model(
         projects = ["*"],
         dependency_groups = ["default"]):
@@ -318,18 +321,22 @@ def _test_pdm_resolution_forks_impl(env, target):
     # Both versions should be present as separate packages
     env.expect.that_collection(result["packages"].keys()).contains_exactly(["greenlet@3.2.5", "greenlet@3.5.3"])
 
-    # Resolution marker expressions should be generated
+    # Resolution marker expressions should be generated with version-free content-hashed keys
+    m_325 = 'python_version < "3.10" and python_version >= "3.9"'
+    m_353 = 'python_version >= "3.10"'
+    c_325 = resolution_marker_constraint_name(m_325)
+    c_353 = resolution_marker_constraint_name(m_353)
     res_exprs = result.get("resolution_marker_exprs", {})
-    env.expect.that_bool("res_greenlet_3_2_5" in res_exprs).equals(True)
-    env.expect.that_bool("res_greenlet_3_5_3" in res_exprs).equals(True)
+    env.expect.that_bool(c_325 in res_exprs).equals(True)
+    env.expect.that_bool(c_353 in res_exprs).equals(True)
 
-    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version < "3.10" and python_version >= "3.9"')
-    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+    env.expect.that_str(res_exprs[c_325]).equals(m_325)
+    env.expect.that_str(res_exprs[c_353]).equals(m_353)
 
     # Pinned specs should be conditional
     pins = result["pins"]["greenlet"]
-    env.expect.that_str(pins["res_greenlet_3_2_5"]).equals("greenlet@3.2.5")
-    env.expect.that_str(pins["res_greenlet_3_5_3"]).equals("greenlet@3.5.3")
+    env.expect.that_str(pins[c_325]).equals("greenlet@3.2.5")
+    env.expect.that_str(pins[c_353]).equals("greenlet@3.5.3")
 
 def _test_pdm_resolution_forks(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

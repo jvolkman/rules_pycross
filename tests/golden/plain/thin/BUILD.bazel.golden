@@ -12,9 +12,9 @@ pycross_modules_mapping(
     deps = [
         "//__maybe:beta_2_0_0",
         "//__maybe:gamma_1_0_0",
-        "@golden_plain__pkgs//_lock:alpha@1.0.0",
-        "@golden_plain__pkgs//_lock:devtool@0.1.0",
-        "@golden_plain__pkgs//_lock:setuptools@75.0.0",
+        "@golden_plain__pkgs//_lock:_raw_alpha@1.0.0",
+        "@golden_plain__pkgs//_lock:_raw_devtool@0.1.0",
+        "@golden_plain__pkgs//_lock:_raw_setuptools@75.0.0",
     ],
 )
 

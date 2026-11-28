@@ -18,7 +18,7 @@ load("//pycross/private:translator_project.bzl", "read_project_dict_for_testing"
 load("//pycross/private:translator_util.bzl", "is_external_member_path", "strip_sha256_prefix")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "base_package_key", "format_package_key", "parse_package_key")
+load("//pycross/private:util.bzl", "base_package_key", "format_package_key", "parse_package_key", "resolution_marker_constraint_name")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:uv_conflicts.bzl", "make_pin_marker_folder", "parse_uv_conflicts", "resolve_uv_pins")
@@ -481,16 +481,18 @@ def _test_uv_resolution_marker_fork_conditional_pins_impl(env, target):
     # Both versions should exist
     env.expect.that_collection(result["packages"].keys()).contains_at_least(["numpy@2.3.4", "numpy@2.3.3"])
 
-    # Pin should be conditional (a dict, not a bare string)
+    # Pin should be conditional (a dict, not a bare string) with version-free content-hashed keys
+    c_linux = resolution_marker_constraint_name("sys_platform == 'linux'")
+    c_darwin = resolution_marker_constraint_name("sys_platform == 'darwin'")
     numpy_pin = result["pins"]["numpy"]
     env.expect.that_int(len(numpy_pin)).equals(2)
-    env.expect.that_str(numpy_pin["res_numpy_2_3_4"]).equals("numpy@2.3.4")
-    env.expect.that_str(numpy_pin["res_numpy_2_3_3"]).equals("numpy@2.3.3")
+    env.expect.that_str(numpy_pin[c_linux]).equals("numpy@2.3.4")
+    env.expect.that_str(numpy_pin[c_darwin]).equals("numpy@2.3.3")
 
     # resolution_marker_exprs should have the marker expressions
     exprs = result["resolution_marker_exprs"]
-    env.expect.that_str(exprs["res_numpy_2_3_4"]).equals("sys_platform == 'linux'")
-    env.expect.that_str(exprs["res_numpy_2_3_3"]).equals("sys_platform == 'darwin'")
+    env.expect.that_str(exprs[c_linux]).equals("sys_platform == 'linux'")
+    env.expect.that_str(exprs[c_darwin]).equals("sys_platform == 'darwin'")
 
 def _test_uv_resolution_marker_fork_conditional_pins(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -542,12 +544,11 @@ def _test_uv_resolution_marker_multi_marker_or_impl(env, target):
     exprs = result["resolution_marker_exprs"]
 
     # 2.3.4 should have its markers OR'd together
-    env.expect.that_str(exprs["res_numpy_2_3_4"]).equals(
-        "(python_full_version >= '3.12' and sys_platform == 'linux') or (python_full_version < '3.12' and sys_platform == 'linux')",
-    )
+    or_expr = "(python_full_version >= '3.12' and sys_platform == 'linux') or (python_full_version < '3.12' and sys_platform == 'linux')"
+    env.expect.that_str(exprs[resolution_marker_constraint_name(or_expr)]).equals(or_expr)
 
     # 2.3.3 has a single marker, no parens needed
-    env.expect.that_str(exprs["res_numpy_2_3_3"]).equals("sys_platform == 'darwin'")
+    env.expect.that_str(exprs[resolution_marker_constraint_name("sys_platform == 'darwin'")]).equals("sys_platform == 'darwin'")
 
 def _test_uv_resolution_marker_multi_marker_or(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -573,19 +574,23 @@ def _test_uv_resolution_marker_fork_optional_group_impl(env, target):
     result = translate_uv(project, lock, _lock_model(dependency_groups = ["default", "optional:science"]))
 
     # Pin should have compound constraint names.
+    c_linux = resolution_marker_constraint_name("sys_platform == 'linux'")
+    c_darwin = resolution_marker_constraint_name("sys_platform == 'darwin'")
+    comp_linux = "extra_my-app_science_" + c_linux
+    comp_darwin = "extra_my-app_science_" + c_darwin
     numpy_pin = result["pins"]["numpy"]
     env.expect.that_int(len(numpy_pin)).equals(2)
-    env.expect.that_str(numpy_pin["extra_my-app_science_res_numpy_2_3_4"]).equals("numpy@2.3.4")
-    env.expect.that_str(numpy_pin["extra_my-app_science_res_numpy_2_3_3"]).equals("numpy@2.3.3")
+    env.expect.that_str(numpy_pin[comp_linux]).equals("numpy@2.3.4")
+    env.expect.that_str(numpy_pin[comp_darwin]).equals("numpy@2.3.3")
 
     # Compound entries should store component info.
     exprs = result["resolution_marker_exprs"]
-    compound_2_3_4 = exprs["extra_my-app_science_res_numpy_2_3_4"]
+    compound_2_3_4 = exprs[comp_linux]
     env.expect.that_str(compound_2_3_4["variant"]).equals("extra_my-app_science")
-    env.expect.that_str(compound_2_3_4["marker"]).equals("res_numpy_2_3_4")
+    env.expect.that_str(compound_2_3_4["marker"]).equals(c_linux)
 
     # Simple entries should still be strings.
-    env.expect.that_str(exprs["res_numpy_2_3_4"]).equals("sys_platform == 'linux'")
+    env.expect.that_str(exprs[c_linux]).equals("sys_platform == 'linux'")
 
 def _test_uv_resolution_marker_fork_optional_group(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -779,8 +784,8 @@ def _test_uv_local_member_deps_keep_forks_impl(env, target):
     result = translate_uv(project, lock, _lock_model(projects = ["app"]))
 
     env.expect.that_dict(result["pins"]["numpy"]).contains_exactly({
-        "res_numpy_1_26_4": "numpy@1.26.4",
-        "res_numpy_2_2_0": "numpy@2.2.0",
+        resolution_marker_constraint_name("python_full_version < '3.10'"): "numpy@1.26.4",
+        resolution_marker_constraint_name("python_full_version >= '3.10'"): "numpy@2.2.0",
     })
     env.expect.that_str(result["pins"]["foo[bar]"]).equals("foo[bar]@1.0")
     env.expect.that_dict(result["root_dependency_markers"]).contains_at_least({
@@ -1753,7 +1758,7 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     for key, target_pkg in torch_pins.items():
         compound = exprs[key]
         marker_key = compound["marker"]
-        env.expect.that_str(marker_key).contains("__edge_")
+        env.expect.that_bool(marker_key.startswith("res_")).equals(True)
         by_variant_target[(compound["variant"], target_pkg)] = exprs[marker_key]
     env.expect.that_collection(by_variant_target.keys()).contains_exactly([
         ("group_native-torch-probe_cpu", "torch@2.12.0"),
@@ -2282,7 +2287,7 @@ def _test_uv_local_member_conflict_markers_impl(env, target):
     env.expect.that_collection(lib_torch.values()).contains_exactly(["torch@2.9.1", "torch@2.9.1+cpu", "torch@2.9.1+cu129"])
     by_ver = {v: k for k, v in lib_torch.items()}
     for ver in ["torch@2.9.1", "torch@2.9.1+cpu", "torch@2.9.1+cu129"]:
-        env.expect.that_str(by_ver[ver]).contains("__edge_")
+        env.expect.that_bool(by_ver[ver].startswith("res_")).equals(True)
     env.expect.that_str(lib_only["resolution_marker_exprs"][by_ver["torch@2.9.1"]]).contains("extra != '__variant_group_conflict-repro_cpu'")
 
 def _test_uv_local_member_conflict_markers(name):
@@ -2401,7 +2406,7 @@ def _test_uv_asymmetric_fork_with_independent_member_impl(env, target):
 
     # Lib's 2.9.1 edge stays narrowed to cuda (the only variant that does not
     # already have a 2.9.1 entry), while its 2.9.1+cpu and 2.9.1+cu129 edges are dropped.
-    plain_edge_keys = [k for k in torch_pin.keys() if type(exprs.get(k)) == "string" and "__edge_" in k]
+    plain_edge_keys = [k for k in torch_pin.keys() if type(exprs.get(k)) == "string" and k.startswith("res_")]
     env.expect.that_collection(plain_edge_keys).has_size(1)
     env.expect.that_str(torch_pin[plain_edge_keys[0]]).equals("torch@2.9.1")
     env.expect.that_str(exprs[plain_edge_keys[0]]).contains("(extra == '__variant_group_root_cuda') and ")
@@ -2603,7 +2608,9 @@ def _test_uv_local_member_edge_cases_impl(env, target):
     env.expect.that_collection(unpinned_res["pins"]["forkpkg[opt]"].values()).contains_exactly(["forkpkg[opt]@1.0", "forkpkg[opt]@2.0"])
     cpu_extra_res = translate_uv(_project(name = "root"), chain_extra_lock, _lock_model(projects = ["*"], dependency_groups = ["default", "group:cpu"]))
     env.expect.that_collection(cpu_extra_res["pins"].keys()).not_contains("phantom")
-    env.expect.that_dict(cpu_extra_res["pins"]["forkpkg[opt]"]).contains_exactly({"res_forkpkg_1_0": "forkpkg[opt]@1.0"})
+    env.expect.that_dict(cpu_extra_res["pins"]["forkpkg[opt]"]).contains_exactly({
+        resolution_marker_constraint_name("extra == '__variant_group_root_cpu'"): "forkpkg[opt]@1.0",
+    })
 
 def _test_uv_local_member_edge_cases(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

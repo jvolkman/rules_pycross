@@ -82,6 +82,11 @@ def targets():
         deps = _app_lib_1_0_0_deps,
     )
 
+    native.alias(
+        name = "_raw_app-lib@1.0.0",
+        actual = ":app-lib@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_app-lib@1.0.0",
         pkg = ":app-lib@1.0.0",
@@ -99,6 +104,11 @@ def targets():
         wheel = ":_wheel_forked-lib@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_forked-lib@1.0.0",
+        actual = ":forked-lib@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_forked-lib@1.0.0",
         pkg = ":forked-lib@1.0.0",
@@ -114,6 +124,11 @@ def targets():
         package_name = "forked-lib",
         package_version = "2.0.0",
         wheel = ":_wheel_forked-lib@2.0.0",
+    )
+
+    native.alias(
+        name = "_raw_forked-lib@2.0.0",
+        actual = ":forked-lib@2.0.0",
     )
 
     pycross_dist_info(

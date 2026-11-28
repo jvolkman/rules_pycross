@@ -48,6 +48,11 @@ def targets():
         wheel = ":_wheel_helper@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_helper@1.0.0",
+        actual = ":helper@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_helper@1.0.0",
         pkg = ":helper@1.0.0",
@@ -65,6 +70,11 @@ def targets():
         wheel = ":_wheel_only-extra@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_only-extra@1.0.0",
+        actual = ":only-extra@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_only-extra@1.0.0",
         pkg = ":only-extra@1.0.0",
@@ -78,6 +88,11 @@ def targets():
         name = "only-extra[opt]@1.0.0",
         actual = ":only-extra@1.0.0",
         deps = _only_extra_opt__1_0_0_deps,
+    )
+
+    native.alias(
+        name = "_raw_only-extra[opt]@1.0.0",
+        actual = ":only-extra[opt]@1.0.0",
     )
 
     _pkg_a_1_0_0_deps = [
@@ -99,6 +114,11 @@ def targets():
         deps = _pkg_a_1_0_0_deps,
     )
 
+    native.alias(
+        name = "_raw_pkg-a@1.0.0",
+        actual = ":pkg-a@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_pkg-a@1.0.0",
         pkg = ":pkg-a@1.0.0",
@@ -116,6 +136,11 @@ def targets():
         deps = _pkg_a_cli__1_0_0_deps,
     )
 
+    native.alias(
+        name = "_raw_pkg-a[cli]@1.0.0",
+        actual = ":pkg-a[cli]@1.0.0",
+    )
+
     _pkg_a_fast__1_0_0_deps = [
         ":helper@1.0.0",
     ]
@@ -124,6 +149,11 @@ def targets():
         name = "pkg-a[fast]@1.0.0",
         actual = ":pkg-a@1.0.0",
         deps = _pkg_a_fast__1_0_0_deps,
+    )
+
+    native.alias(
+        name = "_raw_pkg-a[fast]@1.0.0",
+        actual = ":pkg-a[fast]@1.0.0",
     )
 
     native.alias(
@@ -136,6 +166,11 @@ def targets():
         package_name = "win-only",
         package_version = "1.0.0",
         wheel = ":_wheel_win-only@1.0.0",
+    )
+
+    native.alias(
+        name = "_raw_win-only@1.0.0",
+        actual = ":win-only@1.0.0",
     )
 
     pycross_dist_info(

@@ -252,7 +252,8 @@ def format_raw_lock(
         testonly_pins = None,
         variants = None,
         resolution_marker_exprs = None,
-        root_dependency_markers = None):
+        root_dependency_markers = None,
+        fork_constraints = None):
     """Serialize translated lock data into the canonical `raw_lock.json` dict.
 
     Args:
@@ -262,6 +263,8 @@ def format_raw_lock(
         variants: Optional list of variant set dicts.
         resolution_marker_exprs: Optional dict of constraint name -> marker expression or compound dict.
         root_dependency_markers: Optional dict of pin name -> marker list (or `None`, omitted).
+        fork_constraints: Optional dict mapping base package key (`name@version[~tag]`)
+            -> resolution-marker constraint name for transitive fork pin synthesis.
 
     Returns:
         A dict in raw_lock.json format.
@@ -282,6 +285,8 @@ def format_raw_lock(
         result["variants"] = variants
     if resolution_marker_exprs:
         result["resolution_marker_exprs"] = resolution_marker_exprs
+    if fork_constraints:
+        result["fork_constraints"] = fork_constraints
 
     filtered_markers = {
         name: markers

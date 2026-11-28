@@ -6,7 +6,12 @@ lock_resolver.bzl.
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load(":translator_graph.bzl", "detect_package_marker_forks")
+load(
+    ":translator_graph.bzl",
+    "apply_package_marker_forks",
+    "find_package_marker_forks",
+    "fork_constraints_by_key",
+)
 load(
     ":translator_project.bzl",
     "collect_pep621_requirements",
@@ -552,13 +557,12 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         versions_all,
     )
 
-    resolution_marker_exprs = detect_package_marker_forks(
+    resolution_marker_exprs, forks_by_name = find_package_marker_forks(
         lock_packages.values(),
-        pins,
         markers_by_pkg = versions_all,
-        pin_value_fn = format_package_key,
         allow_unmarked_fallback = True,
     )
+    apply_package_marker_forks(pins, forks_by_name, pin_value_fn = format_package_key)
 
     return format_raw_lock(
         lock_packages,
@@ -566,6 +570,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         testonly_pins = testonly_pins,
         resolution_marker_exprs = resolution_marker_exprs,
         root_dependency_markers = root_dependency_markers,
+        fork_constraints = fork_constraints_by_key(forks_by_name),
     )
 
 # buildifier: disable=unused-variable

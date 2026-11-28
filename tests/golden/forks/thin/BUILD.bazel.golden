@@ -25,15 +25,15 @@ exports_files(["requirements.bzl"])
 pycross_modules_mapping(
     name = "_modules_mapping",
     deps = [
-        "@golden_forks__pkgs//_lock:app-lib@1.0.0",
+        "@golden_forks__pkgs//_lock:_raw_app-lib@1.0.0",
     ] + select({
         "@golden_forks__pkgs//_lock:is_res_py311": [
-            "@golden_forks__pkgs//_lock:forked-lib@1.0.0",
+            "@golden_forks__pkgs//_lock:_raw_forked-lib@1.0.0",
         ],
         "//conditions:default": [],
     }) + select({
         "@golden_forks__pkgs//_lock:is_res_py312": [
-            "@golden_forks__pkgs//_lock:forked-lib@2.0.0",
+            "@golden_forks__pkgs//_lock:_raw_forked-lib@2.0.0",
         ],
         "//conditions:default": [],
     }),

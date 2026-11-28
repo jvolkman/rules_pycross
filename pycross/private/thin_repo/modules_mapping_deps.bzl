@@ -1,7 +1,7 @@
 """Conditional deps computation for `pycross_modules_mapping` in thin package repos."""
 
 load("//pycross/private:build_text.bzl", "config_setting_group", "deps_plus_selects")
-load("//pycross/private:lock_contract.bzl", "lock_constraint_label", "lock_raw_label", "lock_target_label")
+load("//pycross/private:lock_contract.bzl", "lock_constraint_label", "lock_raw_label")
 load("//pycross/private:util.bzl", "sanitize_name")
 load(":common.bzl", "is_key_platform_specific")
 load(":selects.bzl", "unselected_condition")
@@ -46,11 +46,7 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
     for pin_name in sorted(pins.keys()):
         pin_target_dict = pins[pin_name]
         for constraint, pin_target in sorted(pin_target_dict.items()):
-            package = packages.get(pin_target, {})
-            if package.get("cycle_group"):
-                lock_label = lock_raw_label(workspace_repo, pin_target)
-            else:
-                lock_label = lock_target_label(workspace_repo, pin_target)
+            lock_label = lock_raw_label(workspace_repo, pin_target)
 
             if is_key_platform_specific(packages, pin_target):
                 maybe_name = sanitize_name(pin_target)

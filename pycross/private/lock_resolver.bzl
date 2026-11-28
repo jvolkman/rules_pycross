@@ -7,7 +7,6 @@ load(
     "canonicalize_package_key",
     "format_package_key",
     "parse_package_key",
-    "resolution_marker_constraint_name",
 )
 load(":variant_util.bzl", "variant_item_qname")
 
@@ -881,6 +880,7 @@ def _resolve_member(
                 resolved_keys_by_name.setdefault(pkg_name, {})[base_key] = True
 
         resolution_marker_exprs = lock_model_data.get("resolution_marker_exprs", {})
+        fork_constraints = lock_model_data.get("fork_constraints", {})
         for package_pin_name, keys_dict in resolved_keys_by_name.items():
             if package_pin_name in pins:
                 continue
@@ -891,9 +891,8 @@ def _resolve_member(
             ]
             fork_targets = {}
             for base_key in sorted(keys_dict.keys()):
-                parts = parse_package_key(base_key)
-                cname = resolution_marker_constraint_name(package_pin_name, parts.version, parts.tag)
-                if cname in resolution_marker_exprs:
+                cname = fork_constraints.get(base_key)
+                if cname and cname in resolution_marker_exprs:
                     fork_targets[cname] = base_key
             if fork_targets and len(fork_targets) == len(keys_dict):
                 pins[package_pin_name] = fork_targets

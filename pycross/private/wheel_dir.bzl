@@ -16,8 +16,9 @@ def _pycross_wheel_dir_impl(ctx):
         # rules can do the same.
         out = ctx.actions.declare_directory(ctx.attr.whldir_name)
 
-        # Generated wheel_dir targets are named by package key (name@version).
-        package = ctx.label.name
+        # Generated wheel_dir targets may use a version-free target name (e.g.
+        # ":wheel") and pass the human-readable package key via `package`.
+        package = ctx.attr.package or ctx.label.name
         register_failure_action(
             ctx,
             outputs = [out],
@@ -58,6 +59,10 @@ def _pycross_wheel_dir_impl(ctx):
 pycross_wheel_dir = rule(
     implementation = _pycross_wheel_dir_impl,
     attrs = {
+        "package": attr.string(
+            doc = "Package identifier used in unsupported-wheel diagnostics; defaults to the target name.",
+            default = "",
+        ),
         "src": attr.label(
             doc = "The .whl file or TreeArtifact directory to wrap.",
             mandatory = True,

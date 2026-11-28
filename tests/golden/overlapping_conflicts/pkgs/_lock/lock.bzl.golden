@@ -86,6 +86,11 @@ def targets():
         wheel = ":_wheel_colorama@0.4.6",
     )
 
+    native.alias(
+        name = "_raw_colorama@0.4.6",
+        actual = ":colorama@0.4.6",
+    )
+
     pycross_dist_info(
         name = "_dist_info_colorama@0.4.6",
         pkg = ":colorama@0.4.6",
@@ -104,6 +109,11 @@ def targets():
         wheel = ":_wheel_iniconfig@1.1.1",
     )
 
+    native.alias(
+        name = "_raw_iniconfig@1.1.1",
+        actual = ":iniconfig@1.1.1",
+    )
+
     pycross_dist_info(
         name = "_dist_info_iniconfig@1.1.1",
         pkg = ":iniconfig@1.1.1",
@@ -120,6 +130,11 @@ def targets():
         package_name = "iniconfig",
         package_version = "2.0.0",
         wheel = ":_wheel_iniconfig@2.0.0",
+    )
+
+    native.alias(
+        name = "_raw_iniconfig@2.0.0",
+        actual = ":iniconfig@2.0.0",
     )
 
     pycross_dist_info(
@@ -152,6 +167,11 @@ def targets():
         deps = _pytest_7_4_4_deps,
     )
 
+    native.alias(
+        name = "_raw_pytest@7.4.4",
+        actual = ":pytest@7.4.4",
+    )
+
     pycross_dist_info(
         name = "_dist_info_pytest@7.4.4",
         pkg = ":pytest@7.4.4",
@@ -170,6 +190,11 @@ def targets():
         wheel = ":_wheel_typing-extensions@4.11.0",
     )
 
+    native.alias(
+        name = "_raw_typing-extensions@4.11.0",
+        actual = ":typing-extensions@4.11.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_typing-extensions@4.11.0",
         pkg = ":typing-extensions@4.11.0",
@@ -186,6 +211,11 @@ def targets():
         package_name = "typing-extensions",
         package_version = "4.12.2",
         wheel = ":_wheel_typing-extensions@4.12.2",
+    )
+
+    native.alias(
+        name = "_raw_typing-extensions@4.12.2",
+        actual = ":typing-extensions@4.12.2",
     )
 
     pycross_dist_info(

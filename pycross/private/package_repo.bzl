@@ -236,9 +236,10 @@ def slim_member_lock(member_lock, merged_packages):
     """Build the minimal per-member manifest needed by `thin_package_repo`.
 
     Keeps the exact package keys present in `member_lock` while resolving shared
-    wheel/sdist and cycle metadata against `merged_packages` so thin repos and
+    wheel/sdist metadata against `merged_packages` so thin repos and
     `package_repo` never disagree. `availability_markers` remain strictly
-    per-member.
+    per-member, and `resolution_marker_exprs` is filtered to constraints
+    referenced by this member's `pins`.
 
     Args:
         member_lock: Resolved lock dict for one workspace member.
@@ -257,17 +258,30 @@ def slim_member_lock(member_lock, merged_packages):
             slim_pkg["extras_proxy"] = False
         if merged_pkg.get("sdist_file"):
             slim_pkg["sdist_file"] = True
-        if merged_pkg.get("cycle_group"):
-            slim_pkg["cycle_group"] = merged_pkg["cycle_group"]
         if member_pkg.get("availability_markers"):
             slim_pkg["availability_markers"] = member_pkg["availability_markers"]
         slim_packages[pkg_key] = slim_pkg
 
+    pins = member_lock.get("pins", {})
     slim = {
         "packages": slim_packages,
-        "pins": member_lock.get("pins", {}),
+        "pins": pins,
     }
-    for key in ("variants", "resolution_marker_exprs", "testonly_pins"):
+    raw_res_exprs = member_lock.get("resolution_marker_exprs")
+    if raw_res_exprs:
+        referenced = {}
+        for pin_val in pins.values():
+            if type(pin_val) != "dict":
+                continue
+            for cname in pin_val.keys():
+                if cname and cname in raw_res_exprs:
+                    referenced[cname] = True
+                    entry = raw_res_exprs[cname]
+                    if type(entry) == "dict" and entry.get("marker") in raw_res_exprs:
+                        referenced[entry["marker"]] = True
+        if referenced:
+            slim["resolution_marker_exprs"] = {c: raw_res_exprs[c] for c in sorted(referenced.keys())}
+    for key in ("variants", "testonly_pins"):
         val = member_lock.get(key)
         if val:
             slim[key] = val

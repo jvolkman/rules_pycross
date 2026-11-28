@@ -30,7 +30,7 @@ load(
     "make_git_file_entry",
     "strip_sha256_prefix",
 )
-load(":util.bzl", "resolution_marker_constraint_name", "url_decode_filename", "url_filename")
+load(":util.bzl", "format_package_key", "hex_hash8", "resolution_marker_constraint_name", "url_decode_filename", "url_filename")
 load(
     ":uv_conflicts.bzl",
     "apply_repo_variant_pins_and_defaults",
@@ -126,7 +126,7 @@ def _compute_source_tags(packages_list):
             continue
         used_tags = {}
         for canon in sorted(canon_sources.keys()):
-            base_tag = ("00000000" + ("%x" % (hash(canon) & 0xffffffff)))[-8:] if canon else "none"
+            base_tag = hex_hash8(canon) if canon else "none"
             tag = base_tag
             if tag in used_tags:
                 for i in range(1, len(canon_sources) + 1):
@@ -284,16 +284,18 @@ def _parse_lock_packages(packages_list, token_replacements, source_tags, pkg_ide
 
     resolution_marker_exprs = {}
     fork_constraints = {}
+    fork_constraints_by_key = {}
     for fname, versions in fork_versions.items():
         if len(versions) <= 1:
             continue
         for (fversion, ftag), markers in versions.items():
             combined = markers[0] if len(markers) == 1 else " or ".join(["({})".format(m) for m in markers])
-            cname = resolution_marker_constraint_name(fname, fversion, ftag)
+            cname = resolution_marker_constraint_name(combined)
             fork_constraints.setdefault(fname, {})[(fversion, ftag)] = cname
+            fork_constraints_by_key[format_package_key(fname, fversion, tag = ftag)] = cname
             resolution_marker_exprs[cname] = combined
 
-    return packages, fork_constraints, resolution_marker_exprs
+    return packages, fork_constraints, fork_constraints_by_key, resolution_marker_exprs
 
 def _build_uv_workspace_base(lock_dict):
     """Parse workspace-invariant UV lock structures and build the lock graph once."""
@@ -308,7 +310,7 @@ def _build_uv_workspace_base(lock_dict):
 
     base_conflicts = parse_uv_conflicts_base(uv_conflicts)
     source_tags, pkg_identities = _compute_source_tags(packages_list)
-    packages, fork_constraints, base_resolution_marker_exprs = _parse_lock_packages(
+    packages, fork_constraints, fork_constraints_by_key, base_resolution_marker_exprs = _parse_lock_packages(
         packages_list,
         base_conflicts.token_replacements,
         source_tags,
@@ -317,6 +319,7 @@ def _build_uv_workspace_base(lock_dict):
     graph = build_lock_graph(
         packages,
         resolution_marker_exprs = base_resolution_marker_exprs,
+        fork_constraints = fork_constraints_by_key,
         strict_dependencies = True,
     )
 

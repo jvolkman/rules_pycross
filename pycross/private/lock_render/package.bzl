@@ -130,7 +130,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
 
     if is_extras_proxy(pkg_key, pkg):
         base_pkg_key = base_package_key(pkg_key)
-        proxy_name = raw_target_name(pkg_key) if pkg.get("cycle_group") else pkg_key
+        in_cycle = bool(pkg.get("cycle_group"))
+        proxy_name = raw_target_name(pkg_key) if in_cycle else pkg_key
         base_actual = raw_target_name(base_pkg_key) if is_in_same_cycle(base_pkg_key, pkg, packages) else base_pkg_key
 
         lines.extend([
@@ -141,6 +142,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
             ind(")"),
             "",
         ])
+        if not in_cycle:
+            lines.extend(alias(raw_target_name(pkg_key), ":" + pkg_key, indent = 1, use_native = True))
         return
 
     # Sdist alias
@@ -168,9 +171,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
         lines.extend(alias(wheel_target_name(pkg_key), target, indent = 1, use_native = True))
 
     # Library
-    lib_name = pkg_key
-    if pkg.get("cycle_group"):
-        lib_name = raw_target_name(pkg_key)
+    in_cycle = bool(pkg.get("cycle_group"))
+    lib_name = raw_target_name(pkg_key) if in_cycle else pkg_key
 
     reset = reset_plan.get(pkg_key) if reset_plan else None
     if reset and reset.ok:
@@ -212,8 +214,11 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     ])
 
     # Note: if this package is in a cycle group, the public target is created
-    # by lock_render/cycles.bzl (rendered separately).
-    # The pycross_wheel_library above is named _raw_<pkg_key> in that case.
+    # by lock_render/cycles.bzl (rendered separately) and the pycross_wheel_library
+    # above is named _raw_<pkg_key>. Otherwise alias _raw_<pkg_key> -> :<pkg_key>
+    # so callers (e.g. modules_mapping) can always reference _raw_ unconditionally.
+    if not in_cycle:
+        lines.extend(alias(raw_target_name(pkg_key), ":" + pkg_key, indent = 1, use_native = True))
 
     # dist_info (point directly at _raw_<pkg> for cycle members so console script
     # exec analysis doesn't pull in the entire cycle SCC and reachability evaluators)

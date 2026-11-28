@@ -50,25 +50,25 @@ selects.config_setting_group(
 pycross_modules_mapping(
     name = "_modules_mapping",
     deps = [
-        "@golden_overlapping_conflicts__pkgs//_lock:pytest@7.4.4",
+        "@golden_overlapping_conflicts__pkgs//_lock:_raw_pytest@7.4.4",
     ] + select({
         ":_mm_any_1a99e88a": [
-            "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.11.0",
+            "@golden_overlapping_conflicts__pkgs//_lock:_raw_typing-extensions@4.11.0",
         ],
         "//conditions:default": [],
     }) + select({
         ":_mm_any_93f03f07": [
-            "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.12.2",
+            "@golden_overlapping_conflicts__pkgs//_lock:_raw_typing-extensions@4.12.2",
         ],
         "//conditions:default": [],
     }) + select({
         ":_mm_any_a8db7e10": [
-            "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@2.0.0",
+            "@golden_overlapping_conflicts__pkgs//_lock:_raw_iniconfig@2.0.0",
         ],
         "//conditions:default": [],
     }) + select({
         "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a": [
-            "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@1.1.1",
+            "@golden_overlapping_conflicts__pkgs//_lock:_raw_iniconfig@1.1.1",
         ],
         "//conditions:default": [],
     }),

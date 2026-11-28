@@ -12,6 +12,24 @@ def pkgs_repo_name(workspace):
     """Return the backing workspace package repository name (`<workspace>__pkgs`)."""
     return "{}__pkgs".format(workspace)
 
+def state_repo_name(workspace):
+    """Return the workspace control/state repository name (`<workspace>__state`)."""
+    return "{}__state".format(workspace)
+
+def spoke_repo_name(workspace, pkg_name):
+    """Return the per-package spoke repository name (`<workspace>__pkg_<underscore_name>`)."""
+    return "{}__pkg_{}".format(workspace, underscore_name(pkg_name))
+
+def is_reserved_internal_repo_name(workspace, repo_name):
+    """Return True if `repo_name` collides with an internal repo prefix owned by `workspace`."""
+    return (
+        repo_name == pkgs_repo_name(workspace) or
+        repo_name == state_repo_name(workspace) or
+        repo_name.startswith("{}__pkg_".format(workspace)) or
+        repo_name.startswith("{}__whl_".format(workspace)) or
+        repo_name.startswith("{}__sdist".format(workspace))
+    )
+
 def build_repo_name(workspace):
     """Return the default build-tools thin repository name (`<workspace>__build`)."""
     return "{}__build".format(workspace)

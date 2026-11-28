@@ -114,6 +114,11 @@ def targets():
         wheel = ":_wheel_custom-build@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_custom-build@1.0.0",
+        actual = ":custom-build@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_custom-build@1.0.0",
         pkg = ":custom-build@1.0.0",
@@ -152,6 +157,11 @@ def targets():
         wheel = ":_wheel_merged-pkg@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_merged-pkg@1.0.0",
+        actual = ":merged-pkg@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_merged-pkg@1.0.0",
         pkg = ":merged-pkg@1.0.0",
@@ -179,6 +189,11 @@ def targets():
         package_version = "1.0.0",
         wheel = ":_wheel_mixed-consumer@1.0.0",
         deps = _mixed_consumer_1_0_0_deps,
+    )
+
+    native.alias(
+        name = "_raw_mixed-consumer@1.0.0",
+        actual = ":mixed-consumer@1.0.0",
     )
 
     pycross_dist_info(
@@ -225,6 +240,11 @@ def targets():
         package_name = "native2",
         package_version = "1.0.0",
         wheel = ":_wheel_native2@1.0.0",
+    )
+
+    native.alias(
+        name = "_raw_native2@1.0.0",
+        actual = ":native2@1.0.0",
     )
 
     pycross_dist_info(
@@ -286,6 +306,11 @@ def targets():
         deps = _native3_1_0_0_deps,
     )
 
+    native.alias(
+        name = "_raw_native3@1.0.0",
+        actual = ":native3@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_native3@1.0.0",
         pkg = ":native3@1.0.0",
@@ -307,6 +332,11 @@ def targets():
         package_name = "pure-leaf",
         package_version = "1.0.0",
         wheel = ":_wheel_pure-leaf@1.0.0",
+    )
+
+    native.alias(
+        name = "_raw_pure-leaf@1.0.0",
+        actual = ":pure-leaf@1.0.0",
     )
 
     pycross_dist_info(
@@ -331,6 +361,11 @@ def targets():
         wheel = ":_wheel_sdistonly@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_sdistonly@1.0.0",
+        actual = ":sdistonly@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_sdistonly@1.0.0",
         pkg = ":sdistonly@1.0.0",
@@ -353,6 +388,11 @@ def targets():
         package_version = "1.0.0",
         wheel = ":_wheel_variant-dep@1.0.0",
         deps = _variant_dep_1_0_0_deps,
+    )
+
+    native.alias(
+        name = "_raw_variant-dep@1.0.0",
+        actual = ":variant-dep@1.0.0",
     )
 
     pycross_dist_info(

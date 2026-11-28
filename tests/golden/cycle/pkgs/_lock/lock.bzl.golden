@@ -98,6 +98,11 @@ def targets():
         wheel = ":_wheel_leaf@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_leaf@1.0.0",
+        actual = ":leaf@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_leaf@1.0.0",
         pkg = ":leaf@1.0.0",
@@ -113,6 +118,11 @@ def targets():
         package_name = "mac-dep",
         package_version = "1.0.0",
         wheel = ":_wheel_mac-dep@1.0.0",
+    )
+
+    native.alias(
+        name = "_raw_mac-dep@1.0.0",
+        actual = ":mac-dep@1.0.0",
     )
 
     pycross_dist_info(

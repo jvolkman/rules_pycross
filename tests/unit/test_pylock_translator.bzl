@@ -9,6 +9,9 @@ load("//pycross/private:lock_resolver.bzl", "resolve")
 # buildifier: disable=bzl-visibility
 load("//pycross/private:pylock_lock_model.bzl", "translate_pylock")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "resolution_marker_constraint_name")
+
 def _lock_model(
         projects = ["*"],
         dependency_groups = ["default"]):
@@ -487,17 +490,21 @@ def _test_pylock_resolution_forks_impl(env, target):
     env.expect.that_collection(result["packages"].keys()).contains_exactly(["greenlet@3.2.5", "greenlet@3.5.3"])
 
     # Resolution marker expressions should be generated (with PDM selection markers stripped)
+    m_325 = 'python_version < "3.10" and python_version >= "3.9"'
+    m_353 = 'python_version >= "3.10"'
+    c_325 = resolution_marker_constraint_name(m_325)
+    c_353 = resolution_marker_constraint_name(m_353)
     res_exprs = result.get("resolution_marker_exprs", {})
-    env.expect.that_bool("res_greenlet_3_2_5" in res_exprs).equals(True)
-    env.expect.that_bool("res_greenlet_3_5_3" in res_exprs).equals(True)
+    env.expect.that_bool(c_325 in res_exprs).equals(True)
+    env.expect.that_bool(c_353 in res_exprs).equals(True)
 
-    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version < "3.10" and python_version >= "3.9"')
-    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+    env.expect.that_str(res_exprs[c_325]).equals(m_325)
+    env.expect.that_str(res_exprs[c_353]).equals(m_353)
 
     # Pinned specs should be conditional
     pins = result["pins"]["greenlet"]
-    env.expect.that_str(pins["res_greenlet_3_2_5"]).equals("greenlet@3.2.5")
-    env.expect.that_str(pins["res_greenlet_3_5_3"]).equals("greenlet@3.5.3")
+    env.expect.that_str(pins[c_325]).equals("greenlet@3.2.5")
+    env.expect.that_str(pins[c_353]).equals("greenlet@3.5.3")
 
 def _test_pylock_resolution_forks(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -987,21 +994,29 @@ def _test_pylock_multiversion_fork_edges_and_unmarked_branch_impl(env, target):
     result = translate_pylock(lock, project, _lock_model())
 
     # Unmarked greenlet@3.5.3 gets synthesized complement `python_version >= "3.10"`.
+    m_325 = 'python_version < "3.10"'
+    m_353 = 'python_version >= "3.10"'
+    m_comp2 = 'sys_platform != "win32" or python_version >= "3.11"'
+    m_compat1 = 'python_version ~= "3.10"'
+    c_325 = resolution_marker_constraint_name(m_325)
+    c_353 = resolution_marker_constraint_name(m_353)
+    c_comp2 = resolution_marker_constraint_name(m_comp2)
+    c_compat1 = resolution_marker_constraint_name(m_compat1)
     res_exprs = result["resolution_marker_exprs"]
-    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version < "3.10"')
-    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+    env.expect.that_str(res_exprs[c_325]).equals(m_325)
+    env.expect.that_str(res_exprs[c_353]).equals(m_353)
 
     # Compound `and` sibling synthesizes De Morgan complement on unmarked branch.
-    env.expect.that_str(res_exprs["res_compound_lib_2_0_0"]).equals('sys_platform != "win32" or python_version >= "3.11"')
+    env.expect.that_str(res_exprs[c_comp2]).equals(m_comp2)
 
     # Both base and base[extra] pins receive conditional fork entries.
     env.expect.that_dict(result["pins"]["greenlet"]).contains_exactly({
-        "res_greenlet_3_2_5": "greenlet@3.2.5",
-        "res_greenlet_3_5_3": "greenlet@3.5.3",
+        c_325: "greenlet@3.2.5",
+        c_353: "greenlet@3.5.3",
     })
     env.expect.that_dict(result["pins"]["greenlet[extra1]"]).contains_exactly({
-        "res_greenlet_3_2_5": "greenlet[extra1]@3.2.5",
-        "res_greenlet_3_5_3": "greenlet[extra1]@3.5.3",
+        c_325: "greenlet[extra1]@3.2.5",
+        c_353: "greenlet[extra1]@3.5.3",
     })
 
     # app emits both forked greenlet edges gated by their markers, propagates the target package's
@@ -1018,7 +1033,7 @@ def _test_pylock_multiversion_fork_edges_and_unmarked_branch_impl(env, target):
 
     # Non-invertible `~=` sibling keeps unmarked fallback under "".
     env.expect.that_dict(result["pins"]["compat-lib"]).contains_exactly({
-        "res_compat_lib_1_0_0": "compat-lib@1.0.0",
+        c_compat1: "compat-lib@1.0.0",
         "": "compat-lib@2.0.0",
     })
 

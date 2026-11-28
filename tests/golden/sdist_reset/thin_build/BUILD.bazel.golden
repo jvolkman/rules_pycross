@@ -16,8 +16,8 @@ exports_files(["requirements.bzl"])
 pycross_modules_mapping(
     name = "_modules_mapping",
     deps = [
-        "@golden_sdist_reset__pkgs//_lock:merged-pkg@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:pure-leaf@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:_raw_merged-pkg@1.0.0",
+        "@golden_sdist_reset__pkgs//_lock:_raw_pure-leaf@1.0.0",
     ],
 )
 

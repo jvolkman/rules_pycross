@@ -12,7 +12,7 @@ pycross_modules_mapping(
     deps = [
         "@golden_cycle__pkgs//_lock:_raw_cycle-a@1.0.0",
         "@golden_cycle__pkgs//_lock:_raw_cycle-b@1.0.0",
-        "@golden_cycle__pkgs//_lock:leaf@1.0.0",
+        "@golden_cycle__pkgs//_lock:_raw_leaf@1.0.0",
     ],
 )
 

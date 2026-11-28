@@ -32,6 +32,11 @@ def targets():
         precompile = "enabled",
     )
 
+    native.alias(
+        name = "_raw_alpha@1.0.0",
+        actual = ":alpha@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_alpha@1.0.0",
         pkg = ":alpha@1.0.0",
@@ -92,6 +97,11 @@ def targets():
         wheel = ":_wheel_beta@2.0.0",
     )
 
+    native.alias(
+        name = "_raw_beta@2.0.0",
+        actual = ":beta@2.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_beta@2.0.0",
         pkg = ":beta@2.0.0",
@@ -112,6 +122,11 @@ def targets():
         package_version = "0.1.0",
         wheel = ":_wheel_devtool@0.1.0",
         deps = _devtool_0_1_0_deps,
+    )
+
+    native.alias(
+        name = "_raw_devtool@0.1.0",
+        actual = ":devtool@0.1.0",
     )
 
     pycross_dist_info(
@@ -162,6 +177,11 @@ def targets():
         wheel = ":_wheel_gamma@1.0.0",
     )
 
+    native.alias(
+        name = "_raw_gamma@1.0.0",
+        actual = ":gamma@1.0.0",
+    )
+
     pycross_dist_info(
         name = "_dist_info_gamma@1.0.0",
         pkg = ":gamma@1.0.0",
@@ -177,6 +197,11 @@ def targets():
         package_name = "setuptools",
         package_version = "75.0.0",
         wheel = ":_wheel_setuptools@75.0.0",
+    )
+
+    native.alias(
+        name = "_raw_setuptools@75.0.0",
+        actual = ":setuptools@75.0.0",
     )
 
     pycross_dist_info(

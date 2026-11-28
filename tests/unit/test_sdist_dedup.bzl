@@ -345,11 +345,30 @@ def _test_merge_dependencies_paths_impl(env, target):
     env.expect.that_bool(is_wheel_platform_specific(slim_plat)).equals(True)
     env.expect.that_bool(bool(slim_plat.get("sdist_file"))).equals(False)
 
-    # Extras proxy keys are retained with cycle_group and still classify as extras proxies.
+    # Extras proxy keys drop cycle_group (thin repos always use _raw_) and still classify as extras proxies.
     slim_extra = slim_a["packages"]["foo[extra]@1.0"]
     env.expect.that_bool(is_extras_proxy("foo[extra]@1.0", slim_extra)).equals(True)
     env.expect.that_bool("extras_proxy" in slim_extra).equals(False)
-    env.expect.that_str(slim_extra.get("cycle_group", "")).equals("cycle_0")
+    env.expect.that_bool("cycle_group" in slim_extra).equals(False)
+
+    # resolution_marker_exprs is filtered to constraints referenced by this member's pins
+    # (including base marker keys referenced by compound dicts).
+    lock_filtered = dict(
+        lock_a,
+        pins = {
+            "foo": {"extra_app_cpu_res_used": "foo@1.0"},
+        },
+        resolution_marker_exprs = {
+            "extra_app_cpu_res_used": {"variant": "extra_app_cpu", "marker": "res_used"},
+            "res_used": "sys_platform == 'linux'",
+            "res_unused": "sys_platform == 'win32'",
+        },
+    )
+    slim_filtered = slim_member_lock(lock_filtered, merged["packages"])
+    env.expect.that_collection(slim_filtered["resolution_marker_exprs"].keys()).contains_exactly([
+        "extra_app_cpu_res_used",
+        "res_used",
+    ])
 
     # Extras key with its own platform-specific wheel_candidates (e.g. local wheel)
     # must not be misclassified as an extras proxy delegating to the base package.
