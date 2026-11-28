@@ -413,6 +413,15 @@ bzl_library(
 )
 
 bzl_library(
+    name = "repo_slots",
+    srcs = ["repo_slots.bzl"],
+    deps = [
+        ":util",
+        "@pypackaging.bzl//:pypackaging",
+    ],
+)
+
+bzl_library(
     name = "lock_repo_creation",
     srcs = ["lock_repo_creation.bzl"],
     deps = [
@@ -421,6 +430,7 @@ bzl_library(
         ":override_helpers",
         ":package_repo",
         ":pypi_file",
+        ":repo_slots",
         ":thin_package_repo",
         ":util",
         ":variant_util",

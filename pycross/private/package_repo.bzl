@@ -507,6 +507,7 @@ def _package_repo_impl(rctx):
         rctx.name,
         has_variants = bool(normalized_variants.sets_by_suffix),
         reset_conflict_sets = normalized_variants.sets_by_suffix.values(),
+        sdist_repo_map = rctx.attr.sdist_repo_map,
     )
     rctx.file("_lock/lock.bzl", lock_result.content)
     if lock_result.has_reset:
@@ -652,7 +653,10 @@ package_repo = repository_rule(
             mandatory = True,
         ),
         "repo_map": attr.string_dict(
-            doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@pypi_foo//:wheel').",
+            doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@ws__whl_foo_py3_none_any//:wheel').",
+        ),
+        "sdist_repo_map": attr.string_dict(
+            doc = "Optional map of pkg_key -> sdist build wheel label (e.g. '@ws__sdist_foo//:wheel').",
         ),
         "backend_names": attr.string_list(
             doc = "Registered backend rule names to emit `_backend/<name>.bzl` macros for.",

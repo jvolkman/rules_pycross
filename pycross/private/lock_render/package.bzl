@@ -90,7 +90,7 @@ def render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages, loads
     ))
     lines.append("")
 
-def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = None, loads = None, marker_extra_cache = None):
+def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = None, loads = None, marker_extra_cache = None, sdist_repo_map = None):
     """Renders all targets for a single package using marker-based deps and wheel selection.
 
     Args:
@@ -104,6 +104,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
         loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
         marker_extra_cache: Optional dict shared across lock rendering to
             memoize `marker_uses_extra` lookups.
+        sdist_repo_map: Optional dict mapping `pkg_key` to its explicit sdist
+            build wheel label (`@<ws>__sdist_<pkg>[_<slot>]//:wheel`).
     """
     pkg_key_san = sanitize_name(pkg_key)
     parts = parse_package_key(pkg_key)
@@ -158,8 +160,11 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     elif sdist_file and has_build_fallback(pkg):
         sdist_file_key = sdist_file.get("key")
         if sdist_file_key:
-            pkg_sdist_repo = sdist_repo_name(rctx_name, pkg_key)
-            sdist_target = "@@{}//:wheel".format(pkg_sdist_repo)
+            if sdist_repo_map and pkg_key in sdist_repo_map:
+                sdist_target = sdist_repo_map[pkg_key]
+            else:
+                pkg_sdist_repo = sdist_repo_name(rctx_name, pkg_key)
+                sdist_target = "@@{}//:wheel".format(pkg_sdist_repo)
             has_sdist_repo = True
 
     # Wheel chooser

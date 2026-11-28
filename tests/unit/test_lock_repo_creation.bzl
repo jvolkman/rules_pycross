@@ -22,7 +22,6 @@ load(
     "extra_build_tool_names_for_testing",
     "filter_package_repo_overrides_for_testing",
     "known_packages_from_lock_for_testing",
-    "remote_file_dedup_key_and_repo_name_for_testing",
     "slim_thin_repo_overrides_for_testing",
 )
 
@@ -31,6 +30,14 @@ load("//pycross/private:lock_resolver.bzl", "PASSTHROUGH_PACKAGE_ATTRS")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "slim_workspace_lock")
+
+# buildifier: disable=bzl-visibility
+load(
+    "//pycross/private:repo_slots.bzl",
+    "assign_fork_slots",
+    "plan_workspace_remote_slots",
+    "sdist_slot_repo_name",
+)
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "canonicalize_package_key", "parse_flag_arg")
@@ -42,44 +49,128 @@ load("//pycross/private:variant_util.bzl", "split_variant_tokens", "variant_set_
 load("//pycross/private/thin_repo:metadata.bzl", "hook_subdir_build")
 
 # buildifier: disable=unused-variable
-def _test_remote_file_dedup_key_and_repo_name_impl(env, target):
-    """Filename-only remote files factor workspace pypi_indexes into cross-workspace dedup and repo names."""
-    fn = remote_file_dedup_key_and_repo_name_for_testing
-    key = "pkg-1.0-py3-none-any.whl/deadbeef"
+def _test_workspace_remote_slots_impl(env, target):
+    """Workspace-scoped remote file and sdist slots stay version-free and collision-free."""
+    pkgs_v1 = {
+        "requests@2.32.3": {
+            "wheel_candidates": [
+                {"filename": "requests-2.32.3-py3-none-any.whl", "file_reference": {"key": "req_whl_v1"}},
+            ],
+            "sdist_file": {"key": "req_sdist_v1"},
+        },
+        "numpy@1.26.4": {
+            "wheel_candidates": [
+                {"filename": "numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.whl", "file_reference": {"key": "np1_whl"}},
+            ],
+        },
+        "numpy@2.2.0": {
+            "wheel_candidates": [
+                {"filename": "numpy-2.2.0-cp312-cp312-manylinux_2_17_x86_64.whl", "file_reference": {"key": "np2_whl"}},
+            ],
+        },
+        "numpy[extra]@2.2.0": {},
+        "torch@2.9.1~aaaa1111": {
+            "wheel_candidates": [
+                {"filename": "torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", "file_reference": {"key": "t_a"}},
+            ],
+        },
+        "torch@2.9.1~bbbb2222": {
+            "wheel_candidates": [
+                {"filename": "torch-2.9.1-cp312-none-macosx_11_0_arm64.whl", "file_reference": {"key": "t_b"}},
+            ],
+        },
+        "buildtag@1.0.0": {
+            "wheel_candidates": [
+                {"filename": "buildtag-1.0.0-1-py3-none-any.whl", "file_reference": {"key": "bt1"}},
+                {"filename": "buildtag-1.0.0-2-py3-none-any.whl", "file_reference": {"key": "bt2"}},
+            ],
+        },
+        "collide@1.0.0": {
+            "wheel_candidates": [
+                {"filename": "collide-1.0.0-py2.py3-none-any.whl", "file_reference": {"key": "col1"}},
+                {"filename": "collide-1.0.0-py2_py3-none-any.whl", "file_reference": {"key": "col2"}},
+                {
+                    "filename": "collide-1.0.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl",
+                    "file_reference": {"key": "long1"},
+                },
+            ],
+        },
+    }
+    remote_v1 = {
+        "req_whl_v1": {"name": "requests-2.32.3-py3-none-any.whl"},
+        "req_sdist_v1": {"name": "requests-2.32.3.tar.gz"},
+        "np1_whl": {"name": "numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.whl"},
+        "np2_whl": {"name": "numpy-2.2.0-cp312-cp312-manylinux_2_17_x86_64.whl"},
+        "t_a": {"name": "torch-2.9.1-cp312-none-macosx_11_0_arm64.whl"},
+        "t_b": {"name": "torch-2.9.1-cp312-none-macosx_11_0_arm64.whl"},
+        "bt1": {"name": "buildtag-1.0.0-1-py3-none-any.whl"},
+        "bt2": {"name": "buildtag-1.0.0-2-py3-none-any.whl"},
+        "col1": {"name": "collide-1.0.0-py2.py3-none-any.whl"},
+        "col2": {"name": "collide-1.0.0-py2_py3-none-any.whl"},
+        "long1": {"name": "collide-1.0.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl"},
+    }
 
-    # Filename-only with no workspace indexes keeps the plain repo name.
-    k_default, r_default = fn(key, {"name": "pkg-1.0-py3-none-any.whl"}, [])
-    env.expect.that_str(r_default).equals("pypi_pkg_1_0_py3_none_any_whl_deadbeef")
+    slots_v1 = assign_fork_slots(pkgs_v1)
+    env.expect.that_str(slots_v1["requests@2.32.3"]).equals("")
+    env.expect.that_str(slots_v1["numpy@1.26.4"]).equals("s0")
+    env.expect.that_str(slots_v1["numpy@2.2.0"]).equals("s1")
+    env.expect.that_str(slots_v1["numpy[extra]@2.2.0"]).equals("s1")
+    env.expect.that_str(slots_v1["torch@2.9.1~aaaa1111"]).equals("s0")
+    env.expect.that_str(slots_v1["torch@2.9.1~bbbb2222"]).equals("s1")
 
-    # Different workspace pypi_indexes get distinct dedup keys and distinct repo names.
-    k_idx_a, r_idx_a = fn(key, {"name": "pkg-1.0-py3-none-any.whl"}, ["https://a.example.com/simple/"])
-    k_idx_b, r_idx_b = fn(key, {"name": "pkg-1.0-py3-none-any.whl"}, ["https://b.example.com/simple/"])
-    env.expect.that_bool(k_idx_a != k_default).equals(True)
-    env.expect.that_bool(k_idx_a != k_idx_b).equals(True)
-    env.expect.that_bool(r_idx_a != r_default).equals(True)
-    env.expect.that_bool(r_idx_a != r_idx_b).equals(True)
+    map_v1 = plan_workspace_remote_slots("ws_a", pkgs_v1, remote_v1, fork_slots = slots_v1)
+    env.expect.that_str(map_v1["req_whl_v1"]).equals("ws_a__whl_requests_py3_none_any")
+    env.expect.that_str(map_v1["req_sdist_v1"]).equals("ws_a__sdist_file_requests")
+    env.expect.that_str(sdist_slot_repo_name("ws_a", "requests@2.32.3", "")).equals("ws_a__sdist_requests")
+    env.expect.that_str(sdist_slot_repo_name("ws_a", "numpy@2.2.0", "s1")).equals("ws_a__sdist_numpy_s1")
 
-    # Identical workspace pypi_indexes deduplicate together; different order does not.
-    k_idx_ab, r_idx_ab = fn(key, {"name": "pkg-1.0-py3-none-any.whl"}, ["https://a.example.com/simple/", "https://b.example.com/simple/"])
-    k_idx_ab2, r_idx_ab2 = fn(key, {"name": "pkg-1.0-py3-none-any.whl"}, ["https://a.example.com/simple/", "https://b.example.com/simple/"])
-    k_idx_ba, r_idx_ba = fn(key, {"name": "pkg-1.0-py3-none-any.whl"}, ["https://b.example.com/simple/", "https://a.example.com/simple/"])
-    env.expect.that_bool(k_idx_ab == k_idx_ab2).equals(True)
-    env.expect.that_str(r_idx_ab).equals(r_idx_ab2)
-    env.expect.that_bool(k_idx_ab != k_idx_ba).equals(True)
-    env.expect.that_bool(r_idx_ab != r_idx_ba).equals(True)
+    # Multi-source forks and PEP 427 build tags get distinct repo names.
+    env.expect.that_bool(map_v1["t_a"] != map_v1["t_b"]).equals(True)
+    env.expect.that_bool(map_v1["bt1"] != map_v1["bt2"]).equals(True)
+    env.expect.that_bool(map_v1["col1"] != map_v1["col2"]).equals(True)
 
-    # Files with explicit urls or per-package index ignore workspace pypi_indexes.
-    k_url, r_url = fn(key, {"name": "pkg-1.0-py3-none-any.whl", "urls": ["https://files.example.com/pkg.whl"]}, ["https://a.example.com/simple/"])
-    env.expect.that_bool(k_url == k_default).equals(True)
-    env.expect.that_str(r_url).equals(r_default)
+    # Long wheel tag names are truncated + hashed to keep repo names bounded.
+    env.expect.that_bool(len(map_v1["long1"]) <= len("ws_a__whl_collide_") + 48).equals(True)
 
-    k_pkg_idx, r_pkg_idx = fn(key, {"name": "pkg-1.0-py3-none-any.whl", "index": "https://pkg.example.com/simple/"}, ["https://a.example.com/simple/"])
-    env.expect.that_bool(k_pkg_idx == k_default).equals(True)
-    env.expect.that_str(r_pkg_idx).equals(r_default)
+    # Workspace isolation: another workspace gets distinct repo names.
+    map_ws_b = plan_workspace_remote_slots("ws_b", pkgs_v1, remote_v1, fork_slots = slots_v1)
+    env.expect.that_str(map_ws_b["req_whl_v1"]).equals("ws_b__whl_requests_py3_none_any")
+    env.expect.that_bool(map_v1["req_whl_v1"] != map_ws_b["req_whl_v1"]).equals(True)
 
-def _test_remote_file_dedup_key_and_repo_name(name):
+    # Bumping requests 2.32.3 -> 2.32.4 and numpy 1.26.4/2.2.0 -> 1.26.5/2.2.1 preserves all repo names.
+    pkgs_v2 = {
+        "requests@2.32.4": {
+            "wheel_candidates": [
+                {"filename": "requests-2.32.4-py3-none-any.whl", "file_reference": {"key": "req_whl_v2"}},
+            ],
+            "sdist_file": {"key": "req_sdist_v2"},
+        },
+        "numpy@1.26.5": {
+            "wheel_candidates": [
+                {"filename": "numpy-1.26.5-cp311-cp311-manylinux_2_17_x86_64.whl", "file_reference": {"key": "np1_whl_v2"}},
+            ],
+        },
+        "numpy@2.2.1": {
+            "wheel_candidates": [
+                {"filename": "numpy-2.2.1-cp312-cp312-manylinux_2_17_x86_64.whl", "file_reference": {"key": "np2_whl_v2"}},
+            ],
+        },
+    }
+    remote_v2 = {
+        "req_whl_v2": {"name": "requests-2.32.4-py3-none-any.whl"},
+        "req_sdist_v2": {"name": "requests-2.32.4.tar.gz"},
+        "np1_whl_v2": {"name": "numpy-1.26.5-cp311-cp311-manylinux_2_17_x86_64.whl"},
+        "np2_whl_v2": {"name": "numpy-2.2.1-cp312-cp312-manylinux_2_17_x86_64.whl"},
+    }
+    map_v2 = plan_workspace_remote_slots("ws_a", pkgs_v2, remote_v2)
+    env.expect.that_str(map_v2["req_whl_v2"]).equals(map_v1["req_whl_v1"])
+    env.expect.that_str(map_v2["req_sdist_v2"]).equals(map_v1["req_sdist_v1"])
+    env.expect.that_str(map_v2["np1_whl_v2"]).equals(map_v1["np1_whl"])
+    env.expect.that_str(map_v2["np2_whl_v2"]).equals(map_v1["np2_whl"])
+
+def _test_workspace_remote_slots(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_remote_file_dedup_key_and_repo_name_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_workspace_remote_slots_impl)
 
 # buildifier: disable=unused-variable
 def _test_merge_workspace_locks_marker_deps_impl(env, target):
@@ -477,7 +568,7 @@ def lock_repo_creation_test_suite(name):
     test_suite(
         name = name,
         tests = [
-            _test_remote_file_dedup_key_and_repo_name,
+            _test_workspace_remote_slots,
             _test_merge_workspace_locks_marker_deps,
             _test_known_packages_from_lock,
             _test_lock_contract_and_helpers,

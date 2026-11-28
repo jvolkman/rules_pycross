@@ -18,13 +18,13 @@ load(
     "build_repo_name",
     "lock_sdist_deps_label",
     "pkgs_repo_name",
-    "sdist_repo_name",
     "whldir_name",
 )
 load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock", "slim_workspace_lock")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
+load("//pycross/private:repo_slots.bzl", "assign_fork_slots", "plan_workspace_remote_slots", "sdist_slot_repo_name")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "TRUE_FLAG_VALUES", "parse_flag_arg", "parse_package_key", "sanitize_name", "sdist_builds_disallowed")
+load("//pycross/private:util.bzl", "TRUE_FLAG_VALUES", "parse_flag_arg", "parse_package_key", "sdist_builds_disallowed")
 load("//pycross/private:variant_util.bzl", "split_variant_tokens", "variant_item_qname", "variant_set_suffix")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS")
@@ -84,32 +84,6 @@ def _validate_override_packages(override_configs, workspaces, resolved_locks):
                     workspace_name,
                     ", ".join(sorted(known_names[pkg_name].keys())),
                 ))
-
-def _remote_file_dedup_key(key, file, index_tuple):
-    """Return the cross-workspace deduplication key for a remote file.
-
-    Filename-only entries (no explicit `urls` and no per-package `index`) resolve
-    against the workspace's `pypi_indexes`, so different index lists must not
-    deduplicate to the same remote file repository across workspaces.
-    """
-    if file.get("urls") or file.get("index") or not index_tuple:
-        return (key, ())
-    return (key, index_tuple)
-
-def _remote_file_repo_name(key, file, indexes):
-    """Return the Bazel repository name for a remote file."""
-    base_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
-    if file.get("urls") or file.get("index") or not indexes:
-        return base_repo
-    idx_hash = "%x" % (hash("|".join(indexes)) & 0xffffffff)
-    return "{}_idx_{}".format(base_repo, idx_hash)
-
-def _remote_file_dedup_key_and_repo_name(key, file, indexes):
-    """Return (dedup_key, repo_name) for a remote file."""
-    return (
-        _remote_file_dedup_key(key, file, tuple(indexes)),
-        _remote_file_repo_name(key, file, indexes),
-    )
 
 def _create_remote_file_repo(remote_file_repo, file, indexes):
     is_wheel = file["name"].endswith(".whl")
@@ -349,7 +323,6 @@ def create_repos(
     Returns:
         None. Creates repos as a side effect.
     """
-    all_remote_files = {}
 
     # Build per-workspace, per-package override configs from registered override files.
     override_configs = {}
@@ -375,21 +348,13 @@ def create_repos(
     for workspace_name, ws in workspaces.items():
         workspace_repo_name = pkgs_repo_name(workspace_name)
         indexes = ws.pypi_indexes
-        index_tuple = tuple(indexes)
-        merged_repo_map = {}
         merged_remote_files = {}
 
         for repo in ws.repos:
             resolved_lock = resolved_locks[repo.name]
             for key, file in resolved_lock.get("remote_files", {}).items():
-                if key in merged_repo_map:
-                    continue
-                dedup_key = _remote_file_dedup_key(key, file, index_tuple)
-                if dedup_key not in all_remote_files:
-                    remote_file_repo = _remote_file_repo_name(key, file, indexes)
-                    all_remote_files[dedup_key] = _create_remote_file_repo(remote_file_repo, file, indexes)
-                merged_repo_map[key] = all_remote_files[dedup_key]
-                merged_remote_files[key] = file
+                if key not in merged_remote_files:
+                    merged_remote_files[key] = file
 
         skip_variant_members = [repo.name for repo in ws.repos if repo.is_auto_build_repo]
         merged_lock = merge_workspace_locks(
@@ -398,7 +363,21 @@ def create_repos(
         )
         merged_packages = merged_lock["packages"]
 
+        # Assign deterministic, workspace-scoped, version-free slots for all remote
+        # wheel/sdist archive repos and sdist build repos.
+        fork_slots = assign_fork_slots(merged_packages)
+        file_key_to_repo = plan_workspace_remote_slots(
+            workspace_name,
+            merged_packages,
+            merged_remote_files,
+            fork_slots = fork_slots,
+        )
+        merged_repo_map = {}
+        for key, remote_file_repo in sorted(file_key_to_repo.items()):
+            merged_repo_map[key] = _create_remote_file_repo(remote_file_repo, merged_remote_files[key], indexes)
+
         # Instantiate sdist repos once per workspace package requiring source builds.
+        sdist_repo_map = {}
         default_known_packages = known_packages_by_repo[ws.repos[0].name] if ws.repos else []
         for pkg_key, pkg in sorted(merged_packages.items()):
             if pkg.get("build_target") or sdist_builds_disallowed(pkg):
@@ -410,7 +389,8 @@ def create_repos(
 
             sdist_file_key = sdist_file["key"]
             sdist_label = merged_repo_map[sdist_file_key]
-            pkg_sdist_repo = sdist_repo_name(workspace_repo_name, pkg_key)
+            pkg_sdist_repo = sdist_slot_repo_name(workspace_name, pkg_key, fork_slots.get(pkg_key, ""))
+            sdist_repo_map[pkg_key] = "@{}//:wheel".format(pkg_sdist_repo)
 
             sdist_deps = (
                 [lock_sdist_deps_label(workspace_repo_name, pkg_key)] if pkg.get("marker_dependencies") else []
@@ -466,6 +446,7 @@ def create_repos(
             name = workspace_repo_name,
             build_repo = build_repo_name(workspace_name),
             repo_map = merged_repo_map,
+            sdist_repo_map = sdist_repo_map,
             backend_names = backend_names,
             lock_data = json.encode(slim_workspace_lock(merged_lock)),
         )
@@ -512,7 +493,6 @@ def create_repos(
 # Visible for testing
 validate_override_packages_for_testing = _validate_override_packages
 normalize_override_name_for_testing = _normalize_override_name
-remote_file_dedup_key_and_repo_name_for_testing = _remote_file_dedup_key_and_repo_name
 known_packages_from_lock_for_testing = _known_packages_from_lock
 extra_build_tool_names_for_testing = _extra_build_tool_names
 filter_package_repo_overrides_for_testing = _filter_package_repo_overrides

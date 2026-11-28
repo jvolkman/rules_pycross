@@ -22,7 +22,7 @@ load("//pycross/private/lock_render:reset_plan.bzl", "compute_reset_plan", "conf
 
 render_reset_bzl = _render_reset_bzl
 
-def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = False, reset_conflict_sets = None):
+def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = False, reset_conflict_sets = None, sdist_repo_map = None):
     """Renders a lock.bzl file along with generation metadata.
 
     Args:
@@ -34,6 +34,8 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
         reset_conflict_sets: The workspace's conflict sets (lists of qualified
             names). When given, packages that don't depend on the variant
             settings install with them reset (see render_reset_bzl).
+        sdist_repo_map: Optional dict mapping `pkg_key` to its explicit sdist
+            build wheel label (`@<ws>__sdist_<pkg>[_<slot>]//:wheel`).
 
     Returns:
         A `struct(content, has_reset)` where `content` is the rendered `lock.bzl`
@@ -112,6 +114,7 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
             reset_plan = reset_plan,
             loads = loads,
             marker_extra_cache = marker_extra_cache,
+            sdist_repo_map = sdist_repo_map,
         )
 
     if loads.get("cycle_dep_needed"):
@@ -152,7 +155,7 @@ def render_lock_bzl_with_meta(lock, repo_map, rctx_name = "", has_variants = Fal
         has_reset = has_reset,
     )
 
-def render_lock_bzl(lock, repo_map, rctx_name = "", has_variants = False, reset_conflict_sets = None):
+def render_lock_bzl(lock, repo_map, rctx_name = "", has_variants = False, reset_conflict_sets = None, sdist_repo_map = None):
     """Renders a lock.bzl file from a resolved lock structure.
 
     Args:
@@ -164,6 +167,8 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", has_variants = False, reset_
         reset_conflict_sets: The workspace's conflict sets (lists of qualified
             names). When given, packages that don't depend on the variant
             settings install with them reset (see render_reset_bzl).
+        sdist_repo_map: Optional dict mapping `pkg_key` to its explicit sdist
+            build wheel label (`@<ws>__sdist_<pkg>[_<slot>]//:wheel`).
 
     Returns:
         A string containing the rendered lock.bzl file.
@@ -174,4 +179,5 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", has_variants = False, reset_
         rctx_name = rctx_name,
         has_variants = has_variants,
         reset_conflict_sets = reset_conflict_sets,
+        sdist_repo_map = sdist_repo_map,
     ).content
