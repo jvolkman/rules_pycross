@@ -9,17 +9,17 @@ alias(
 
 pycross_transitioning_library_proxy(
     name = "pkg",
-    actual = "@golden_sdist_reset__pkgs//_lock:custom-build@1.0.0",
+    actual = "@golden_sdist_reset__pkg_custom_build//:pkg",
 )
 
 pycross_transitioning_file_proxy(
     name = "wheel",
-    actual = "@golden_sdist_reset__pkgs//_wheel:custom-build@1.0.0",
+    actual = "@golden_sdist_reset__pkg_custom_build//:wheel",
 )
 
 pycross_transitioning_file_proxy(
     name = "dist_info",
-    actual = "@golden_sdist_reset__pkgs//_lock:_dist_info_custom-build@1.0.0",
+    actual = "@golden_sdist_reset__pkg_custom_build//:dist_info",
 )
 
 alias(

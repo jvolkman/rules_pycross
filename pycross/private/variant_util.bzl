@@ -1,4 +1,4 @@
-"""UV conflict-variant naming, marker-folding, and `//_lock:_state` codec helpers."""
+"""UV conflict-variant naming, marker-folding, and `@<ws>__state//:_state` codec helpers."""
 
 load("@pypackaging.bzl", "pypackaging")
 load(":lock_contract.bzl", "VARIANT_STATE_USABLE_PREFIX")
@@ -279,13 +279,13 @@ def fold_variant_marker(
     fail("fold_variant_marker exceeded step bound: " + marker)
 
 def decode_variant_state(raw):
-    """Decode a canonical `//_lock:_state` JSON string into a dict of overrides.
+    """Decode a canonical `@<ws>__state//:_state` JSON string into a dict of overrides.
 
     Keys are `"p:<set>"` (pin), `"d:<set>"` (default), and `"u:<set>"` (usable
     items space-separated, `""` for none; absent means `"*"`, i.e. all usable).
 
     Args:
-        raw: Canonical JSON string from `//_lock:_state`, or `""`.
+        raw: Canonical JSON string from `@<ws>__state//:_state`, or `""`.
 
     Returns:
         Dict of `{key: value}`.
@@ -304,11 +304,11 @@ def merge_variant_state(current_raw, overrides):
     to the same canonical string for Bazel configuration deduplication.
 
     Args:
-        current_raw: Incoming `//_lock:_state` string (may be `""`).
+        current_raw: Incoming `@<ws>__state//:_state` string (may be `""`).
         overrides: Dict `{key: value}` owned by the transitioning repo.
 
     Returns:
-        Canonical encoded `//_lock:_state` string (`""` when empty).
+        Canonical encoded `@<ws>__state//:_state` string (`""` when empty).
     """
     merged = dict(decode_variant_state(current_raw))
     for k, v in overrides.items():

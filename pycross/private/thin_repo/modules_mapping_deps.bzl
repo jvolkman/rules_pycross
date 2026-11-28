@@ -1,25 +1,42 @@
 """Conditional deps computation for `pycross_modules_mapping` in thin package repos."""
 
 load("//pycross/private:build_text.bzl", "config_setting_group", "deps_plus_selects")
-load("//pycross/private:lock_contract.bzl", "lock_constraint_label", "lock_raw_label", "lock_target_label")
+load(
+    "//pycross/private:lock_contract.bzl",
+    "member_constraint_label",
+    "slot_key_id",
+    "spoke_slot_label",
+    "state_repo_name",
+)
 load("//pycross/private:util.bzl", "sanitize_name")
 load(":common.bzl", "is_key_platform_specific")
 load(":selects.bzl", "unselected_condition")
 load(":variants.bzl", "effective_defaults")
 
-def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no_variant_fallbacks = None, pins_by_set = None, defaults_by_set = None, excluded = None, resolution_marker_exprs = None):
+def modules_mapping_deps(
+        pins,
+        packages,
+        workspace_name,
+        state_repo = None,
+        variant_info = None,
+        no_variant_fallbacks = None,
+        pins_by_set = None,
+        defaults_by_set = None,
+        excluded = None,
+        resolution_marker_exprs = None):
     """Compute conditional `deps` lines and helper config_setting_groups for `pycross_modules_mapping`.
 
     Resolution-marker forks and pinned/defaulted repo variants are selected on
     their active condition so inactive forks are never analyzed or fetched.
     Unpinned conflict variants without a repo default remain unioned when no
-    variant flag is set (via `_unselected_<set>`), while narrowing to the active
-    variant when a flag is set.
+    variant flag is set (via `@<state_repo>//:_unselected_<set>`), while narrowing
+    to the active variant when a flag is set.
 
     Args:
-        pins: Normalized pin dict mapping pin name -> `{constraint: pkg_key}`.
-        packages: Lock packages dict.
-        workspace_repo: Name of the workspace (backing) repo.
+        pins: Normalized pin dict mapping pin name -> `{constraint: slot_key}`.
+        packages: Slimmed member packages dict keyed by slot key.
+        workspace_name: Workspace name.
+        state_repo: Optional apparent name of `@<ws>__state` (defaults to `state_repo_name(workspace_name)`).
         variant_info: Result of `collect_variants`, or None.
         no_variant_fallbacks: Result of `variant_fallbacks`, or None.
         pins_by_set: Dict of set suffix -> pinned qname, or None.
@@ -27,11 +44,12 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
             default qname (from `transition_settings`). Computed from
             `variant_info` when omitted.
         excluded: Set/dict of qnames excluded by pins, or None.
-        resolution_marker_exprs: Lock `resolution_marker_exprs` dict, or None.
+        resolution_marker_exprs: Member `resolution_marker_exprs` dict, or None.
 
     Returns:
         `struct(deps_lines, extra_target_lines, maybe_mapping_targets, needs_selects, unselected_groups)`.
     """
+    state_repo = state_repo or state_repo_name(workspace_name)
     pins_by_set = pins_by_set or {}
     excluded = excluded or {}
     if defaults_by_set == None:
@@ -39,25 +57,21 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
     resolution_marker_exprs = resolution_marker_exprs or {}
     sets_by_constraint = no_variant_fallbacks.sets if no_variant_fallbacks else {}
 
-    maybe_mapping_targets = {}  # maybe_name -> (pkg_key, lock_label)
+    maybe_mapping_targets = {}  # maybe_name -> (slot_key, spoke_raw_label)
     unconditional = {}  # dep_label -> True
     conditional = {}  # dep_label -> {constraint: True}
 
     for pin_name in sorted(pins.keys()):
         pin_target_dict = pins[pin_name]
         for constraint, pin_target in sorted(pin_target_dict.items()):
-            package = packages.get(pin_target, {})
-            if package.get("cycle_group"):
-                lock_label = lock_raw_label(workspace_repo, pin_target)
-            else:
-                lock_label = lock_target_label(workspace_repo, pin_target)
+            spoke_label = spoke_slot_label(workspace_name, pin_target, "raw")
 
             if is_key_platform_specific(packages, pin_target):
-                maybe_name = sanitize_name(pin_target)
-                maybe_mapping_targets[maybe_name] = (pin_target, lock_label)
+                maybe_name = slot_key_id(pin_target)
+                maybe_mapping_targets[maybe_name] = (pin_target, spoke_label)
                 dep_label = "//__maybe:%s" % maybe_name
             else:
-                dep_label = lock_label
+                dep_label = spoke_label
 
             if constraint == "":
                 unconditional[dep_label] = True
@@ -75,7 +89,7 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
             continue
         conds_set = {}
         for constraint in sorted(conditional[dep_label].keys()):
-            conds_set[lock_constraint_label(workspace_repo, constraint)] = True
+            conds_set[member_constraint_label(state_repo, constraint, resolution_marker_exprs)] = True
 
             # Check whether this constraint belongs to an unpinned conflict variant
             # (either bare variant qname or compound {variant, marker}).
@@ -91,16 +105,10 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
             if not v_sets or variant_qname in excluded:
                 continue
 
-            # If any set containing this variant has a pin or non-excluded
-            # default, do not union it via _unselected_: when pinned/defaulted
-            # to this variant, @ws//_lock:is_<v> already activates under the
-            # repo's transition; when pinned/defaulted to a rival (or when a
-            # rival CLI flag is passed in that set), unioning an unselected
-            # sibling set would falsely pull this variant in.
             if any([s in pins_by_set or s in defaults_by_set for s in v_sets]):
                 continue
 
-            unselected = unselected_condition(sorted(v_sets), workspace_repo)
+            unselected = unselected_condition(sorted(v_sets), state_repo)
             unselected_groups.update(unselected.groups)
             unselected_cond = unselected.condition
 
@@ -111,7 +119,7 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
                     extra_target_lines.extend(config_setting_group(
                         comp_name,
                         "match_all",
-                        [unselected_cond, lock_constraint_label(workspace_repo, marker_cname)],
+                        [unselected_cond, member_constraint_label(state_repo, marker_cname, resolution_marker_exprs)],
                     ))
                 conds_set[":{}".format(comp_name)] = True
             else:

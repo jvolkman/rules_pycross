@@ -7,10 +7,13 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
+load("//pycross/private:repo_slots.bzl", "assign_fork_slots")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "marker_evaluator_name")
+load("//pycross/private:spoke_repo.bzl", "build_spoke_payloads", "render_spoke_build")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "hex_hash8", "marker_evaluator_name")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -21,9 +24,6 @@ load(
     "select_canonical_source",
     "single_incoming_marker",
 )
-
-# buildifier: disable=bzl-visibility
-load("//pycross/private/lock_render:cycles.bzl", "render_marker_cycle_member_deps")
 
 # ── Test: Linear Chain Collapsing ─────────────────────────────────────
 
@@ -549,9 +549,23 @@ def _test_fuzz_reachability_equivalence(name):
 
 # ── Test: Repo-Rule-Time Cycle Rendering Paths ────────────────────────
 
+def _render_spokes(lock, repo_map):
+    pkgs = lock["packages"]
+    slots = assign_fork_slots(pkgs)
+    spokes = build_spoke_payloads(
+        "ws",
+        "ws__state",
+        pkgs,
+        repo_map,
+        {},
+        slots,
+        cycle_groups = lock.get("cycle_groups"),
+    )
+    return {name: render_spoke_build(s.payload) for name, s in spokes.items()}
+
 def _test_repo_time_cycle_rendering_impl(env, _target):
-    # 1. Hub graph with 1-hop markers in unique_markers -> 0 _cycle_needed_* targets,
-    #    reuses _marker_eval_*_match, 0 _EDGES_JSON, no cycle_dep_needed.bzl load,
+    # 1. Hub graph with 1-hop markers -> 0 _cycle_needed_* targets,
+    #    reuses local _marker_eval_*_match, 0 _EDGES_JSON, no cycle_dep_needed.bzl load,
     #    and combines sibling groups sharing the same 1-hop match into one select().
     hub_lock = {
         "cycle_groups": {
@@ -584,19 +598,20 @@ def _test_repo_time_cycle_rendering_impl(env, _target):
             },
         },
     }
-    hub_res = render_lock_bzl(
+    hub_spokes = _render_spokes(
         hub_lock,
         {"hub_w": "@r//hub:w", "a_w": "@r//a:w", "c1_w": "@r//c1:w", "c2_w": "@r//c2:w"},
-        "ws__pkgs",
     )
+    hub_all = "\n".join(hub_spokes.values())
     linux_match = marker_evaluator_name("sys_platform == 'linux'") + "_match"
-    env.expect.that_bool("_cycle_needed_" in hub_res).equals(False)
-    env.expect.that_bool("_EDGES_JSON" in hub_res).equals(False)
-    env.expect.that_bool("cycle_dep_needed.bzl" in hub_res).equals(False)
-    env.expect.that_str(hub_res).contains('":{}": [":_raw_c1@1.0", ":_raw_c2@1.0"]'.format(linux_match))
+    env.expect.that_bool("_cycle_needed_" in hub_all).equals(False)
+    env.expect.that_bool("_EDGES_JSON" in hub_all).equals(False)
+    env.expect.that_bool("cycle_dep_needed.bzl" in hub_all).equals(False)
+    env.expect.that_str(hub_spokes["hub"]).contains('":{}": ["@ws__pkg_c1//:_raw", "@ws__pkg_c2//:_raw"]'.format(linux_match))
+    env.expect.that_str(hub_spokes["a"]).contains('":{}": ["@ws__pkg_c1//:_raw", "@ws__pkg_c2//:_raw"]'.format(linux_match))
 
-    # 2a. Multi-hop conditional cycle -> deduplicated _cycle_needed_* per (canonical_source, rep),
-    #     emits _{GROUP}_EDGES_JSON once, loads pycross_cycle_dep_needed, gates deps behind select().
+    # 2. Multi-hop conditional cycle -> emits _CYCLE_EDGES_JSON and pycross_cycle_dep_needed
+    #    with version-free node keys and cross-spoke raw labels.
     multihop_lock = {
         "cycle_groups": {
             "cycle_mh": ["a@1.0", "a_peer@1.0", "b@1.0", "c@1.0"],
@@ -629,55 +644,20 @@ def _test_repo_time_cycle_rendering_impl(env, _target):
             },
         },
     }
-    mh_res = render_lock_bzl(
+    mh_spokes = _render_spokes(
         multihop_lock,
         {"a_w": "@r//a:w", "ap_w": "@r//ap:w", "b_w": "@r//b:w", "c_w": "@r//c:w"},
-        "ws__pkgs",
     )
-    env.expect.that_str(mh_res).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
-    env.expect.that_int(mh_res.count("_CYCLE_MH_EDGES_JSON = ")).equals(1)
-
-    # Both a@1.0 and a_peer@1.0 share canonical source a@1.0 -> only ONE _cycle_needed_a_1_0_c_1_0 rule.
-    env.expect.that_int(mh_res.count('name = "_cycle_needed_a_1_0_c_1_0",')).equals(1)
-    env.expect.that_int(mh_res.count('name = "_cycle_needed_a_1_0_c_1_0_match",')).equals(1)
-    env.expect.that_str(mh_res).contains('":_cycle_needed_a_1_0_c_1_0_match": [":_raw_c@1.0"]')
-
-    # 2b. Direct render_marker_cycle_member_deps call with marker absent from unique_markers
-    #     falls back to canonical-source-deduplicated _cycle_needed_*.
-    fallback_lines = []
-    fallback_loads = {}
-    render_marker_cycle_member_deps(
-        fallback_lines,
-        {"cycle_m2": ["m2_hub@1.0", "m2_a@1.0", "m2_a[dev]@1.0", "m2_c@1.0"]},
-        {
-            "m2_hub@1.0": {
-                "marker_dependencies": [
-                    {"key": "m2_a@1.0"},
-                    {"key": "m2_a[dev]@1.0"},
-                    {"key": "m2_c@1.0", "marker": "sys_platform == 'm2_linux'"},
-                ],
-            },
-            "m2_a@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
-            "m2_a[dev]@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
-            "m2_c@1.0": {"marker_dependencies": [{"key": "m2_hub@1.0"}]},
-        },
-        loads = fallback_loads,
-    )
-    fallback_text = "\n".join(fallback_lines)
-    env.expect.that_bool(fallback_loads.get("cycle_dep_needed", False)).equals(True)
-    env.expect.that_int(fallback_text.count("_CYCLE_M2_EDGES_JSON = ")).equals(1)
-    env.expect.that_int(fallback_text.count("pycross_cycle_dep_needed(")).equals(1)
-    env.expect.that_str(fallback_text).contains('name = "_cycle_needed_m2_hub_1_0_m2_c_1_0",')
-
-    # Verify the encoded _EDGES_JSON literal decodes back to valid JSON containing the edge marker.
-    edges_rhs = fallback_text.split("_CYCLE_M2_EDGES_JSON = ")[1].split("\n", 1)[0]
+    a_build = mh_spokes["a"]
+    env.expect.that_str(a_build).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
+    env.expect.that_int(a_build.count("_CYCLE_EDGES_JSON = ")).equals(1)
+    ac_pair = "_cycle_needed_a__c_{}".format(hex_hash8("a|c"))
+    env.expect.that_str(a_build).contains('name = "{}",'.format(ac_pair))
+    env.expect.that_str(a_build).contains('":{}_match": ["@ws__pkg_c//:_raw"]'.format(ac_pair))
+    edges_rhs = a_build.split("_CYCLE_EDGES_JSON = ")[1].split("\n", 1)[0]
     decoded_edges = json.decode(json.decode(edges_rhs))
-    env.expect.that_bool("m2_hub@1.0" in decoded_edges).equals(True)
-    env.expect.that_collection([e["dep"] for e in decoded_edges["m2_hub@1.0"]]).contains_exactly([
-        "m2_a@1.0",
-        "m2_a[dev]@1.0",
-        "m2_c@1.0",
-    ])
+    env.expect.that_bool("a" in decoded_edges).equals(True)
+    env.expect.that_collection([e["dep"] for e in decoded_edges["a"]]).contains_exactly(["a_peer", "b"])
 
     # 3. Pure unconditional cycle -> direct pycross_library_proxy with flat deps,
     #    0 _cycle_needed_*, 0 _EDGES_JSON, no cycle_dep_needed.bzl load.
@@ -698,24 +678,15 @@ def _test_repo_time_cycle_rendering_impl(env, _target):
             },
         },
     }
-    uncond_res = render_lock_bzl(uncond_lock, {"u1_w": "@r//u1:w", "u2_w": "@r//u2:w"}, "ws__pkgs")
-    env.expect.that_bool("_cycle_needed_" in uncond_res).equals(False)
-    env.expect.that_bool("_EDGES_JSON" in uncond_res).equals(False)
-    env.expect.that_bool("cycle_dep_needed.bzl" in uncond_res).equals(False)
-    env.expect.that_bool("select({" in uncond_res).equals(False)
-    env.expect.that_str(uncond_res).contains(
-        'pycross_library_proxy(\n        name = "u1@1.0",\n        actual = ":_raw_u1@1.0",\n        deps = [\n            ":_raw_u2@1.0",\n        ],\n    )',
+    uncond_spokes = _render_spokes(uncond_lock, {"u1_w": "@r//u1:w", "u2_w": "@r//u2:w"})
+    u1_build = uncond_spokes["u1"]
+    env.expect.that_bool("_cycle_needed_" in u1_build).equals(False)
+    env.expect.that_bool("_EDGES_JSON" in u1_build).equals(False)
+    env.expect.that_bool("cycle_dep_needed.bzl" in u1_build).equals(False)
+    env.expect.that_bool("select({" in u1_build).equals(False)
+    env.expect.that_str(u1_build).contains(
+        'pycross_library_proxy(\n    name = "pkg",\n    actual = ":_raw",\n    deps = [\n        "@ws__pkg_u2//:_raw",\n    ],\n)',
     )
-
-    # 4. Single-member degenerate cycle -> native.alias directly to _raw_<pkg>.
-    single_lines = []
-    render_marker_cycle_member_deps(
-        single_lines,
-        {"cycle_one": ["solo@1.0"]},
-        {"solo@1.0": {"marker_dependencies": [{"key": "solo@1.0"}]}},
-    )
-    single_text = "\n".join(single_lines)
-    env.expect.that_str(single_text).contains('native.alias(\n        name = "solo@1.0",\n        actual = ":_raw_solo@1.0",\n    )')
 
 def _test_repo_time_cycle_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject")

@@ -4,7 +4,7 @@ load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_
 load("@rules_pycross//pycross/private:variant_util.bzl", "merge_variant_state")
 
 # Variant pins, defaults, and usable narrowing merged over incoming _state.
-_VARIANT_STATE_LABEL = "@golden_sdist_reset__pkgs//_lock:_state"
+_VARIANT_STATE_LABEL = "@golden_sdist_reset__state//:_state"
 
 _VARIANT_STATE_OVERRIDES = {
     "d:extra_app_cpu_extra_app_gpu": "extra_app_cpu",
@@ -24,11 +24,11 @@ _repo_transition = transition(
     implementation = _transition_impl,
     inputs = [
         "//command_line_option:platforms",
-        "@golden_sdist_reset__pkgs//_lock:_state",
+        "@golden_sdist_reset__state//:_state",
     ],
     outputs = [
         "//command_line_option:platforms",
-        "@golden_sdist_reset__pkgs//_lock:_state",
+        "@golden_sdist_reset__state//:_state",
     ],
 )
 

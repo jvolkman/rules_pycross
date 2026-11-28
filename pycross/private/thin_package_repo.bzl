@@ -1,54 +1,51 @@
-"""A thin package repo that delegates to a workspace for shared resources.
+"""A version-free thin package repo that delegates to workspace state and per-package spokes.
 
-Each user-facing repo is "thin": it only contains pin aliases,
-requirements.bzl, and modules_mapping.json. The actual
-pycross_wheel_library targets live in the shared workspace repo.
+Each user-facing repo is "thin" and 100% version-free: it only contains
+version-free pin aliases pointing to `@<ws>__pkg_<name>` spokes, variant
+flags referencing `@<ws>__state`, member-local `_markers/` evaluators,
+`requirements.bzl`, and `modules_mapping`.
 
-The file structure is:
-- BUILD.bazel              - Root aliases (//:package).
-- requirements.bzl         - Provides requirement(), all_requirements and all_testonly_requirements.
-- modules_mapping.json     - Import-to-package mapping for Gazelle.
-- <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_lock targets.
-- _variants/BUILD.bazel    - This repo's variant flags, is_<flag> config settings and no-variant errors.
+The file structure is as follows:
+- BUILD.bazel              - Root aliases (`//:package`) and `modules_mapping`.
+- requirements.bzl         - Provides `requirement()`, `all_requirements`, and `all_testonly_requirements`.
+- <package>/BUILD.bazel    - Pin proxies pointing to `@<ws>__pkg_<name>` targets.
+- _markers/BUILD.bazel     - Member-local PEP 508 and resolution-marker evaluators (when needed).
+- _variants/BUILD.bazel    - This repo's variant flags, `is_<flag>` config_settings, and no-variant errors.
+- _backend/<rule>.bzl      - Forwarding aliases to `@<ws>__state//_backend/<rule>.bzl`.
+- <subdir>/BUILD.bazel     - Version-free aliases to per-spoke hook targets (e.g. `_cargo/`).
 """
 
-load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS", "PACKAGE_REPO_HOOK_SUBDIRS")
 load("//pycross/private/thin_repo:availability.bzl", "render_maybe_build")
-load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS", "emit_backend_files", "hook_subdir_build", "requirements_bzl")
+load("//pycross/private/thin_repo:markers.bzl", "render_member_markers_build")
+load("//pycross/private/thin_repo:metadata.bzl", "emit_backend_files", "hook_subdir_build", "requirements_bzl")
 load("//pycross/private/thin_repo:modules_mapping_deps.bzl", "modules_mapping_deps")
 load("//pycross/private/thin_repo:pins.bzl", "append_root_aliases", "emit_pin_directories")
 load("//pycross/private/thin_repo:selects.bzl", "variant_fallbacks")
 load("//pycross/private/thin_repo:transition.bzl", "render_transition_bzl")
 load("//pycross/private/thin_repo:variants.bzl", "collect_variants", "transition_settings", "variants_build")
-load(":lock_contract.bzl", "variant_state_label")
+load(":lock_contract.bzl", "state_flag_label", "state_repo_name")
 load(":util.bzl", "parse_package_key")
 
 def _thin_package_repo_impl(rctx):
-    workspace_repo = rctx.attr.workspace_repo
+    workspace_name = rctx.attr.workspace_name
+    state_repo = state_repo_name(workspace_name)
     lock = json.decode(rctx.attr.lock_data)
     packages = lock["packages"]
     pins = lock["pins"]
     testonly_pins_set = {p: True for p in lock.get("testonly_pins", [])}
 
     # Normalize pin values: bare strings (unconditional) become {"": value}.
-    # Kept because hand-authored resolved-lock fixtures (e.g. tests/golden/fixtures/*.json)
-    # pass bare string pins directly to thin_package_repo.
     for pin_name in pins.keys():
         if type(pins[pin_name]) == "string":
             pins[pin_name] = {"": pins[pin_name]}
 
-    # This repo's variant flags and conflict sets. Every set gets an
-    # _unselected_<set> -> _no_variant_<set> fallback in selects; defaults come
-    # from this repo's transition (`d:<set>` in `//_lock:_state`), not //conditions:default.
+    # This repo's variant flags and conflict sets.
     variant_info = collect_variants(lock.get("variants", []))
-    sets_by_constraint = {}  # constraint -> [conflict set suffixes (sorted qnames joined by "_")]
+    sets_by_constraint = {}  # constraint -> [conflict set suffixes]
     for set_suffix, vset in sorted(variant_info.sets.items()):
         for qname in vset.qnames:
             sets_by_constraint.setdefault(qname, []).append(set_suffix)
 
-    # Only compound {variant, marker} constraints need a variant. A plain marker
-    # constraint (an unconflicted edge that uv split by conflict markers) is
-    # valid with no variant selected, e.g. `extra != '__variant_package_a'`.
     resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
     for cname, expr in resolution_marker_exprs.items():
         if type(expr) == "dict" and expr.get("variant") in sets_by_constraint:
@@ -57,6 +54,15 @@ def _thin_package_repo_impl(rctx):
 
     rctx.file("REPO.bazel", "")
     rctx.file("requirements.bzl", requirements_bzl(rctx, pins, packages, testonly_pins_set))
+
+    markers_content = render_member_markers_build(
+        packages,
+        resolution_marker_exprs,
+        state_repo,
+        has_variants = bool(variant_info.sets),
+    )
+    if markers_content:
+        rctx.file("_markers/BUILD.bazel", markers_content)
 
     # Group pins by base package name to identify extras.
     grouped_pins = {}
@@ -115,7 +121,7 @@ def _thin_package_repo_impl(rctx):
                 rctx.attr.member_name,
                 rctx.attr.flags,
                 rctx.attr.settings,
-                variant_state_label = variant_state_label(workspace_repo) if state_overrides else "",
+                variant_state_label = state_flag_label(state_repo) if state_overrides else "",
                 variant_state_overrides = state_overrides,
             ),
         )
@@ -126,7 +132,8 @@ def _thin_package_repo_impl(rctx):
     mm = modules_mapping_deps(
         pins,
         packages,
-        workspace_repo,
+        workspace_name,
+        state_repo = state_repo,
         variant_info = variant_info,
         no_variant_fallbacks = no_variant_fallbacks,
         pins_by_set = pins_by_set,
@@ -168,7 +175,7 @@ def _thin_package_repo_impl(rctx):
     root_build_lines.extend([")", ""])
 
     if mm.maybe_mapping_targets:
-        rctx.file("__maybe/BUILD.bazel", render_maybe_build(mm.maybe_mapping_targets, packages, workspace_repo))
+        rctx.file("__maybe/BUILD.bazel", render_maybe_build(mm.maybe_mapping_targets, packages, workspace_name))
 
     append_root_aliases(root_build_lines, grouped_pins)
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
@@ -177,46 +184,40 @@ def _thin_package_repo_impl(rctx):
         rctx,
         grouped_pins,
         packages,
-        workspace_repo,
+        workspace_name,
         no_variant_fallbacks,
         target_platform,
         has_flags,
         testonly_pins_set,
+        state_repo = state_repo,
         resolution_marker_exprs = resolution_marker_exprs,
     ))
-    emit_backend_files(rctx, rctx.attr.backend_names, workspace_repo)
+    emit_backend_files(rctx, rctx.attr.backend_names, state_repo)
 
-    hook_backends_by_subdir = {}
-    for backend_name, subdir in sorted(PACKAGE_REPO_HOOK_SUBDIRS.items()):
-        if subdir and backend_name in PACKAGE_REPO_HOOKS:
-            hook_backends_by_subdir.setdefault(subdir, []).append(backend_name)
-    for legacy_backend in LEGACY_CARGO_HOOK_BACKENDS:
-        if legacy_backend in PACKAGE_REPO_HOOKS and legacy_backend not in PACKAGE_REPO_HOOK_SUBDIRS:
-            hook_backends_by_subdir.setdefault("_cargo", []).append(legacy_backend)
+    # Emit <subdir>/BUILD.bazel for any hook subdirs present in this member's pins.
+    hook_subdirs = {}
+    for pkg in packages.values():
+        for subdir in pkg.get("hook_subdirs", []):
+            hook_subdirs[subdir] = True
+    for subdir in sorted(hook_subdirs.keys()):
+        hook_result = hook_subdir_build(
+            grouped_pins,
+            packages,
+            workspace_name,
+            state_repo = state_repo,
+            no_variant_fallbacks = no_variant_fallbacks,
+            subdir = subdir,
+            resolution_marker_exprs = resolution_marker_exprs,
+        )
+        if hook_result:
+            unselected_groups.update(hook_result.unselected_groups)
+            rctx.file("{}/BUILD.bazel".format(subdir), hook_result.build)
 
-    if rctx.attr.override_configs and hook_backends_by_subdir:
-        override_configs = json.decode(rctx.attr.override_configs)
-        for subdir, hook_backends in sorted(hook_backends_by_subdir.items()):
-            hook_result = hook_subdir_build(
-                grouped_pins,
-                packages,
-                override_configs,
-                workspace_repo,
-                no_variant_fallbacks = no_variant_fallbacks,
-                hook_backends = hook_backends,
-                subdir = subdir,
-                resolution_marker_exprs = resolution_marker_exprs,
-            )
-            if hook_result:
-                unselected_groups.update(hook_result.unselected_groups)
-                rctx.file("{}/BUILD.bazel".format(subdir), hook_result.build)
-
-    # _variants/ BUILD: this repo's variant flags (see variants_build), including
-    # every `_unselected_all_*` group collected from the selects above.
+    # _variants/ BUILD: this repo's variant flags, including every `_unselected_all_*` group.
     variants_content = variants_build(
         variant_info,
-        workspace_repo,
-        getattr(rctx, "original_name", "") or "<repo>",
+        state_repo,
+        rctx.attr.member_name,
         unselected_groups = unselected_groups,
         pins_by_set = pins_by_set,
         defaults_by_set = defaults_by_set,
@@ -234,12 +235,12 @@ thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
         "lock_data": attr.string(
-            doc = "JSON-encoded slimmed per-member lock manifest from slim_member_lock().",
+            doc = "JSON-encoded version-free per-member lock manifest from slim_member_lock().",
             mandatory = True,
         ),
-        "workspace_repo": attr.string(
+        "workspace_name": attr.string(
             mandatory = True,
-            doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
+            doc = "Workspace name used to derive `@<ws>__state` and `@<ws>__pkg_<name>` repo names.",
         ),
         "member_name": attr.string(
             mandatory = True,
@@ -265,10 +266,7 @@ thin_package_repo = repository_rule(
         ),
         "variant_pins": attr.string_dict(
             doc = "Conflict set suffix -> qualified name of the variant this repo's flags/settings select. " +
-                  "Its transition merges `p:<set>` into the workspace repo's `//_lock:_state`.",
-        ),
-        "override_configs": attr.string(
-            doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",
+                  "Its transition merges `p:<set>` into `@<ws>__state//:_state`.",
         ),
         "expose_variant_flags": attr.bool(
             doc = "Whether to emit user-facing `_variants` flags in this thin repo.",

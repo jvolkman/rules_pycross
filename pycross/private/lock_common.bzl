@@ -2,7 +2,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@toml.bzl//toml:toml.bzl", "decode")
-load(":lock_contract.bzl", "build_repo_name")
+load(":lock_contract.bzl", "build_repo_name", "is_reserved_internal_repo_name")
 
 def validate_transition_attrs(tag, tag_name):
     """Validates that transition attributes are mutually exclusive.
@@ -27,6 +27,14 @@ def check_unique_repo_name(owners, module_name, repo_name):
             owners[repo_name],
         ))
     owners[repo_name] = module_name
+
+def _check_reserved_repo_name(ws_names, repo_name):
+    for ws_name in ws_names:
+        if is_reserved_internal_repo_name(ws_name, repo_name):
+            fail("lock repo '{}' conflicts with reserved internal repository name for workspace '{}'".format(
+                repo_name,
+                ws_name,
+            ))
 
 _EMPTY_TRANSITION = struct(
     flags = [],
@@ -243,6 +251,10 @@ def process_workspaces(
             fail("Duplicate workspace name: '{}'".format(ws_name))
         ws_infos[ws_name] = tag_info
 
+    ws_names = ws_infos.keys()
+    for ws_name in ws_names:
+        _check_reserved_repo_name(ws_names, ws_name)
+
     # Auto-discover members and compute extra_project_files for each workspace.
     ws_discovered = {}
     ws_extra_project_files = {}
@@ -311,6 +323,7 @@ def process_workspaces(
         raw_groups = getattr(tag, "dependency_groups", ["default"])
         _warn_redundant_dependency_groups(repo_name, ws_name, raw_groups)
 
+        _check_reserved_repo_name(ws_names, repo_name)
         check_unique_repo_name(owners, tag_info.module.name, repo_name)
         _record_root_dep(
             tag_info.module,

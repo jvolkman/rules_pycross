@@ -16,18 +16,30 @@ load(
     "VARIANTS_PACKAGE",
     "VARIANTS_STRING_FLAG_TARGET",
     "build_repo_name",
-    "lock_sdist_deps_label",
-    "pkgs_repo_name",
-    "sdist_repo_name",
+    "is_extras_proxy",
+    "spoke_repo_name",
+    "spoke_sdist_deps_target",
+    "spoke_sdist_target",
+    "state_repo_name",
     "whldir_name",
 )
-load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock", "slim_workspace_lock")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
+load("//pycross/private:repo_slots.bzl", "assign_fork_slots", "plan_workspace_remote_slots", "sdist_slot_repo_name")
+load("//pycross/private:spoke_repo.bzl", "build_spoke_payloads", "spoke_repo")
+load(
+    "//pycross/private:state_repo.bzl",
+    "is_spoke_hook_backend",
+    "merge_workspace_locks",
+    "normalize_workspace_variants",
+    "slim_member_lock",
+    "spoke_hook_backend_subdirs",
+    "state_repo",
+)
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "TRUE_FLAG_VALUES", "parse_flag_arg", "parse_package_key", "sanitize_name", "sdist_builds_disallowed")
+load("//pycross/private:util.bzl", "TRUE_FLAG_VALUES", "parse_flag_arg", "parse_package_key", "sdist_builds_disallowed")
 load("//pycross/private:variant_util.bzl", "split_variant_tokens", "variant_item_qname", "variant_set_suffix")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
-load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS")
+load("//pycross/private/lock_render:reset_plan.bzl", "compute_workspace_reset_states", "conflict_pairs")
 load(":git_file.bzl", "pycross_git_file")
 
 sdist_builds_disallowed_for_testing = sdist_builds_disallowed
@@ -84,32 +96,6 @@ def _validate_override_packages(override_configs, workspaces, resolved_locks):
                     workspace_name,
                     ", ".join(sorted(known_names[pkg_name].keys())),
                 ))
-
-def _remote_file_dedup_key(key, file, index_tuple):
-    """Return the cross-workspace deduplication key for a remote file.
-
-    Filename-only entries (no explicit `urls` and no per-package `index`) resolve
-    against the workspace's `pypi_indexes`, so different index lists must not
-    deduplicate to the same remote file repository across workspaces.
-    """
-    if file.get("urls") or file.get("index") or not index_tuple:
-        return (key, ())
-    return (key, index_tuple)
-
-def _remote_file_repo_name(key, file, indexes):
-    """Return the Bazel repository name for a remote file."""
-    base_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
-    if file.get("urls") or file.get("index") or not indexes:
-        return base_repo
-    idx_hash = "%x" % (hash("|".join(indexes)) & 0xffffffff)
-    return "{}_idx_{}".format(base_repo, idx_hash)
-
-def _remote_file_dedup_key_and_repo_name(key, file, indexes):
-    """Return (dedup_key, repo_name) for a remote file."""
-    return (
-        _remote_file_dedup_key(key, file, tuple(indexes)),
-        _remote_file_repo_name(key, file, indexes),
-    )
 
 def _create_remote_file_repo(remote_file_repo, file, indexes):
     is_wheel = file["name"].endswith(".whl")
@@ -188,7 +174,7 @@ def _variants_flag_ref(label):
     return (repo, flag)
 
 def _compute_variant_pins(member, flags, settings, resolved_locks):
-    """Compute the variants a repo's `flags`/`settings` select, for its transition's `p:<set>` entry in `//_lock:_state`.
+    """Compute the variants a repo's `flags`/`settings` select, for its transition's `p:<set>` entry in `@<ws>__state//:_state`.
 
     Args:
         member: The repo name.
@@ -306,34 +292,46 @@ def _filter_package_repo_overrides(ws_overrides, package_repo_hooks):
             filtered[pkg_spec] = kept
     return filtered
 
-def _slim_thin_repo_overrides(ws_overrides, package_repo_hooks, hook_subdirs):
-    """Retain only hook-subdir backend presence (`{backend: {}}`) for `thin_package_repo`.
-
-    Thin repos only check whether a package has a matching hook-backed override
-    to decide whether to emit `<subdir>/BUILD.bazel` aliases; stripping attribute
-    values keeps thin repos invariant across override flag or attribute edits.
-    """
-    if not ws_overrides or not package_repo_hooks:
+def _filter_spoke_overrides(ws_overrides, spoke_hooks, canon_name):
+    """Retain only spoke-hook overrides matching `canon_name`, `canon_name@*`, or `*`."""
+    if not ws_overrides or not spoke_hooks:
         return {}
-    subdir_backends = {
-        backend_name: True
-        for backend_name in package_repo_hooks
-        if hook_subdirs.get(backend_name) or (
-            backend_name in LEGACY_CARGO_HOOK_BACKENDS and backend_name not in hook_subdirs
-        )
-    }
-    if not subdir_backends:
-        return {}
-    slimmed = {}
+    prefix = canon_name + "@"
+    filtered = {}
     for pkg_spec in sorted(ws_overrides.keys()):
+        if pkg_spec != "*" and pkg_spec != canon_name and not pkg_spec.startswith(prefix):
+            continue
+        backends = ws_overrides[pkg_spec]
         kept = {
-            backend_name: {}
-            for backend_name in sorted(ws_overrides[pkg_spec].keys())
-            if backend_name in subdir_backends
+            backend_name: backends[backend_name]
+            for backend_name in sorted(backends.keys())
+            if backend_name in spoke_hooks
         }
         if kept:
-            slimmed[pkg_spec] = kept
-    return slimmed
+            filtered[pkg_spec] = kept
+    return filtered
+
+def _fallback_hook_packages_info(workspace_name, merged_packages, fork_slots):
+    """Build JSON-serializable `packages_info` for fallback hooks with empty subdir."""
+    packages_info = {}
+    for pkg_key in sorted(merged_packages.keys()):
+        parts = parse_package_key(pkg_key)
+        if parts.extra:
+            continue
+        norm_name = pypackaging.utils.canonicalize_name(parts.name)
+        has_sdist = bool(merged_packages[pkg_key].get("sdist_file"))
+        entry = {
+            "version": parts.version,
+            "package_key": pkg_key,
+            "has_sdist": has_sdist,
+        }
+        if has_sdist:
+            entry["sdist_label"] = "@{}//:{}".format(
+                spoke_repo_name(workspace_name, parts.name),
+                spoke_sdist_target(fork_slots.get(pkg_key, "")),
+            )
+        packages_info.setdefault(norm_name, {"versions": []})["versions"].append(entry)
+    return packages_info
 
 def create_repos(
         module_ctx,
@@ -349,7 +347,6 @@ def create_repos(
     Returns:
         None. Creates repos as a side effect.
     """
-    all_remote_files = {}
 
     # Build per-workspace, per-package override configs from registered override files.
     override_configs = {}
@@ -372,24 +369,28 @@ def create_repos(
 
     _validate_override_packages(override_configs, workspaces, resolved_locks)
 
+    spoke_hooks = {
+        b: True
+        for b in PACKAGE_REPO_HOOKS
+        if is_spoke_hook_backend(b)
+    }
+    fallback_hooks = {
+        b: True
+        for b in PACKAGE_REPO_HOOKS
+        if b not in spoke_hooks
+    }
+    hook_backend_subdirs = spoke_hook_backend_subdirs(PACKAGE_REPO_HOOKS, PACKAGE_REPO_HOOK_SUBDIRS)
+
     for workspace_name, ws in workspaces.items():
-        workspace_repo_name = pkgs_repo_name(workspace_name)
+        ws_state_repo = state_repo_name(workspace_name)
         indexes = ws.pypi_indexes
-        index_tuple = tuple(indexes)
-        merged_repo_map = {}
         merged_remote_files = {}
 
         for repo in ws.repos:
             resolved_lock = resolved_locks[repo.name]
             for key, file in resolved_lock.get("remote_files", {}).items():
-                if key in merged_repo_map:
-                    continue
-                dedup_key = _remote_file_dedup_key(key, file, index_tuple)
-                if dedup_key not in all_remote_files:
-                    remote_file_repo = _remote_file_repo_name(key, file, indexes)
-                    all_remote_files[dedup_key] = _create_remote_file_repo(remote_file_repo, file, indexes)
-                merged_repo_map[key] = all_remote_files[dedup_key]
-                merged_remote_files[key] = file
+                if key not in merged_remote_files:
+                    merged_remote_files[key] = file
 
         skip_variant_members = [repo.name for repo in ws.repos if repo.is_auto_build_repo]
         merged_lock = merge_workspace_locks(
@@ -398,10 +399,24 @@ def create_repos(
         )
         merged_packages = merged_lock["packages"]
 
+        # Assign deterministic, workspace-scoped, version-free slots for all remote
+        # wheel/sdist archive repos and sdist build repos.
+        fork_slots = assign_fork_slots(merged_packages)
+        file_key_to_repo = plan_workspace_remote_slots(
+            workspace_name,
+            merged_packages,
+            merged_remote_files,
+            fork_slots = fork_slots,
+        )
+        merged_repo_map = {}
+        for key, remote_file_repo in sorted(file_key_to_repo.items()):
+            merged_repo_map[key] = _create_remote_file_repo(remote_file_repo, merged_remote_files[key], indexes)
+
         # Instantiate sdist repos once per workspace package requiring source builds.
+        sdist_repo_map = {}
         default_known_packages = known_packages_by_repo[ws.repos[0].name] if ws.repos else []
         for pkg_key, pkg in sorted(merged_packages.items()):
-            if pkg.get("build_target") or sdist_builds_disallowed(pkg):
+            if is_extras_proxy(pkg_key, pkg) or pkg.get("build_target") or sdist_builds_disallowed(pkg):
                 continue
 
             sdist_file = pkg.get("sdist_file")
@@ -410,13 +425,15 @@ def create_repos(
 
             sdist_file_key = sdist_file["key"]
             sdist_label = merged_repo_map[sdist_file_key]
-            pkg_sdist_repo = sdist_repo_name(workspace_repo_name, pkg_key)
-
-            sdist_deps = (
-                [lock_sdist_deps_label(workspace_repo_name, pkg_key)] if pkg.get("marker_dependencies") else []
-            )
+            slot = fork_slots.get(pkg_key, "")
+            pkg_sdist_repo = sdist_slot_repo_name(workspace_name, pkg_key, slot)
+            sdist_repo_map[pkg_key] = "@{}//:wheel".format(pkg_sdist_repo)
 
             parts = parse_package_key(pkg_key)
+            sdist_deps = (
+                ["@{}//:{}".format(spoke_repo_name(workspace_name, parts.name), spoke_sdist_deps_target(slot, parts.extra))] if pkg.get("marker_dependencies") else []
+            )
+
             pkg_version = parts.version
 
             if pkg.get("build_tools_repo") and pkg["build_tools_repo"] not in known_packages_by_repo:
@@ -456,31 +473,88 @@ def create_repos(
 
             pycross_sdist_repo(**sdist_repo_attrs)
 
-        # Compute filtered override configs for package and thin repo hooks.
+        # Workspace-wide state repo (@<ws>__state): variant flags/state, reset.bzl, _backend/.
         ws_overrides = override_configs.get(workspace_name)
-        pkg_repo_overrides = _filter_package_repo_overrides(ws_overrides, PACKAGE_REPO_HOOKS)
-        thin_repo_overrides = _slim_thin_repo_overrides(ws_overrides, PACKAGE_REPO_HOOKS, PACKAGE_REPO_HOOK_SUBDIRS)
-        thin_repo_overrides_json = json.encode(thin_repo_overrides) if thin_repo_overrides else None
-
-        package_repo_attrs = dict(
-            name = workspace_repo_name,
+        variant_sets = merged_lock.get("variant_sets", [])
+        norm_variants = normalize_workspace_variants(variant_sets)
+        has_variants = bool(norm_variants.sets_by_suffix)
+        state_payload = {}
+        for field in ("variant_items", "variant_sets", "member_variant_flags"):
+            val = merged_lock.get(field)
+            if val:
+                state_payload[field] = val
+        backend_tool_pkgs = {}
+        for bname in backend_names:
+            cfg = BACKEND_CONFIGS.get(bname)
+            if cfg:
+                for tp in cfg.get("tool_packages", []):
+                    backend_tool_pkgs[pypackaging.utils.canonicalize_name(tp)] = True
+        known_base_packages = sorted({
+            pypackaging.utils.canonicalize_name(parse_package_key(k).name): True
+            for k in merged_packages.keys()
+            if not parse_package_key(k).extra and pypackaging.utils.canonicalize_name(parse_package_key(k).name) in backend_tool_pkgs
+        }.keys())
+        state_repo_attrs = dict(
+            name = ws_state_repo,
             build_repo = build_repo_name(workspace_name),
-            repo_map = merged_repo_map,
             backend_names = backend_names,
-            lock_data = json.encode(slim_workspace_lock(merged_lock)),
+            known_base_packages = known_base_packages,
         )
-        if pkg_repo_overrides:
-            package_repo_attrs["override_configs"] = json.encode(pkg_repo_overrides)
-        package_repo(**package_repo_attrs)
+        if state_payload:
+            state_repo_attrs["state_data"] = json.encode(state_payload)
+        fallback_overrides = _filter_package_repo_overrides(ws_overrides, fallback_hooks)
+        if fallback_overrides:
+            state_repo_attrs["override_configs"] = json.encode(fallback_overrides)
+            state_repo_attrs["fallback_hook_packages"] = json.encode(
+                _fallback_hook_packages_info(workspace_name, merged_packages, fork_slots),
+            )
+        state_repo(**state_repo_attrs)
 
-        # Create thin repos for each workspace member.
+        # Per-package spoke repos (@<ws>__pkg_<underscore_name>).
+        reset_states = (
+            compute_workspace_reset_states(
+                merged_packages,
+                merged_repo_map,
+                conflict_pairs(norm_variants.sets_by_suffix.values()),
+                workspace_name,
+                fork_slots,
+            ) if has_variants else None
+        )
+        spokes = build_spoke_payloads(
+            workspace_name,
+            ws_state_repo,
+            merged_packages,
+            merged_repo_map,
+            sdist_repo_map,
+            fork_slots,
+            cycle_groups = merged_lock.get("cycle_groups"),
+            has_variants = has_variants,
+            reset_states = reset_states,
+        )
+        for canon_name, spoke in spokes.items():
+            spoke_attrs = dict(
+                name = spoke.spoke_repo,
+                spoke_data = json.encode(spoke.payload),
+            )
+            spoke_overrides = _filter_spoke_overrides(ws_overrides, spoke_hooks, canon_name)
+            if spoke_overrides:
+                spoke_attrs["override_configs"] = json.encode(spoke_overrides)
+            spoke_repo(**spoke_attrs)
+
+        # Create version-free thin repos for each workspace member.
         ws_resolved_locks = {repo.name: resolved_locks[repo.name] for repo in ws.repos}
         for repo in ws.repos:
             transition = repo.transition
             thin_repo_attrs = dict(
                 name = repo.name,
-                lock_data = json.encode(slim_member_lock(resolved_locks[repo.name], merged_packages)),
-                workspace_repo = workspace_repo_name,
+                lock_data = json.encode(slim_member_lock(
+                    resolved_locks[repo.name],
+                    merged_packages,
+                    fork_slots = fork_slots,
+                    ws_overrides = ws_overrides,
+                    spoke_hook_subdirs = hook_backend_subdirs,
+                )),
+                workspace_name = workspace_name,
                 member_name = repo.name,
                 backend_names = backend_names,
             )
@@ -504,16 +578,12 @@ def create_repos(
             if transition.platform:
                 thin_repo_attrs["platform"] = transition.platform
 
-            if thin_repo_overrides_json:
-                thin_repo_attrs["override_configs"] = thin_repo_overrides_json
-
             thin_package_repo(**thin_repo_attrs)
 
 # Visible for testing
 validate_override_packages_for_testing = _validate_override_packages
 normalize_override_name_for_testing = _normalize_override_name
-remote_file_dedup_key_and_repo_name_for_testing = _remote_file_dedup_key_and_repo_name
 known_packages_from_lock_for_testing = _known_packages_from_lock
 extra_build_tool_names_for_testing = _extra_build_tool_names
 filter_package_repo_overrides_for_testing = _filter_package_repo_overrides
-slim_thin_repo_overrides_for_testing = _slim_thin_repo_overrides
+filter_spoke_overrides_for_testing = _filter_spoke_overrides

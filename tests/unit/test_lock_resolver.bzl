@@ -2362,6 +2362,10 @@ def _test_transitive_resolution_marker_forks_impl(env, target):
             "res_setuptools_68_0_0": "python_full_version < '3.12'",
             "res_setuptools_75_1_0": "python_full_version >= '3.12'",
         },
+        "fork_constraints": {
+            "setuptools@68.0.0": "res_setuptools_68_0_0",
+            "setuptools@75.1.0": "res_setuptools_75_1_0",
+        },
     }
 
     res = resolve(lock_model_data, include_transitive = True)
@@ -2542,6 +2546,10 @@ def _multi_source_lock_data():
         "resolution_marker_exprs": {
             "res_torch_2_9_1_11111111": "sys_platform == 'darwin'",
             "res_torch_2_9_1_22222222": "sys_platform == 'linux'",
+        },
+        "fork_constraints": {
+            "torch@2.9.1~11111111": "res_torch_2_9_1_11111111",
+            "torch@2.9.1~22222222": "res_torch_2_9_1_22222222",
         },
     }
 

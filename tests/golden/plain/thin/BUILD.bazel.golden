@@ -10,11 +10,11 @@ exports_files(["requirements.bzl"])
 pycross_modules_mapping(
     name = "modules_mapping",
     deps = [
-        "//__maybe:beta_2_0_0",
-        "//__maybe:gamma_1_0_0",
-        "@golden_plain__pkgs//_lock:alpha@1.0.0",
-        "@golden_plain__pkgs//_lock:devtool@0.1.0",
-        "@golden_plain__pkgs//_lock:setuptools@75.0.0",
+        "//__maybe:beta",
+        "//__maybe:gamma",
+        "@golden_plain__pkg_alpha//:_raw",
+        "@golden_plain__pkg_devtool//:_raw",
+        "@golden_plain__pkg_setuptools//:_raw",
     ],
 )
 

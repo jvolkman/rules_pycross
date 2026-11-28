@@ -16,7 +16,6 @@ load(
     ":util.bzl",
     "parse_package_key",
     "resolution_marker_constraint_name",
-    "sanitize_name",
 )
 load(
     ":variant_util.bzl",
@@ -375,11 +374,6 @@ def make_pin_marker_folder(conflicts, repo_pins, parse_cache = None, tokens_cach
 
     return _fold
 
-def _edge_constraint_name(base_dep_name, version, marker, tag = ""):
-    """Build a content-hashed `__edge_<hash>` constraint name for `(base_dep_name, version, tag, marker)`."""
-    prefix = resolution_marker_constraint_name(base_dep_name, version, tag) if version else "res_{}".format(sanitize_name(base_dep_name))
-    return "%s__edge_%x" % (prefix, hash(marker) & 0xffffffff)
-
 def _prune_plain_branches(branches, conflicts, repo_pins, parse_cache = None, tokens_cache = None, fold_cache = None):
     """Drop or narrow plain (`raw_constraint == ""`) conflict-gated branches on one pin.
 
@@ -565,13 +559,9 @@ def resolve_uv_pins(
         for branch in surviving:
             raw_constraint = branch["raw_constraint"]
             if branch["needs_marker"]:
-                fork_constraint = branch["fork_constraint"]
                 marker = branch["effective_marker"]
-                if fork_constraint and marker == resolution_marker_exprs.get(fork_constraint):
-                    marker_key = fork_constraint
-                else:
-                    marker_key = _edge_constraint_name(base_name, branch["pkg_version"], marker, tag = branch["pkg_tag"])
-                    resolution_marker_exprs[marker_key] = marker
+                marker_key = resolution_marker_constraint_name(marker)
+                resolution_marker_exprs[marker_key] = marker
 
                 if raw_constraint:
                     constraint_key = "{}_{}".format(raw_constraint, marker_key)

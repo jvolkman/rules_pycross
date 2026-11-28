@@ -9,17 +9,17 @@ alias(
 
 pycross_thin_library_proxy(
     name = "pkg",
-    actual = "@golden_extras__pkgs//_lock:win-only@1.0.0",
+    actual = "@golden_extras__pkg_win_only//:pkg",
 )
 
 pycross_file_proxy(
     name = "wheel",
-    actual = "@golden_extras__pkgs//_wheel:win-only@1.0.0",
+    actual = "@golden_extras__pkg_win_only//:wheel",
 )
 
 pycross_file_proxy(
     name = "dist_info",
-    actual = "@golden_extras__pkgs//_lock:_dist_info_win-only@1.0.0",
+    actual = "@golden_extras__pkg_win_only//:dist_info",
 )
 
 alias(
@@ -29,7 +29,7 @@ alias(
 alias(
     name = "maybe",
     actual = select({
-        "@golden_extras__pkgs//_lock:_marker_eval_sys_platform__win32_1913209870_match": ":pkg",
+        "//_markers:_marker_eval_sys_platform__win32_1913209870_match": ":pkg",
         "//conditions:default": "//:_empty_library",
     }),
 )

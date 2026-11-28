@@ -56,7 +56,7 @@ for marker in "$first"/@*.marker; do
       echo "ERROR: $repo has different contents in each output base" >&2
       failed=1
     fi
-    if [[ "$repo" == *"_sdist_iniconfig_"* ]]; then
+    if [[ "$repo" == *"__sdist_iniconfig"* ]]; then
       if ! grep -q 'iniconfig.patch' "$marker"; then
         echo "ERROR: $repo did not record pre_build_patches file in $marker" >&2
         failed=1

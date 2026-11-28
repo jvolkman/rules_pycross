@@ -7,25 +7,25 @@ load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant
 selects.config_setting_group(
     name = "_selected_group_app_g-b",
     match_any = [
-        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b",
-        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_group_app_g-a_group_app_g-b",
+        "@golden_overlapping_conflicts__state//:is_group_app_g-b",
+        "@golden_overlapping_conflicts__state//:_unselected_group_app_g-a_group_app_g-b",
     ],
 )
 
 selects.config_setting_group(
     name = "_unselected_all_1a2293e5",
     match_all = [
-        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_extra_app_y",
-        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_group_app_g-a",
+        "@golden_overlapping_conflicts__state//:_unselected_extra_app_x_extra_app_y",
+        "@golden_overlapping_conflicts__state//:_unselected_extra_app_x_group_app_g-a",
     ],
 )
 
 selects.config_setting_group(
     name = "_unselected_all_840c96e5",
     match_all = [
-        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_extra_app_y",
-        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_group_app_g-a",
-        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_group_app_g-a_group_app_g-b",
+        "@golden_overlapping_conflicts__state//:_unselected_extra_app_x_extra_app_y",
+        "@golden_overlapping_conflicts__state//:_unselected_extra_app_x_group_app_g-a",
+        "@golden_overlapping_conflicts__state//:_unselected_group_app_g-a_group_app_g-b",
     ],
 )
 
@@ -41,7 +41,7 @@ bool_flag(
 
 alias(
     name = "is_extra_x",
-    actual = "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x",
+    actual = "@golden_overlapping_conflicts__state//:is_extra_app_x",
 )
 
 bool_flag(
@@ -51,7 +51,7 @@ bool_flag(
 
 alias(
     name = "is_extra_y",
-    actual = "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y",
+    actual = "@golden_overlapping_conflicts__state//:is_extra_app_y",
 )
 
 bool_flag(
@@ -61,7 +61,7 @@ bool_flag(
 
 alias(
     name = "is_group_g-a",
-    actual = "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a",
+    actual = "@golden_overlapping_conflicts__state//:is_group_app_g-a",
 )
 
 bool_flag(

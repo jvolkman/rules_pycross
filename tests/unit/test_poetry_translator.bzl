@@ -7,6 +7,9 @@ load("@rules_testing//lib:util.bzl", "util")
 # buildifier: disable=bzl-visibility
 load("//pycross/private:poetry_lock_model.bzl", "translate_poetry")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "resolution_marker_constraint_name")
+
 def _lock_model(
         projects = ["*"],
         dependency_groups = ["default"]):
@@ -207,16 +210,20 @@ def _test_poetry_forks_impl(env, target):
     result = translate_poetry(project, lock, _lock_model())
 
     # Check resolution_marker_exprs
+    m_325 = 'python_version == "3.9"'
+    m_353 = 'python_version >= "3.10"'
+    c_325 = resolution_marker_constraint_name(m_325)
+    c_353 = resolution_marker_constraint_name(m_353)
     res_exprs = result.get("resolution_marker_exprs", {})
-    env.expect.that_bool("res_greenlet_3_2_5" in res_exprs).equals(True)
-    env.expect.that_bool("res_greenlet_3_5_3" in res_exprs).equals(True)
-    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version == "3.9"')
-    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+    env.expect.that_bool(c_325 in res_exprs).equals(True)
+    env.expect.that_bool(c_353 in res_exprs).equals(True)
+    env.expect.that_str(res_exprs[c_325]).equals(m_325)
+    env.expect.that_str(res_exprs[c_353]).equals(m_353)
 
     # Check pinned specs resolved conditionally
     pins = result["pins"]["greenlet"]
-    env.expect.that_str(pins["res_greenlet_3_2_5"]).equals("greenlet@3.2.5")
-    env.expect.that_str(pins["res_greenlet_3_5_3"]).equals("greenlet@3.5.3")
+    env.expect.that_str(pins[c_325]).equals("greenlet@3.2.5")
+    env.expect.that_str(pins[c_353]).equals("greenlet@3.5.3")
 
 def _test_poetry_forks(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -330,8 +337,8 @@ def _test_poetry_issue_34_impl(env, target):
 
     # Verify forks are detected
     res_exprs = result.get("resolution_marker_exprs", {})
-    env.expect.that_bool("res_torch_1_12_1" in res_exprs).equals(True)
-    env.expect.that_bool("res_torch_1_12_1_cpu" in res_exprs).equals(True)
+    env.expect.that_bool(resolution_marker_constraint_name('platform_machine == "aarch64"') in res_exprs).equals(True)
+    env.expect.that_bool(resolution_marker_constraint_name('platform_machine == "x86_64"') in res_exprs).equals(True)
 
 def _test_poetry_issue_34(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

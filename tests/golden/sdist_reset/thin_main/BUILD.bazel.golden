@@ -16,14 +16,14 @@ exports_files(["requirements.bzl"])
 pycross_modules_mapping(
     name = "_modules_mapping",
     deps = [
-        "@golden_sdist_reset__pkgs//_lock:custom-build@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:merged-pkg@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:mixed-consumer@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:native2@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:native3@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:pure-leaf@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:sdistonly@1.0.0",
-        "@golden_sdist_reset__pkgs//_lock:variant-dep@1.0.0",
+        "@golden_sdist_reset__pkg_custom_build//:_raw",
+        "@golden_sdist_reset__pkg_merged_pkg//:_raw",
+        "@golden_sdist_reset__pkg_mixed_consumer//:_raw",
+        "@golden_sdist_reset__pkg_native2//:_raw",
+        "@golden_sdist_reset__pkg_native3//:_raw",
+        "@golden_sdist_reset__pkg_pure_leaf//:_raw",
+        "@golden_sdist_reset__pkg_sdistonly//:_raw",
+        "@golden_sdist_reset__pkg_variant_dep//:_raw",
     ],
 )
 

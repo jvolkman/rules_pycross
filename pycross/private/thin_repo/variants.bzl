@@ -7,8 +7,8 @@ load(
     "VARIANT_STATE_DEFAULT_PREFIX",
     "VARIANT_STATE_PIN_PREFIX",
     "VARIANT_STATE_USABLE_PREFIX",
-    "lock_constraint_label",
-    "lock_unselected_label",
+    "state_constraint_label",
+    "state_unselected_label",
     "variant_state_key",
 )
 load("//pycross/private:variant_util.bzl", "excluded_variant_items", "variant_item_qname", "variant_set_suffix")
@@ -111,7 +111,7 @@ def effective_defaults(variant_info, pins_by_set = None, excluded = None):
     return defaults
 
 def usable_settings(variant_info, pins_by_set, excluded):
-    """`u:<set>` overrides in `//_lock:_state` for a transitioned repo.
+    """`u:<set>` overrides in `@<ws>__state//:_state` for a transitioned repo.
 
     Variant resolvers read every repo's flags. Inside a repo with its own
     transition, a flag meant for another repo could otherwise activate an item
@@ -137,7 +137,7 @@ def usable_settings(variant_info, pins_by_set, excluded):
     return result
 
 def transition_settings(variant_info, variant_pins, member_name, has_other_flags):
-    """The `//_lock:_state` overrides that a repo's transition merges.
+    """The `@<ws>__state//:_state` overrides that a repo's transition merges.
 
     Args:
         variant_info: Result of collect_variants.
@@ -179,11 +179,11 @@ def transition_settings(variant_info, variant_pins, member_name, has_other_flags
         excluded = excluded,
     )
 
-def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None, pins_by_set = None, defaults_by_set = None, excluded = None, expose_variant_flags = True):
+def variants_build(variant_info, state_repo, repo_name, unselected_groups = None, pins_by_set = None, defaults_by_set = None, excluded = None, expose_variant_flags = True):
     """Render _variants/BUILD.bazel: this repo's variant flags.
 
-    The workspace repo's variant resolvers read these bool_flags (see
-    package_repo.bzl), so one flag here can enable the same extra/group in
+    The workspace state repo's variant resolvers read these bool_flags (see
+    state_repo.bzl), so one flag here can enable the same extra/group in
     several projects. `is_<flag>` matches when all of the items the flag
     enables are active. For this repo's default variant, it also matches when
     nothing in the set is selected, so first-party select()s outside the repo's
@@ -191,7 +191,7 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
 
     Args:
         variant_info: Result of collect_variants.
-        workspace_repo: Name of the workspace (backing) repo.
+        state_repo: Apparent name of the workspace's `@<ws>__state` repo.
         repo_name: This repo's apparent name, for messages.
         unselected_groups: {name: [set suffixes]} of `_unselected_all_*`
             groups that the repo's selects reference.
@@ -236,13 +236,13 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
     selected = {}  # qname -> condition label
     for qname, set_suffixes in sorted(defaults.items()):
         needs_selects = True
-        unselected = unselected_condition(sorted(set_suffixes), workspace_repo, local_prefix = ":")
+        unselected = unselected_condition(sorted(set_suffixes), state_repo, local_prefix = ":")
         groups.update(unselected.groups)
         selected[qname] = ":_selected_{}".format(qname)
         body.extend(config_setting_group(
             "_selected_{}".format(qname),
             "match_any",
-            [lock_constraint_label(workspace_repo, qname), unselected.condition],
+            [state_constraint_label(state_repo, qname), unselected.condition],
         ))
 
     # `_unselected_all_<hash>`: all of several conflict sets are unselected.
@@ -251,7 +251,7 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
         body.extend(config_setting_group(
             name,
             "match_all",
-            [lock_unselected_label(workspace_repo, s) for s in set_suffixes],
+            [state_unselected_label(state_repo, s) for s in set_suffixes],
         ))
 
     if flags:
@@ -271,7 +271,7 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
             ")",
             "",
         ])
-        conditions = [selected.get(q, lock_constraint_label(workspace_repo, q)) for q in qnames]
+        conditions = [selected.get(q, state_constraint_label(state_repo, q)) for q in qnames]
         if len(qnames) == 1:
             body.extend(alias("is_{}".format(flag), conditions[0]))
             continue

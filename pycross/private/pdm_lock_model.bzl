@@ -11,6 +11,7 @@ load(
     "apply_package_marker_forks",
     "build_lock_graph",
     "find_package_marker_forks",
+    "fork_constraints_by_key",
     "resolve_lock_graph",
 )
 load(
@@ -148,6 +149,7 @@ def _build_pdm_workspace_base(lock_dict):
     graph = build_lock_graph(
         packages,
         resolution_marker_exprs = resolution_marker_exprs,
+        fork_constraints = fork_constraints_by_key(forks_by_name),
         strict_dependencies = False,
     )
     return struct(

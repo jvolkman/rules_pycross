@@ -9,19 +9,19 @@ alias(
 
 pycross_transitioning_library_proxy(
     name = "pkg",
-    actual = "@golden_forks__pkgs//_lock:app-lib@1.0.0",
+    actual = "@golden_forks__pkg_app_lib//:pkg",
     platform = "//:_internal_platform",
 )
 
 pycross_transitioning_file_proxy(
     name = "wheel",
-    actual = "@golden_forks__pkgs//_wheel:app-lib@1.0.0",
+    actual = "@golden_forks__pkg_app_lib//:wheel",
     platform = "//:_internal_platform",
 )
 
 pycross_transitioning_file_proxy(
     name = "dist_info",
-    actual = "@golden_forks__pkgs//_lock:_dist_info_app-lib@1.0.0",
+    actual = "@golden_forks__pkg_app_lib//:dist_info",
     platform = "//:_internal_platform",
 )
 

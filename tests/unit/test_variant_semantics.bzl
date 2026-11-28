@@ -6,7 +6,7 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "render_lock_build_for_testing")
+load("//pycross/private:state_repo.bzl", "normalize_workspace_variants", "render_state_build")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_set_projection", "variant_state")
@@ -173,11 +173,11 @@ def _test_render_lock_build_overlapping_and_disjoint_impl(env, target):
         },
     }
 
-    rendered = render_lock_build_for_testing(
+    rendered = render_state_build(
         variant_items,
-        variant_sets,
-        qname_to_resolvers,
+        normalize_workspace_variants(variant_sets),
         member_variant_flags,
+        qname_to_resolvers = qname_to_resolvers,
     )
 
     # Single joint variant_state holds all sets, canonical `_state` setting, and consolidated flags once.
@@ -235,7 +235,12 @@ def _test_render_lock_build_three_set_chain_impl(env, target):
         "extra_y": ["_resolver_extra_x_extra_y"],
     }
 
-    rendered = render_lock_build_for_testing(variant_items, variant_sets, qname_to_resolvers, {})
+    rendered = render_state_build(
+        variant_items,
+        normalize_workspace_variants(variant_sets),
+        {},
+        qname_to_resolvers = qname_to_resolvers,
+    )
 
     state = _extract_block(rendered, "_variant_state")
     env.expect.that_str(state).contains('"group_g-a_group_g-b": ["group_g-a","group_g-b"],')

@@ -7,7 +7,6 @@ load(
     "canonicalize_package_key",
     "format_package_key",
     "parse_package_key",
-    "resolution_marker_constraint_name",
 )
 load(":variant_util.bzl", "variant_item_qname")
 
@@ -18,8 +17,8 @@ load(":variant_util.bzl", "variant_item_qname")
 #   "label": stringify scalar Label during tag conversion
 #   "label_list": stringify each Label in a list during tag conversion
 #   "dedup": deduplicate list entries while preserving order
-# Note: fields consumed by package_repo / lock_render must also be listed in
-# package_repo.bzl:_PACKAGE_REPO_PKG_FIELDS.
+# Note: fields consumed by spoke_repo must also be forwarded in
+# spoke_repo.bzl:build_spoke_payloads.
 PASSTHROUGH_PACKAGE_ATTRS = {
     "build_backend": (None, "plain"),
     "build_target": (None, "label"),
@@ -346,7 +345,7 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
             continue
         marker_dependencies.append({
             "key": dep_key,
-            "marker": dep.get("marker", ""),
+            "marker": dep.get("marker") or "",
         })
         all_dependency_keys.append(dep_key)
 
@@ -371,10 +370,9 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
 
     # When build_mode = "always" or build_target is set, the user explicitly wants the
     # sdist/build_target used rather than pre-built wheels from the registry.
-    # Clear wheel_candidates and wheel_candidate_files so the renderer aliases
+    # Clear wheel_candidates and wheel_candidate_files so the spoke aliases
     # directly to the sdist/build_target and lock_repo_creation does not
-    # instantiate unused pycross_wheel_file repos or leak dead entries into
-    # package_repo.repo_map.
+    # instantiate unused pycross_wheel_file repos.
     if always_build or build_target:
         wheel_candidates = []
         wheel_candidate_files = {}
@@ -881,6 +879,7 @@ def _resolve_member(
                 resolved_keys_by_name.setdefault(pkg_name, {})[base_key] = True
 
         resolution_marker_exprs = lock_model_data.get("resolution_marker_exprs", {})
+        fork_constraints = lock_model_data.get("fork_constraints", {})
         for package_pin_name, keys_dict in resolved_keys_by_name.items():
             if package_pin_name in pins:
                 continue
@@ -891,9 +890,8 @@ def _resolve_member(
             ]
             fork_targets = {}
             for base_key in sorted(keys_dict.keys()):
-                parts = parse_package_key(base_key)
-                cname = resolution_marker_constraint_name(package_pin_name, parts.version, parts.tag)
-                if cname in resolution_marker_exprs:
+                cname = fork_constraints.get(base_key)
+                if cname and cname in resolution_marker_exprs:
                     fork_targets[cname] = base_key
             if fork_targets and len(fork_targets) == len(keys_dict):
                 pins[package_pin_name] = fork_targets

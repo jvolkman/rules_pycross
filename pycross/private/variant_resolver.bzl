@@ -1,7 +1,7 @@
 """Joint conflict-variant state rule and FeatureFlagInfo projections.
 
 A single `variant_state` target per workspace reads every repo's bool_flags,
-`//_variants` string_flags, and the canonical `//_lock:_state` setting once,
+`//_variants` string_flags, and the canonical `@<ws>__state//:_state` setting once,
 and computes the consistent assignment across all conflict sets:
 
   1. Validate all `//_variants` string_flag tokens up front so typos fail loudly.
@@ -196,7 +196,7 @@ variant_state = rule(
         ),
         "state": attr.label(
             providers = [BuildSettingInfo],
-            doc = "Canonical `//_lock:_state` string_flag encoding per-set pins, defaults, and usable narrowing.",
+            doc = "Canonical `@<ws>__state//:_state` string_flag encoding per-set pins, defaults, and usable narrowing.",
         ),
         "string_flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],

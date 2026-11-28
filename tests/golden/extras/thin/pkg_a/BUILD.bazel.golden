@@ -9,21 +9,21 @@ alias(
 
 pycross_library_proxy(
     name = "pkg",
-    actual = "@golden_extras__pkgs//_lock:pkg-a@1.0.0",
+    actual = "@golden_extras__pkg_pkg_a//:pkg",
     deps = [
-        "@golden_extras__pkgs//_lock:pkg-a[cli]@1.0.0",
-        "@golden_extras__pkgs//_lock:pkg-a[fast]@1.0.0",
+        "@golden_extras__pkg_pkg_a//:[cli]",
+        "@golden_extras__pkg_pkg_a//:[fast]",
     ],
 )
 
 pycross_file_proxy(
     name = "wheel",
-    actual = "@golden_extras__pkgs//_wheel:pkg-a@1.0.0",
+    actual = "@golden_extras__pkg_pkg_a//:wheel",
 )
 
 pycross_file_proxy(
     name = "dist_info",
-    actual = "@golden_extras__pkgs//_lock:_dist_info_pkg-a@1.0.0",
+    actual = "@golden_extras__pkg_pkg_a//:dist_info",
 )
 
 alias(
@@ -32,16 +32,16 @@ alias(
 )
 pycross_thin_library_proxy(
     name = "[]",
-    actual = "@golden_extras__pkgs//_lock:pkg-a@1.0.0",
+    actual = "@golden_extras__pkg_pkg_a//:pkg",
 )
 
 pycross_thin_library_proxy(
     name = "[cli]",
-    actual = "@golden_extras__pkgs//_lock:pkg-a[cli]@1.0.0",
+    actual = "@golden_extras__pkg_pkg_a//:[cli]",
 )
 
 pycross_thin_library_proxy(
     name = "[fast]",
-    actual = "@golden_extras__pkgs//_lock:pkg-a[fast]@1.0.0",
+    actual = "@golden_extras__pkg_pkg_a//:[fast]",
 )
 

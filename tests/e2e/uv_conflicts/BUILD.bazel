@@ -270,7 +270,7 @@ filegroup(
     ],
 )
 
-# Per-repo extras isolation: @extras_beta shares @extras_ws__pkgs with @extras_alpha
+# Per-repo extras isolation: @extras_beta shares workspace spokes with @extras_alpha
 # (which requests wrapper[v1] -> idna==3.7), so @extras_beta//wrapper must NOT pull
 # wrapper[v1] / idna==3.7 into the same build as @extras_beta//idna (3.10).
 py_test(

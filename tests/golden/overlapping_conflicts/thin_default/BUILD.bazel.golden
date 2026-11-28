@@ -15,43 +15,43 @@ pycross_transitioning_file_proxy(
 exports_files(["requirements.bzl"])
 
 selects.config_setting_group(
-    name = "_mm_any_a6966f9b",
+    name = "_mm_any_8fac517f",
     match_any = [
-        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x",
-        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-b",
+        "@golden_overlapping_conflicts__state//:is_extra_app_x",
+        "@golden_overlapping_conflicts__state//:is_group_app_g-b",
     ],
 )
 
 selects.config_setting_group(
-    name = "_mm_any_93f03f07",
+    name = "_mm_any_1ca705c7",
     match_any = [
-        "@golden_overlapping_conflicts__pkgs//_lock:_unselected_extra_app_x_extra_app_y",
-        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_y",
+        "@golden_overlapping_conflicts__state//:_unselected_extra_app_x_extra_app_y",
+        "@golden_overlapping_conflicts__state//:is_extra_app_y",
     ],
 )
 
 pycross_modules_mapping(
     name = "_modules_mapping",
     deps = [
-        "@golden_overlapping_conflicts__pkgs//_lock:pytest@7.4.4",
+        "@golden_overlapping_conflicts__pkg_pytest//:_raw",
     ] + select({
-        ":_mm_any_93f03f07": [
-            "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.12.2",
+        "//_markers:is_extra_app_x_res_py312": [
+            "@golden_overlapping_conflicts__pkg_typing_extensions//:_raw_s0",
         ],
         "//conditions:default": [],
     }) + select({
-        ":_mm_any_a6966f9b": [
-            "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@2.0.0",
+        ":_mm_any_1ca705c7": [
+            "@golden_overlapping_conflicts__pkg_typing_extensions//:_raw_s1",
         ],
         "//conditions:default": [],
     }) + select({
-        "@golden_overlapping_conflicts__pkgs//_lock:is_extra_app_x_res_py312": [
-            "@golden_overlapping_conflicts__pkgs//_lock:typing-extensions@4.11.0",
+        ":_mm_any_8fac517f": [
+            "@golden_overlapping_conflicts__pkg_iniconfig//:_raw_s1",
         ],
         "//conditions:default": [],
     }) + select({
-        "@golden_overlapping_conflicts__pkgs//_lock:is_group_app_g-a": [
-            "@golden_overlapping_conflicts__pkgs//_lock:iniconfig@1.1.1",
+        "@golden_overlapping_conflicts__state//:is_group_app_g-a": [
+            "@golden_overlapping_conflicts__pkg_iniconfig//:_raw_s0",
         ],
         "//conditions:default": [],
     }),

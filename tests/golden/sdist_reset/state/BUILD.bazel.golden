@@ -1,0 +1,47 @@
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_set_projection", "variant_state")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["reset.bzl"])
+
+string_flag(
+    name = "_state",
+    build_setting_default = "",
+)
+
+variant_state(
+    name = "_variant_state",
+    state = ":_state",
+    sets = {
+        "extra_app_cpu_extra_app_gpu": ["extra_app_cpu","extra_app_gpu"],
+    },
+    flags = {
+        "@golden_sdist_reset//_variants:extra_cpu": "@golden_sdist_reset//_variants:extra_cpu|extra_app_cpu",
+        "@golden_sdist_reset//_variants:extra_gpu": "@golden_sdist_reset//_variants:extra_gpu|extra_app_gpu",
+    },
+    string_flags = {
+        "@golden_sdist_reset//_variants:_variants": "{\"display\":\"@golden_sdist_reset//_variants\",\"map\":{\"extra_cpu\":[\"extra_app_cpu\"],\"extra_gpu\":[\"extra_app_gpu\"]}}",
+    },
+)
+
+variant_set_projection(
+    name = "_resolver_extra_app_cpu_extra_app_gpu",
+    state = ":_variant_state",
+    set_key = "extra_app_cpu_extra_app_gpu",
+)
+
+config_setting(
+    name = "_unselected_extra_app_cpu_extra_app_gpu",
+    flag_values = {":_resolver_extra_app_cpu_extra_app_gpu": ""},
+)
+
+config_setting(
+    name = "is_extra_app_cpu",
+    flag_values = {":_resolver_extra_app_cpu_extra_app_gpu": "extra_app_cpu"},
+)
+
+config_setting(
+    name = "is_extra_app_gpu",
+    flag_values = {":_resolver_extra_app_cpu_extra_app_gpu": "extra_app_gpu"},
+)

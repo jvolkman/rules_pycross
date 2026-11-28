@@ -9,7 +9,7 @@ _FLAG_VALUES = {
 }
 
 # Variant pins, defaults, and usable narrowing merged over incoming _state.
-_VARIANT_STATE_LABEL = "@golden_overlapping_conflicts__pkgs//_lock:_state"
+_VARIANT_STATE_LABEL = "@golden_overlapping_conflicts__state//:_state"
 
 _VARIANT_STATE_OVERRIDES = {
     "p:group_app_g-a_group_app_g-b": "group_app_g-b",
@@ -34,12 +34,12 @@ _repo_transition = transition(
     inputs = [
         "//command_line_option:platforms",
         "@golden_overlapping_conflicts_pinned//_variants:group_g-b",
-        "@golden_overlapping_conflicts__pkgs//_lock:_state",
+        "@golden_overlapping_conflicts__state//:_state",
     ],
     outputs = [
         "//command_line_option:platforms",
         "@golden_overlapping_conflicts_pinned//_variants:group_g-b",
-        "@golden_overlapping_conflicts__pkgs//_lock:_state",
+        "@golden_overlapping_conflicts__state//:_state",
     ],
 )
 

@@ -91,23 +91,24 @@ def extract_pep508_name(spec):
     """
     return pypackaging.requirements.parse(spec).name
 
-def resolution_marker_constraint_name(name, version, tag = ""):
-    """Generate a deterministic constraint name for a resolution-marker fork.
+def hex_hash8(val):
+    """Return a deterministic 8-character lowercase hex digest of `val`."""
+    return ("00000000" + ("%x" % (hash(val) & 0xffffffff)))[-8:]
+
+def resolution_marker_constraint_name(marker_expr):
+    """Generate a deterministic, version-free constraint name for a PEP 508 marker expression.
 
     Used when a package has multiple versions (or sources at the same version)
-    resolved for different environments.
+    resolved for different environments, or when a dependency edge carries a
+    resolution marker.
 
     Args:
-        name: Canonical package name.
-        version: Package version string.
-        tag: Optional disambiguating source tag (omitted when empty).
+        marker_expr: PEP 508 marker expression string.
 
     Returns:
-        A constraint name like "res_numpy_2_3_4" or "res_torch_2_9_1_a1b2c3d4".
+        A content-hashed constraint name like `"res_a1b2c3d4"`.
     """
-    ver = "{}_{}".format(version, tag) if tag else version
-    sanitized = (name + "_" + ver).replace("-", "_").replace(".", "_").replace("+", "_").replace("~", "_")
-    return "res_{}".format(sanitized)
+    return "res_{}".format(hex_hash8(marker_expr))
 
 def format_package_key(name, version = "", extra = "", tag = ""):
     """Format a package key from its components.
