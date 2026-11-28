@@ -3,6 +3,7 @@ load("@rules_python//python:defs.bzl", "py_test")
 py_test(
     name = "test_all",
     srcs = ["test_versions.py"],
+    data = ["expected_six.txt"],
     main = "test_versions.py",
     deps = [
         "@uv//cowsay",

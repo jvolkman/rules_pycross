@@ -1,7 +1,7 @@
 import importlib.metadata
-import os
+import pathlib
 
-expected_six = os.environ.get("EXPECTED_SIX_VERSION", "1.16.0")
+expected_six = pathlib.Path("expected_six.txt").read_text(encoding="utf-8").strip()
 assert importlib.metadata.version("cowsay") == "6.1"
 assert importlib.metadata.version("python-dateutil") == "2.9.0.post0"
 actual_six = importlib.metadata.version("six")

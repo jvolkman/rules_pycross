@@ -15,9 +15,11 @@ cd "$(dirname "$0")"
 
 tmp_dir="$(mktemp -d)"
 cp uv.lock "$tmp_dir/uv.lock.orig"
+cp expected_six.txt "$tmp_dir/expected_six.txt.orig"
 
 cleanup() {
   cp "$tmp_dir/uv.lock.orig" uv.lock
+  cp "$tmp_dir/expected_six.txt.orig" expected_six.txt
   rm -rf "$tmp_dir"
 }
 trap cleanup EXIT
@@ -25,7 +27,6 @@ trap cleanup EXIT
 # 1. Warm build with six 1.16.0 and active conflict variant extra_a (fetches @uv__state).
 bazel test "$@" \
   --@uv//_variants=extra_a \
-  --test_env=EXPECTED_SIX_VERSION=1.16.0 \
   //:test_all --test_output=errors
 
 output_base="$(bazel info output_base)"
@@ -50,11 +51,11 @@ with open(out_path, "w", encoding="utf-8") as fh:
     json.dump(snap, fh, indent=2, sort_keys=True)
 PY
 
-# 2. Bump ONLY six (1.16.0 -> 1.17.0) and run an incremental build with a Bazel profile.
+# 2. Bump ONLY six (1.16.0 -> 1.17.0) with identical build flags (no analysis cache discard).
 cp uv.lock.v2 uv.lock
+printf '1.17.0\n' > expected_six.txt
 bazel test "$@" \
   --@uv//_variants=extra_a \
-  --test_env=EXPECTED_SIX_VERSION=1.17.0 \
   --profile="$tmp_dir/inc_profile.json.gz" \
   --noslim_profile \
   //:test_all --test_output=errors
