@@ -13,15 +13,15 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:lock_contract.bzl", "is_extras_proxy")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "slim_member_lock")
-
-# buildifier: disable=bzl-visibility
 load(
     "//pycross/private:sdist_repo.bzl",
     "compute_sdist_build_config_for_testing",
     "render_build_content_for_testing",
     "select_hook_extract_patterns_for_testing",
 )
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:state_repo.bzl", "merge_workspace_locks", "slim_member_lock")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "is_wheel_platform_specific")
@@ -322,18 +322,15 @@ def _test_merge_dependencies_paths_impl(env, target):
     env.expect.that_collection(merged_foo.get("bin_paths", [])).contains_exactly(["foo-bin"])
     env.expect.that_collection(merged_foo.get("data_paths", [])).contains_exactly(["foo-data"])
     env.expect.that_collection(merged_foo.get("include_paths", [])).contains_exactly(["foo-inc"])
-    env.expect.that_collection(merged_foo.get("availability_markers", [])).contains_exactly([
-        "sys_platform == 'darwin'",
-        "sys_platform == 'linux'",
-    ]).in_order()
+    env.expect.that_bool("availability_markers" in merged_foo).equals(False)
     env.expect.that_bool("member_a" in merged.get("member_variant_flags", {})).equals(True)
     env.expect.that_bool("member_b" in merged.get("member_variant_flags", {})).equals(False)
 
-    # Slimming against merged_packages keeps wheel_platform_specific in sync with package_repo
-    # (member_a was wheel-only, but member_b supplied an sdist) while keeping availability_markers
-    # strictly per-member.
+    # Slimming against merged_packages produces version-free slot keys while keeping
+    # wheel_platform_specific in sync with merged_packages and availability_markers strictly per-member.
     slim_a = slim_member_lock(lock_a, merged["packages"])
-    slim_foo = slim_a["packages"]["foo@1.0"]
+    env.expect.that_str(slim_a["pins"]["foo"]).equals("foo")
+    slim_foo = slim_a["packages"]["foo"]
     env.expect.that_bool(is_wheel_platform_specific(slim_foo)).equals(False)
     env.expect.that_bool(bool(slim_foo.get("sdist_file"))).equals(True)
     env.expect.that_collection(slim_foo.get("availability_markers", [])).contains_exactly([
@@ -341,13 +338,13 @@ def _test_merge_dependencies_paths_impl(env, target):
     ])
 
     # Wheel-only platform-specific package with no sdist in any member stays wheel_platform_specific.
-    slim_plat = slim_a["packages"]["plat@1.0"]
+    slim_plat = slim_a["packages"]["plat"]
     env.expect.that_bool(is_wheel_platform_specific(slim_plat)).equals(True)
     env.expect.that_bool(bool(slim_plat.get("sdist_file"))).equals(False)
 
-    # Extras proxy keys drop cycle_group (thin repos always use _raw_) and still classify as extras proxies.
-    slim_extra = slim_a["packages"]["foo[extra]@1.0"]
-    env.expect.that_bool(is_extras_proxy("foo[extra]@1.0", slim_extra)).equals(True)
+    # Extras proxy keys drop cycle_group (thin repos always use _raw) and still classify as extras proxies.
+    slim_extra = slim_a["packages"]["foo[extra]"]
+    env.expect.that_bool(is_extras_proxy("foo[extra]", slim_extra)).equals(True)
     env.expect.that_bool("extras_proxy" in slim_extra).equals(False)
     env.expect.that_bool("cycle_group" in slim_extra).equals(False)
 
@@ -372,12 +369,12 @@ def _test_merge_dependencies_paths_impl(env, target):
 
     # Extras key with its own platform-specific wheel_candidates (e.g. local wheel)
     # must not be misclassified as an extras proxy delegating to the base package.
-    slim_extra_whl = slim_a["packages"]["foo[x]@1.0"]
-    env.expect.that_bool(is_extras_proxy("foo[x]@1.0", slim_extra_whl)).equals(False)
+    slim_extra_whl = slim_a["packages"]["foo[x]"]
+    env.expect.that_bool(is_extras_proxy("foo[x]", slim_extra_whl)).equals(False)
     env.expect.that_bool(is_wheel_platform_specific(slim_extra_whl)).equals(True)
     avail_lines = []
-    avail_cond = availability_condition(avail_lines, "_maybe", "foo[x]@1.0", slim_a["packages"], "ws")
-    env.expect.that_str(avail_cond).equals("@ws//_lock:_wheel_available_foo[x]@1.0")
+    avail_cond = availability_condition(avail_lines, "_maybe", "foo[x]", slim_a["packages"], "ws")
+    env.expect.that_str(avail_cond).equals("@ws__pkg_foo//:_wheel_available_[x]")
     env.expect.that_collection(avail_lines).contains_exactly([])
 
 def _test_merge_dependencies_paths(name):

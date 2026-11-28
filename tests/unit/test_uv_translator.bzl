@@ -9,7 +9,10 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 load("//pycross/private:lock_resolver.bzl", "resolve", "resolve_workspace")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
+load("//pycross/private:repo_slots.bzl", "assign_fork_slots")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:spoke_repo.bzl", "build_spoke_payloads", "render_spoke_build")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:translator_project.bzl", "read_project_dict_for_testing")
@@ -28,6 +31,9 @@ load("//pycross/private:uv_lock_model.bzl", "discover_uv_all_members", "translat
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:variant_util.bzl", "fold_variant_marker", "variant_active_tokens", "variant_conflict_pairs")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/thin_repo:markers.bzl", "render_member_markers_build")
 
 def _lock_model(
         projects = ["*"],
@@ -1775,35 +1781,45 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     env.expect.that_int(len(torch_avail)).equals(3)
     env.expect.that_bool(any(["extra == '__variant_group_native-torch-probe_cpu'" in m for m in torch_avail])).equals(True)
 
-    # 3. Render lock.bzl and verify variants = [":_variant_state"] on evaluators.
+    # 3. Render spokes + member _markers and verify variants = ["@ws__state//:_variant_state"] on evaluators.
     repo_map = {k: "@repo//" + k + ":file" for k in resolved.remote_files.keys()}
-    rendered_lock = render_lock_bzl(
-        {
-            "packages": resolved.packages,
-            "cycle_groups": resolved.cycle_groups,
-            "resolution_marker_exprs": resolved.resolution_marker_exprs,
-        },
-        repo_map,
+    slots = assign_fork_slots(resolved.packages)
+    spokes = build_spoke_payloads(
         "ws",
+        "ws__state",
+        resolved.packages,
+        repo_map,
+        {},
+        slots,
+        cycle_groups = resolved.cycle_groups,
         has_variants = True,
     )
+    rendered_spokes = {name: render_spoke_build(s.payload) for name, s in spokes.items()}
+    rendered_markers = render_member_markers_build(
+        resolved.packages,
+        resolved.resolution_marker_exprs,
+        "ws__state",
+        has_variants = True,
+    )
+    rendered_all = "\n".join(rendered_spokes.values()) + "\n" + (rendered_markers or "")
 
     for extra_name in ["cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"]:
-        env.expect.that_str(rendered_lock).contains('"cuda-toolkit[{}]@13.0.2"'.format(extra_name))
+        env.expect.that_str(rendered_spokes["cuda-toolkit"]).contains('"[{}]"'.format(extra_name))
 
     eval_blocks = [
-        b.split("\n    )")[0]
-        for b in rendered_lock.split("pycross_pep508_evaluator(\n")[1:]
+        b.split("\n)")[0]
+        for b in rendered_all.split("pycross_pep508_evaluator(\n")[1:]
     ]
     for block in eval_blocks:
         if "__variant_" in block.split('expr = "')[1].split('",')[0]:
-            env.expect.that_str(block).contains('variants = [":_variant_state"]')
+            env.expect.that_str(block).contains('variants = ["@ws__state//:_variant_state"]')
         else:
             env.expect.that_bool("variants =" in block).equals(False)
 
-    env.expect.that_str(rendered_lock).contains('name = "_wheel_available_torch@2.12.0"')
+    torch_slot = slots["torch@2.12.0"]
+    env.expect.that_str(rendered_spokes["torch"]).contains('name = "_wheel_available{}"'.format("_" + torch_slot if torch_slot else ""))
     env.expect.that_bool(len(resolved.packages["torch@2.12.0"].get("availability_markers", [])) > 0).equals(True)
-    env.expect.that_str(rendered_lock).contains("_marker_eval_")
+    env.expect.that_str(rendered_markers).contains("_marker_eval_")
 
 def _test_uv_issue_1510_verbatim_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -2717,19 +2733,12 @@ def _test_uv_multi_source_same_version_impl(env, target):
     lib_only = translate_uv(_project(name = "lib"), lock, _lock_model(projects = ["lib"], dependency_groups = ["default"]))
     env.expect.that_collection(lib_only["pins"]["torch"].values()).contains_exactly([cpu_key, "torch@2.9.1+cpu", pypi_key])
 
-    # Downstream resolve() + render_lock_bzl() succeed with zero duplicate-wheel collisions.
+    # Downstream resolve() + spoke rendering succeed with zero duplicate-wheel collisions.
     resolved = resolve(res)
     repo_map = {fk: "@pypi_{}//:file".format(i) for i, fk in enumerate(sorted(resolved.remote_files.keys()))}
-    rendered = render_lock_bzl(
-        {
-            "packages": resolved.packages,
-            "pins": resolved.pins,
-            "variants": resolved.variants,
-            "resolution_marker_exprs": resolved.resolution_marker_exprs,
-        },
-        repo_map,
-        "ws__pkgs",
-    )
+    slots = assign_fork_slots(resolved.packages)
+    spokes = build_spoke_payloads("ws", "ws__state", resolved.packages, repo_map, {}, slots)
+    rendered = render_spoke_build(spokes["torch"].payload)
     env.expect.that_str(rendered).contains(cpu_key)
     env.expect.that_str(rendered).contains(pypi_key)
 

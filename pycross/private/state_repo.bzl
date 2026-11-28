@@ -15,17 +15,248 @@ load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS")
 load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private/lock_render:reset_plan.bzl", "render_state_reset_bzl")
 load("//pycross/private/thin_repo:metadata.bzl", "LEGACY_CARGO_HOOK_BACKENDS")
-load(":build_text.bzl", "flag_setting")
+load(":build_text.bzl", "alias", "flag_setting")
 load(
     ":lock_contract.bzl",
     "VARIANTS_PACKAGE",
     "VARIANT_STATE_TARGET",
     "constraint_setting_name",
+    "cycle_node_key",
     "unselected_target_name",
     "variants_flag_label",
 )
-load(":util.bzl", "underscore_name")
-load(":variant_util.bzl", "variant_set_suffix")
+load(":override_helpers.bzl", "merge_backend_overrides")
+load(":repo_slots.bzl", "assign_fork_slots")
+load(":util.bzl", "base_package_key", "is_wheel_platform_specific", "parse_package_key", "underscore_name")
+load(":variant_util.bzl", "variant_item_qname", "variant_set_suffix")
+
+def _merge_package_entries(entries):
+    merged = dict(entries[0])
+    merged.pop("availability_markers", None)
+
+    for pkg_data in entries[1:]:
+        for field in ("site_paths", "bin_paths", "data_paths", "include_paths", "sdist_file"):
+            if not merged.get(field) and pkg_data.get(field):
+                merged[field] = pkg_data[field]
+
+    # Merge marker_dependencies: union across workspace members, dedup by (key, marker).
+    seen_marker_deps = {}  # (key, marker) -> entry
+    for md in merged.get("marker_dependencies", []):
+        seen_marker_deps[(md["key"], md.get("marker"))] = md
+    for pkg_data in entries[1:]:
+        for md in pkg_data.get("marker_dependencies", []):
+            dedupe_key = (md["key"], md.get("marker"))
+            if dedupe_key not in seen_marker_deps:
+                seen_marker_deps[dedupe_key] = md
+    merged["marker_dependencies"] = sorted(seen_marker_deps.values(), key = lambda m: (m["key"], m.get("marker", "")))
+
+    # Merge wheel_candidates: union across members, dedup by filename.
+    seen_candidates = {}  # filename -> entry
+    for wc in merged.get("wheel_candidates", []):
+        seen_candidates[wc["filename"]] = wc
+    for pkg_data in entries[1:]:
+        for wc in pkg_data.get("wheel_candidates", []):
+            if wc["filename"] not in seen_candidates:
+                seen_candidates[wc["filename"]] = wc
+    merged["wheel_candidates"] = sorted(seen_candidates.values(), key = lambda w: w["filename"])
+
+    return merged
+
+def merge_workspace_locks(member_locks, skip_variant_members = None):
+    """Merge per-member resolved locks into a single workspace lock payload.
+
+    `availability_markers` and `resolution_marker_exprs` stay strictly per-member
+    (rendered in each thin repo's `_markers/BUILD.bazel`) and are intentionally
+    excluded from the merged workspace lock.
+
+    Args:
+        member_locks: Ordered list of `(member_name, lock_dict)` pairs or a dict
+            `{member_name: lock_dict}` preserving workspace repo order.
+        skip_variant_members: Optional collection of member repo names whose
+            `_variants` flags should not be wired into workspace resolvers or
+            `reset.bzl` (e.g. auto-generated `<ws>__build`).
+
+    Returns:
+        Dict with `"packages"` and optional non-empty `"cycle_groups"`,
+        `"variant_items"`, `"variant_sets"`, and `"member_variant_flags"`.
+    """
+    items = member_locks.items() if type(member_locks) == "dict" else member_locks
+    skip_set = {m: True for m in (skip_variant_members or [])}
+
+    all_pkg_keys = {}  # pkg_key -> [pkg_data, ...]
+    cycle_groups = {}  # group_name -> [pkg_key, ...]
+    variant_items = {}  # qualified_name -> True (dedup across members)
+    variant_sets = []  # list of {"qnames": [...], "flags": {flag label: [qnames]}, "member_flags": {member: {flag: [qnames]}}}
+    variant_sets_seen = {}  # sorted qnames key -> variant set (dedup across members)
+    member_variant_flags = {}  # member -> {flag_name: True} (all valid flags for that member)
+
+    for member, member_lock in items:
+        skip_member_variants = member in skip_set
+        for variant_set in member_lock.get("variants", []):
+            set_qnames = []
+            set_flags = {}  # "@<member>//_variants:<flag>" -> [qnames]
+            set_member_flags = {}  # flag -> [qnames]
+            for item in variant_set["items"]:
+                qname = variant_item_qname(item)
+                variant_items[qname] = True
+                set_qnames.append(qname)
+                if not skip_member_variants:
+                    for flag in item.get("flags", []):
+                        set_flags.setdefault(variants_flag_label(member, flag), []).append(qname)
+                        set_member_flags.setdefault(flag, []).append(qname)
+                        member_variant_flags.setdefault(member, {})[flag] = True
+            set_key = "|".join(sorted(set_qnames))
+            if set_key not in variant_sets_seen:
+                variant_sets_seen[set_key] = {"qnames": set_qnames, "flags": {}, "member_flags": {}}
+                variant_sets.append(variant_sets_seen[set_key])
+            variant_sets_seen[set_key]["flags"].update(set_flags)
+            if set_member_flags:
+                variant_sets_seen[set_key]["member_flags"][member] = set_member_flags
+
+        for pkg_key, pkg_data in member_lock.get("packages", {}).items():
+            all_pkg_keys.setdefault(pkg_key, []).append(pkg_data)
+
+        # Merge cycle groups (union across members).
+        for group_name, group_members in member_lock.get("cycle_groups", {}).items():
+            if group_name in cycle_groups and sorted(cycle_groups[group_name]) != sorted(group_members):
+                fail("Cycle group {} conflicts between workspace members ({} vs {})".format(group_name, cycle_groups[group_name], group_members))
+            cycle_groups[group_name] = group_members
+
+    packages = {}
+    for pkg_key, entries in all_pkg_keys.items():
+        if len(entries) <= 1:
+            entry = dict(entries[0])
+            entry.pop("availability_markers", None)
+            packages[pkg_key] = entry
+        else:
+            packages[pkg_key] = _merge_package_entries(entries)
+
+    result = {"packages": packages}
+    if cycle_groups:
+        result["cycle_groups"] = cycle_groups
+    if variant_items:
+        result["variant_items"] = variant_items
+    if variant_sets:
+        result["variant_sets"] = variant_sets
+    if member_variant_flags:
+        result["member_variant_flags"] = member_variant_flags
+    return result
+
+def spoke_hook_backend_subdirs(hooks = None, hook_subdirs = None):
+    """Map each spoke-scoped hook backend name to its target subdirectory name.
+
+    Args:
+        hooks: Optional dict of `{backend_name: hook_fn}` (defaults to `PACKAGE_REPO_HOOKS`).
+        hook_subdirs: Optional dict of `{backend_name: subdir}` (defaults to `PACKAGE_REPO_HOOK_SUBDIRS`).
+
+    Returns:
+        Dict mapping spoke-scoped `backend_name -> subdir` (e.g. `{"maturin_build": "_cargo"}`).
+    """
+    hooks = PACKAGE_REPO_HOOKS if hooks == None else hooks
+    subdirs = PACKAGE_REPO_HOOK_SUBDIRS if hook_subdirs == None else hook_subdirs
+    result = {}
+    for backend_name in sorted(hooks.keys()):
+        subdir = subdirs.get(backend_name)
+        if subdir:
+            result[backend_name] = subdir
+        elif backend_name in LEGACY_CARGO_HOOK_BACKENDS and backend_name not in subdirs:
+            result[backend_name] = "_cargo"
+    return result
+
+def slim_member_lock(
+        member_lock,
+        merged_packages,
+        fork_slots = None,
+        ws_overrides = None,
+        spoke_hook_subdirs = None):
+    """Build the minimal, version-free per-member manifest needed by `thin_package_repo`.
+
+    Rewrites every pin target key to a version-free `slot_key` (`foo`, `foo@s0`,
+    `foo[extra]@s1`), keeps only pinned keys and their base packages, filters
+    `resolution_marker_exprs` to member-referenced constraints, and precomputes
+    version-free `hook_subdirs` from workspace overrides so routine version bumps
+    leave the member repo's inputs byte-identical.
+
+    Args:
+        member_lock: Resolved lock dict for one workspace member.
+        merged_packages: Merged `"packages"` dict from `merge_workspace_locks`.
+        fork_slots: Optional precomputed fork slots dict from `assign_fork_slots`.
+        ws_overrides: Optional workspace override configs dict (`{override_key: {backend: attrs}}`).
+        spoke_hook_subdirs: Optional `{backend_name: subdir}` dict from `spoke_hook_backend_subdirs`.
+
+    Returns:
+        Version-free slimmed dict suitable for `json.encode()` into `thin_package_repo.lock_data`.
+    """
+    slots = fork_slots if fork_slots != None else assign_fork_slots(merged_packages)
+    raw_pins = member_lock.get("pins", {})
+    pins = {}
+    kept_pkg_keys = {}
+    for pin_name in sorted(raw_pins.keys()):
+        pin_val = raw_pins[pin_name]
+        if type(pin_val) == "string":
+            kept_pkg_keys[pin_val] = True
+            kept_pkg_keys[base_package_key(pin_val)] = True
+            pins[pin_name] = cycle_node_key(pin_val, slots.get(pin_val, ""))
+        else:
+            mapped = {}
+            for cname in sorted(pin_val.keys()):
+                pkg_key = pin_val[cname]
+                kept_pkg_keys[pkg_key] = True
+                kept_pkg_keys[base_package_key(pkg_key)] = True
+                mapped[cname] = cycle_node_key(pkg_key, slots.get(pkg_key, ""))
+            pins[pin_name] = mapped
+
+    member_packages = member_lock.get("packages", {})
+    slim_packages = {}
+    for pkg_key in sorted(kept_pkg_keys.keys()):
+        member_pkg = member_packages.get(pkg_key, {})
+        merged_pkg = merged_packages.get(pkg_key, member_pkg)
+        parts = parse_package_key(pkg_key)
+        slot_key = cycle_node_key(pkg_key, slots.get(pkg_key, ""))
+        slim_pkg = {}
+        if is_wheel_platform_specific(merged_pkg):
+            slim_pkg["wheel_platform_specific"] = True
+        if parts.extra and merged_pkg.get("wheel_candidates"):
+            slim_pkg["extras_proxy"] = False
+        if merged_pkg.get("sdist_file"):
+            slim_pkg["sdist_file"] = True
+        if member_pkg.get("availability_markers"):
+            slim_pkg["availability_markers"] = member_pkg["availability_markers"]
+        if not parts.extra and merged_pkg.get("sdist_file") and ws_overrides and spoke_hook_subdirs:
+            pkg_name = pypackaging.utils.canonicalize_name(parts.name)
+            matched_backends = merge_backend_overrides(ws_overrides, pkg_name, parts.version)
+            matched_subdirs = sorted({
+                spoke_hook_subdirs[b]: True
+                for b in matched_backends
+                if b in spoke_hook_subdirs
+            }.keys())
+            if matched_subdirs:
+                slim_pkg["hook_subdirs"] = matched_subdirs
+        slim_packages[slot_key] = slim_pkg
+
+    slim = {
+        "packages": slim_packages,
+        "pins": pins,
+    }
+    raw_res_exprs = member_lock.get("resolution_marker_exprs")
+    if raw_res_exprs:
+        referenced = {}
+        for pin_val in raw_pins.values():
+            if type(pin_val) != "dict":
+                continue
+            for cname in pin_val.keys():
+                if cname and cname in raw_res_exprs:
+                    referenced[cname] = True
+                    entry = raw_res_exprs[cname]
+                    if type(entry) == "dict" and entry.get("marker") in raw_res_exprs:
+                        referenced[entry["marker"]] = True
+        if referenced:
+            slim["resolution_marker_exprs"] = {c: raw_res_exprs[c] for c in sorted(referenced.keys())}
+    for key in ("variants", "testonly_pins"):
+        val = member_lock.get(key)
+        if val:
+            slim[key] = val
+    return slim
 
 def normalize_workspace_variants(variant_sets):
     """Normalize deduplicated workspace variant sets once for state rendering.
@@ -349,8 +580,19 @@ def _state_repo_impl(rctx):
             }
             for norm_name, entry in raw_pkgs_info.items()
         }
-        for path, content in run_package_repo_hooks(fallback_hooks, packages_info, override_configs).items():
+        hook_files = run_package_repo_hooks(fallback_hooks, packages_info, override_configs)
+        for path, content in hook_files.items():
             rctx.file(path, content)
+        if hook_files:
+            sdist_lines = ['package(default_visibility = ["//visibility:public"])', ""]
+            has_sdist_shim = False
+            for norm_name in sorted(raw_pkgs_info.keys()):
+                for v in raw_pkgs_info[norm_name]["versions"]:
+                    if v.get("sdist_label"):
+                        sdist_lines.extend(alias(v["package_key"], v["sdist_label"]))
+                        has_sdist_shim = True
+            if has_sdist_shim:
+                rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
 
     if hasattr(rctx, "repo_metadata"):
         return rctx.repo_metadata(reproducible = True)

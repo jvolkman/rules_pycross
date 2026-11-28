@@ -1,7 +1,7 @@
 """Metadata, requirements, backend forwarding, and hook-subdir files for thin package repos."""
 
 load("//pycross/private:build_text.bzl", "alias")
-load("//pycross/private:override_helpers.bzl", "merge_backend_overrides")
+load("//pycross/private:lock_contract.bzl", "spoke_slot_label", "state_repo_name")
 load("//pycross/private:util.bzl", "base_package_key", "parse_package_key", "underscore_name")
 load(":common.bzl", "NO_MATCH_ERROR_TARGET", "effective_base_target_dict", "is_key_platform_specific", "safe_name")
 load(":selects.bzl", "target_select")
@@ -32,8 +32,8 @@ def requirements_bzl(rctx, pins, packages, testonly_pins = {}):
 
     Args:
         rctx: Repository context (uses `rctx.name`).
-        pins: Normalized pin dict mapping pin name -> `{constraint: pkg_key}`.
-        packages: Lock packages dict.
+        pins: Normalized pin dict mapping pin name -> `{constraint: slot_key}`.
+        packages: Slimmed member packages dict.
         testonly_pins: Set/dict of pin names marked testonly.
 
     Returns:
@@ -49,8 +49,8 @@ def requirements_bzl(rctx, pins, packages, testonly_pins = {}):
         # so inactive variants/forks become _empty_library instead of no_match_error.
         is_conditional = "" not in pin_target_dict
         if not is_conditional:
-            for pkg_key in pin_target_dict.values():
-                if is_key_platform_specific(packages, pkg_key):
+            for slot_key in pin_target_dict.values():
+                if is_key_platform_specific(packages, slot_key):
                     is_conditional = True
                     break
 
@@ -83,13 +83,13 @@ def requirements_bzl(rctx, pins, packages, testonly_pins = {}):
     lines.append("]")
     return "\n".join(lines) + "\n"
 
-def emit_backend_files(rctx, backend_names, workspace_repo):
+def emit_backend_files(rctx, backend_names, state_repo):
     """Generate `_backend/BUILD.bazel` and forwarding macro `.bzl` files.
 
     Args:
         rctx: Repository context.
         backend_names: List of registered backend rule names.
-        workspace_repo: Name of the workspace (backing) repo.
+        state_repo: Apparent name of the workspace's `@<ws>__state` repo.
     """
     if not backend_names:
         return
@@ -101,34 +101,40 @@ def emit_backend_files(rctx, backend_names, workspace_repo):
         lines = [
             '"""Backend macro alias for this thin repo."""',
             "",
-            'load("@{}//_backend:{}.bzl", _{} = "{}")'.format(workspace_repo, macro_name, macro_name, macro_name),
+            'load("@{}//_backend:{}.bzl", _{} = "{}")'.format(state_repo, macro_name, macro_name, macro_name),
             "",
             "{} = _{}".format(macro_name, macro_name),
             "",
         ]
         rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
-def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None, hook_backends = None, subdir = "_cargo", resolution_marker_exprs = None):
-    """Render `<subdir>/BUILD.bazel` aliases for packages with hook-backed overrides, or None.
+def hook_subdir_build(
+        grouped_pins,
+        packages,
+        workspace_name,
+        state_repo = None,
+        no_variant_fallbacks = None,
+        subdir = "_cargo",
+        resolution_marker_exprs = None):
+    """Render `<subdir>/BUILD.bazel` aliases for packages with matching spoke hook subdirs, or None.
+
+    Uses precomputed version-free `hook_subdirs` metadata from `slim_member_lock`
+    and points directly at `@<ws>__pkg_<name>//<subdir>:pkg[_<slot>]`.
 
     Args:
         grouped_pins: Dict of base pin name -> `{"base_target", "extras"}`.
-        packages: Lock packages dict.
-        override_configs: Decoded backend override configs dict.
-        workspace_repo: Name of the workspace (backing) repo.
+        packages: Slimmed member packages dict keyed by version-free slot key.
+        workspace_name: Workspace name.
+        state_repo: Optional apparent name of `@<ws>__state` (defaults to `state_repo_name(workspace_name)`).
         no_variant_fallbacks: Result of `variant_fallbacks`, or None.
-        hook_backends: List of backend names that contribute to `subdir`, or None for legacy cargo fallback.
         subdir: Subdirectory name under the repo (default `"_cargo"`).
-        resolution_marker_exprs: Optional lock `resolution_marker_exprs` dict.
+        resolution_marker_exprs: Optional member `resolution_marker_exprs` dict.
 
     Returns:
         `struct(build, unselected_groups)` with generated `<subdir>/BUILD.bazel` content
         and any required `_unselected_all_*` groups, or None if no packages match.
     """
-    effective_backends = LEGACY_CARGO_HOOK_BACKENDS if hook_backends == None else hook_backends
-    if not effective_backends:
-        return None
-
+    state_repo = state_repo or state_repo_name(workspace_name)
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
@@ -137,6 +143,7 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
     variant_constraints = no_variant_fallbacks.sets if no_variant_fallbacks else None
     has_targets = False
     unselected_groups = {}
+    hook_label_fn = lambda skey: spoke_slot_label(workspace_name, skey, "hook", subdir = subdir)
     for base_pin_name in sorted(grouped_pins.keys()):
         us_name = underscore_name(base_pin_name)
         target_dict = effective_base_target_dict(
@@ -148,13 +155,9 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
             continue
 
         matched_target_dict = {}
-        for constraint, pkg_key in target_dict.items():
-            parts = parse_package_key(pkg_key)
-            base_key = base_package_key(pkg_key)
-            if not packages.get(base_key, {}).get("sdist_file"):
-                continue
-            merged = merge_backend_overrides(override_configs, parts.name, parts.version)
-            if not any([b in merged for b in effective_backends]):
+        for constraint, slot_key in target_dict.items():
+            base_key = base_package_key(slot_key)
+            if subdir not in packages.get(base_key, {}).get("hook_subdirs", []):
                 continue
             matched_target_dict[constraint] = base_key
         if not matched_target_dict:
@@ -162,11 +165,12 @@ def hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, 
 
         sel = target_select(
             matched_target_dict,
-            "@{}//{}:".format(workspace_repo, subdir),
-            workspace_repo,
+            hook_label_fn,
+            state_repo,
             no_variant_fallbacks = no_variant_fallbacks,
             all_target_dict = target_dict,
             fallback_target = NO_MATCH_ERROR_TARGET,
+            resolution_marker_exprs = resolution_marker_exprs,
         )
         unselected_groups.update(sel.unselected_groups)
         lines.extend(alias(us_name, sel.expr, actual_is_expr = True))

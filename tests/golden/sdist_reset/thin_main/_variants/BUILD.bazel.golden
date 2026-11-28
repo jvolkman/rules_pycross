@@ -7,8 +7,8 @@ load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant
 selects.config_setting_group(
     name = "_selected_extra_app_cpu",
     match_any = [
-        "@golden_sdist_reset__pkgs//_lock:is_extra_app_cpu",
-        "@golden_sdist_reset__pkgs//_lock:_unselected_extra_app_cpu_extra_app_gpu",
+        "@golden_sdist_reset__state//:is_extra_app_cpu",
+        "@golden_sdist_reset__state//:_unselected_extra_app_cpu_extra_app_gpu",
     ],
 )
 
@@ -34,7 +34,7 @@ bool_flag(
 
 alias(
     name = "is_extra_gpu",
-    actual = "@golden_sdist_reset__pkgs//_lock:is_extra_app_gpu",
+    actual = "@golden_sdist_reset__state//:is_extra_app_gpu",
 )
 
 pycross_no_variant_selected(

@@ -1,23 +1,71 @@
-"""Tests for resolved_lock_renderer"""
+"""Tests for spoke_repo, member _markers, and variant-reset lock rendering."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl", "render_lock_bzl_with_meta", "render_reset_bzl")
+load("//pycross/private:repo_slots.bzl", "assign_fork_slots", "sdist_slot_repo_name")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "marker_evaluator_name", "sanitize_name")
+load("//pycross/private:spoke_repo.bzl", "build_spoke_payloads", "render_spoke_build")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/lock_render:cycles.bzl", "build_cycle_edges_dict")
+load("//pycross/private:util.bzl", "marker_evaluator_name", "sanitize_name", "sdist_builds_disallowed")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/lock_render:reset_plan.bzl", "conflict_pairs", "marker_depends_on_variants")
+load(
+    "//pycross/private/lock_render:reset_plan.bzl",
+    "compute_workspace_reset_states",
+    "conflict_pairs",
+    "marker_depends_on_variants",
+    "render_state_reset_bzl",
+)
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/thin_repo:markers.bzl", "render_member_markers_build")
+
+def _render_spokes(lock, repo_map, workspace_name = "ws", has_variants = False, reset_conflict_sets = None):
+    pkgs = lock.get("packages", {})
+    slots = assign_fork_slots(pkgs)
+    sdist_repo_map = {}
+    for pkg_key, pkg in sorted(pkgs.items()):
+        if pkg.get("build_target") or sdist_builds_disallowed(pkg):
+            continue
+        if pkg.get("sdist_file"):
+            sdist_repo_map[pkg_key] = "@{}//:wheel".format(sdist_slot_repo_name(workspace_name, pkg_key, slots.get(pkg_key, "")))
+    state_repo = workspace_name + "__state"
+    reset_states = (
+        compute_workspace_reset_states(
+            pkgs,
+            repo_map,
+            conflict_pairs(reset_conflict_sets),
+            workspace_name,
+            slots,
+        ) if reset_conflict_sets else None
+    )
+    spokes = build_spoke_payloads(
+        workspace_name,
+        state_repo,
+        pkgs,
+        repo_map,
+        sdist_repo_map,
+        slots,
+        cycle_groups = lock.get("cycle_groups"),
+        has_variants = has_variants or bool(reset_conflict_sets),
+        reset_states = reset_states,
+    )
+    rendered = {name: render_spoke_build(s.payload) for name, s in spokes.items()}
+    return struct(
+        spokes = rendered,
+        payloads = {name: s.payload for name, s in spokes.items()},
+        all = "\n".join([rendered[k] for k in sorted(rendered.keys())]),
+        slots = slots,
+        reset_states = reset_states,
+    )
 
 # buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
-    """Verify basic rendering with wheel_candidates (wheel selection via pycross_wheel_chooser)."""
+    """Verify basic spoke rendering with wheel_candidates (wheel selection via pycross_wheel_chooser)."""
     lock = {
         "packages": {
             "foo@1.0": {
@@ -30,11 +78,12 @@ def _test_render_lock_impl(env, target):
             },
         },
     }
-    repo_map = {"foo_wheel": "@my_repo//foo:wheel"}
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+    res = _render_spokes(lock, {"foo_wheel": "@my_repo//foo:wheel"}).spokes["foo"]
 
     env.expect.that_bool("pycross_wheel_library(" in res).equals(True)
     env.expect.that_bool("pycross_wheel_chooser(" in res).equals(True)
+    env.expect.that_str(res).contains('name = "wheel",')
+    env.expect.that_str(res).contains('package = "foo@1.0",')
 
 def _test_render_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -42,7 +91,7 @@ def _test_render_lock(name):
 
 # buildifier: disable=unused-variable
 def _test_cycle_group_rendering_impl(env, target):
-    """Verify unconditional cycle groups render direct pycross_library_proxy targets."""
+    """Verify unconditional cycle groups render direct cross-spoke pycross_library_proxy targets."""
     lock = {
         "cycle_groups": {
             "cycle_group_abc123": ["alpha@1.0", "beta@2.0"],
@@ -50,60 +99,37 @@ def _test_cycle_group_rendering_impl(env, target):
         "packages": {
             "alpha@1.0": {
                 "cycle_group": "cycle_group_abc123",
-                "marker_dependencies": [
-                    {"key": "beta@2.0", "marker": None},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "alpha-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "alpha_wheel"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "beta@2.0", "marker": None}],
+                "wheel_candidates": [{"filename": "alpha-1.0-py3-none-any.whl", "file_reference": {"key": "alpha_wheel"}}],
             },
             "beta@2.0": {
                 "cycle_group": "cycle_group_abc123",
-                "marker_dependencies": [
-                    {"key": "alpha@1.0", "marker": None},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "beta-2.0-py3-none-any.whl",
-                        "file_reference": {"key": "beta_wheel"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "alpha@1.0", "marker": None}],
+                "wheel_candidates": [{"filename": "beta-2.0-py3-none-any.whl", "file_reference": {"key": "beta_wheel"}}],
             },
         },
     }
-    repo_map = {
-        "alpha_wheel": "@repo//alpha:wheel",
-        "beta_wheel": "@repo//beta:wheel",
-    }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+    out = _render_spokes(lock, {"alpha_wheel": "@repo//alpha:wheel", "beta_wheel": "@repo//beta:wheel"})
+    alpha = out.spokes["alpha"]
+    beta = out.spokes["beta"]
 
-    # Pure unconditional cycle emits direct pycross_library_proxy with no evaluator or edges JSON.
-    env.expect.that_bool("cycle_member_marker_deps" in res).equals(False)
-    env.expect.that_bool("pycross_cycle_dep_needed" in res).equals(False)
-    env.expect.that_bool("_EDGES" in res).equals(False)
+    env.expect.that_bool("pycross_cycle_dep_needed" in out.all).equals(False)
+    env.expect.that_bool("_EDGES" in out.all).equals(False)
 
-    # Should reference _raw_ targets for both cycle members
-    env.expect.that_bool('"_raw_alpha@1.0"' in res).equals(True)
-    env.expect.that_bool('"_raw_beta@2.0"' in res).equals(True)
-
-    # Both cycle members should have direct pycross_library_proxy wrappers
-    env.expect.that_str(res).contains(
-        'pycross_library_proxy(\n        name = "alpha@1.0",\n        actual = ":_raw_alpha@1.0",\n        deps = [\n            ":_raw_beta@2.0",\n        ],\n    )',
+    env.expect.that_str(alpha).contains(
+        'pycross_library_proxy(\n    name = "pkg",\n    actual = ":_raw",\n    deps = [\n        "@ws__pkg_beta//:_raw",\n    ],\n)',
     )
-    env.expect.that_str(res).contains(
-        'pycross_library_proxy(\n        name = "beta@2.0",\n        actual = ":_raw_beta@2.0",\n        deps = [\n            ":_raw_alpha@1.0",\n        ],\n    )',
+    env.expect.that_str(beta).contains(
+        'pycross_library_proxy(\n    name = "pkg",\n    actual = ":_raw",\n    deps = [\n        "@ws__pkg_alpha//:_raw",\n    ],\n)',
     )
 
-    # Cycled package deps should exclude same-cycle members from _deps list
-    alpha_deps_section = res.split("_alpha_1_0_deps = [")[1].split("]")[0] if "_alpha_1_0_deps = [" in res else ""
-    env.expect.that_bool('"beta@2.0"' not in alpha_deps_section).equals(True)
+    # Cycled package deps exclude same-cycle members from _deps list.
+    alpha_deps_section = alpha.split("_deps = [")[1].split("]")[0] if "_deps = [" in alpha else ""
+    env.expect.that_bool("beta" not in alpha_deps_section).equals(True)
 
-    # dist_info for cycle members points directly at _raw_<pkg>, bypassing the cycle proxy
-    alpha_di = res.split('name = "_dist_info_alpha@1.0"')[1].split(")", 1)[0]
-    env.expect.that_str(alpha_di).contains('pkg = ":_raw_alpha@1.0"')
+    # dist_info for cycle members points directly at :_raw, bypassing the cycle proxy.
+    alpha_di = alpha.split('name = "dist_info"')[1].split(")", 1)[0]
+    env.expect.that_str(alpha_di).contains('pkg = ":_raw"')
 
 def _test_cycle_group_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -111,7 +137,7 @@ def _test_cycle_group_rendering(name):
 
 # buildifier: disable=unused-variable
 def _test_cycle_group_marker_specific_rendering_impl(env, target):
-    """Verify 1-hop marker cycle reuses _marker_eval_*_match and multi-hop emits _EDGES_JSON + evaluator."""
+    """Verify 1-hop marker cycle reuses local _marker_eval_*_match and multi-hop emits _CYCLE_EDGES_JSON."""
     lock = {
         "cycle_groups": {
             "cycle_group_abc": ["alpha@1.0", "beta@2.0", "appnope@1.0"],
@@ -121,46 +147,19 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
                 "cycle_group": "cycle_group_abc",
                 "marker_dependencies": [
                     {"key": "beta@2.0", "marker": None},
-                    {
-                        "key": "appnope@1.0",
-                        "marker": "sys_platform == \"darwin\"",
-                        "marker_ast": {
-                            "op": "==",
-                            "lhs": {"type": "marker", "value": "sys_platform"},
-                            "rhs": {"type": "string", "value": "darwin"},
-                        },
-                    },
+                    {"key": "appnope@1.0", "marker": 'sys_platform == "darwin"'},
                 ],
-                "wheel_candidates": [
-                    {
-                        "filename": "alpha-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "alpha_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "alpha-1.0-py3-none-any.whl", "file_reference": {"key": "alpha_wheel"}}],
             },
             "beta@2.0": {
                 "cycle_group": "cycle_group_abc",
-                "marker_dependencies": [
-                    {"key": "alpha@1.0", "marker": None},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "beta-2.0-py3-none-any.whl",
-                        "file_reference": {"key": "beta_wheel"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "alpha@1.0", "marker": None}],
+                "wheel_candidates": [{"filename": "beta-2.0-py3-none-any.whl", "file_reference": {"key": "beta_wheel"}}],
             },
             "appnope@1.0": {
                 "cycle_group": "cycle_group_abc",
-                "marker_dependencies": [
-                    {"key": "alpha@1.0", "marker": None},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "appnope-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "appnope_wheel"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "alpha@1.0", "marker": None}],
+                "wheel_candidates": [{"filename": "appnope-1.0-py3-none-any.whl", "file_reference": {"key": "appnope_wheel"}}],
             },
         },
     }
@@ -169,42 +168,26 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
         "beta_wheel": "@repo//beta:wheel",
         "appnope_wheel": "@repo//appnope:wheel",
     }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
-
-    # 1-hop marker cycle reuses _marker_eval_*_match with no _cycle_needed_* or _EDGES_JSON.
+    out = _render_spokes(lock, repo_map)
     darwin_match = marker_evaluator_name('sys_platform == "darwin"') + "_match"
-    env.expect.that_bool("_cycle_needed_" in res).equals(False)
-    env.expect.that_bool("_EDGES_JSON" in res).equals(False)
-    env.expect.that_bool("cycle_dep_needed.bzl" in res).equals(False)
-    env.expect.that_bool("marker_ast" in res).equals(False)
-    env.expect.that_str(res).contains('name = "alpha@1.0",\n        actual = ":_raw_alpha@1.0",')
-    env.expect.that_str(res).contains('name = "beta@2.0",\n        actual = ":_raw_beta@2.0",')
-    env.expect.that_str(res).contains('name = "appnope@1.0",\n        actual = ":_raw_appnope@1.0",')
-    env.expect.that_str(res).contains('":{}": [":_raw_appnope@1.0"]'.format(darwin_match))
+    env.expect.that_bool("_cycle_needed_" in out.all).equals(False)
+    env.expect.that_bool("_EDGES_JSON" in out.all).equals(False)
+    env.expect.that_bool("cycle_dep_needed.bzl" in out.all).equals(False)
+    env.expect.that_str(out.spokes["alpha"]).contains('":{}": ["@ws__pkg_appnope//:_raw"]'.format(darwin_match))
+    env.expect.that_str(out.spokes["beta"]).contains('":{}": ["@ws__pkg_appnope//:_raw"]'.format(darwin_match))
 
-    # Multi-hop conditional cycle (a -> b [darwin] -> c [py<3.13] -> a) emits _EDGES_JSON
-    # and pycross_cycle_dep_needed for the 2-hop edge a -> c.
+    # Multi-hop conditional cycle (a -> b [darwin] -> c [py<3.13] -> a) emits _CYCLE_EDGES_JSON.
     mh_lock = {
-        "cycle_groups": {
-            "cycle_group_mh": ["a@1.0", "b@1.0", "c@1.0"],
-        },
+        "cycle_groups": {"cycle_group_mh": ["a@1.0", "b@1.0", "c@1.0"]},
         "packages": {
             "a@1.0": {
                 "cycle_group": "cycle_group_mh",
-                "marker_dependencies": [
-                    {
-                        "key": "b@1.0",
-                        "marker": 'sys_platform == "darwin"',
-                        "marker_ast": {"op": "=="},
-                    },
-                ],
+                "marker_dependencies": [{"key": "b@1.0", "marker": 'sys_platform == "darwin"'}],
                 "wheel_candidates": [{"filename": "a-1.0-py3-none-any.whl", "file_reference": {"key": "alpha_wheel"}}],
             },
             "b@1.0": {
                 "cycle_group": "cycle_group_mh",
-                "marker_dependencies": [
-                    {"key": "c@1.0", "marker": "python_version < '3.13'"},
-                ],
+                "marker_dependencies": [{"key": "c@1.0", "marker": "python_version < '3.13'"}],
                 "wheel_candidates": [{"filename": "b-1.0-py3-none-any.whl", "file_reference": {"key": "beta_wheel"}}],
             },
             "c@1.0": {
@@ -214,13 +197,12 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
             },
         },
     }
-    mh_res = render_lock_bzl(mh_lock, repo_map, "my_rctx")
-    env.expect.that_str(mh_res).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
-    env.expect.that_int(mh_res.count("_CYCLE_GROUP_MH_EDGES_JSON = ")).equals(1)
-    env.expect.that_str(mh_res).contains('name = "_cycle_needed_a_1_0_c_1_0",')
-    env.expect.that_str(mh_res).contains("edges = _CYCLE_GROUP_MH_EDGES_JSON,")
-    env.expect.that_str(mh_res).contains('":_cycle_needed_a_1_0_c_1_0_match": [":_raw_c@1.0"]')
-    env.expect.that_bool("marker_ast" in mh_res).equals(False)
+    mh_a = _render_spokes(mh_lock, repo_map).spokes["a"]
+    env.expect.that_str(mh_a).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
+    env.expect.that_int(mh_a.count("_CYCLE_EDGES_JSON = ")).equals(1)
+    env.expect.that_str(mh_a).contains('name = "_cycle_needed_a_c",')
+    env.expect.that_str(mh_a).contains("edges = _CYCLE_EDGES_JSON,")
+    env.expect.that_str(mh_a).contains('":_cycle_needed_a_c_match": ["@ws__pkg_c//:_raw"]')
 
 def _test_cycle_group_marker_specific_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -228,64 +210,25 @@ def _test_cycle_group_marker_specific_rendering(name):
 
 # buildifier: disable=unused-variable
 def _test_extras_rendering_impl(env, target):
-    """Verify extra_dependencies generate pycross_library_proxy targets named [extra_name]."""
+    """Verify extras generate version-free pycross_library_proxy targets named [extra_name] inside the spoke."""
     lock = {
         "packages": {
             "mylib@1.0": {
                 "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "mylib-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "mylib_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "mylib-1.0-py3-none-any.whl", "file_reference": {"key": "mylib_wheel"}}],
             },
             "mylib[test]@1.0": {
-                "marker_dependencies": [
-                    {"key": "pytest@7.0", "marker": None},
-                ],
+                "marker_dependencies": [{"key": "pytest@7.0", "marker": None}],
             },
             "mylib[dev]@1.0": {
                 "marker_dependencies": [
                     {"key": "black@23.0", "marker": None},
-                    {
-                        "key": "mypy@1.5",
-                        "marker": "sys_platform == \"linux\"",
-                        "marker_ast": {
-                            "op": "==",
-                            "lhs": {"type": "marker", "value": "sys_platform"},
-                            "rhs": {"type": "string", "value": "linux"},
-                        },
-                    },
+                    {"key": "mypy@1.5", "marker": 'sys_platform == "linux"'},
                 ],
             },
-            "pytest@7.0": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "pytest-7.0-py3-none-any.whl",
-                        "file_reference": {"key": "pytest_wheel"},
-                    },
-                ],
-            },
-            "black@23.0": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "black-23.0-py3-none-any.whl",
-                        "file_reference": {"key": "black_wheel"},
-                    },
-                ],
-            },
-            "mypy@1.5": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "mypy-1.5-py3-none-any.whl",
-                        "file_reference": {"key": "mypy_wheel"},
-                    },
-                ],
-            },
+            "pytest@7.0": {"wheel_candidates": [{"filename": "pytest-7.0-py3-none-any.whl", "file_reference": {"key": "pytest_wheel"}}]},
+            "black@23.0": {"wheel_candidates": [{"filename": "black-23.0-py3-none-any.whl", "file_reference": {"key": "black_wheel"}}]},
+            "mypy@1.5": {"wheel_candidates": [{"filename": "mypy-1.5-py3-none-any.whl", "file_reference": {"key": "mypy_wheel"}}]},
         },
     }
     repo_map = {
@@ -294,126 +237,71 @@ def _test_extras_rendering_impl(env, target):
         "black_wheel": "@repo//black:wheel",
         "mypy_wheel": "@repo//mypy:wheel",
     }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+    mylib = _render_spokes(lock, repo_map).spokes["mylib"]
 
-    # Should have py_library for [test] extra
-    env.expect.that_bool('"mylib[test]@1.0"' in res).equals(True)
-
-    # [test] deps should include pytest
-    env.expect.that_bool('":pytest@7.0"' in res).equals(True)
-
-    # Should have py_library for [dev] extra
-    env.expect.that_bool('"mylib[dev]@1.0"' in res).equals(True)
-
-    # [dev] deps should include black (unconditional) and mypy (marker-conditional via select)
-    env.expect.that_bool('":black@23.0"' in res).equals(True)
-    env.expect.that_bool('":mypy@1.5"' in res).equals(True)
-
-    # [dev] should use select for marker-conditional deps
-    env.expect.that_bool("select({" in res).equals(True)
-
-    # extras use pycross_library_proxy
-    env.expect.that_bool("pycross_library_proxy" in res).equals(True)
-
-    # Workspace lock must NOT generate workspace-wide [_all_] aggregate targets
-    # (extras aggregation is performed per thin repo from direct pins).
-    env.expect.that_bool("[_all_]" in res).equals(False)
+    env.expect.that_str(mylib).contains('name = "[test]"')
+    env.expect.that_str(mylib).contains('"@ws__pkg_pytest//:pkg"')
+    env.expect.that_str(mylib).contains('name = "[dev]"')
+    env.expect.that_str(mylib).contains('"@ws__pkg_black//:pkg"')
+    env.expect.that_str(mylib).contains('"@ws__pkg_mypy//:pkg"')
+    env.expect.that_bool("select({" in mylib).equals(True)
+    env.expect.that_bool("pycross_library_proxy" in mylib).equals(True)
+    env.expect.that_bool("[_all_]" in mylib).equals(False)
 
 def _test_extras_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_extras_rendering_impl)
 
 # buildifier: disable=unused-variable
-def _test_lock_bzl_format_impl(env, target):
-    """Verify the renderer produces a single lock.bzl string with targets() function."""
+def _test_spoke_build_format_impl(env, target):
+    """Verify spoke rendering emits direct root BUILD.bazel files with minimal loads (no def targets())."""
     lock = {
         "packages": {
             "numpy@1.26.4": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "numpy-1.26.4-py3-none-any.whl",
-                        "file_reference": {"key": "numpy_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "numpy-1.26.4-py3-none-any.whl", "file_reference": {"key": "numpy_wheel"}}],
             },
             "pandas@2.1.0": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "pandas-2.1.0-py3-none-any.whl",
-                        "file_reference": {"key": "pandas_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "pandas-2.1.0-py3-none-any.whl", "file_reference": {"key": "pandas_wheel"}}],
             },
         },
     }
-    repo_map = {
-        "numpy_wheel": "@repo//numpy:wheel",
-        "pandas_wheel": "@repo//pandas:wheel",
-    }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+    out = _render_spokes(lock, {"numpy_wheel": "@repo//numpy:wheel", "pandas_wheel": "@repo//pandas:wheel"})
+    np_build = out.spokes["numpy"]
+    pd_build = out.spokes["pandas"]
 
-    # Should be a string, not a dict
-    env.expect.that_bool(type(res) == "string").equals(True)
+    env.expect.that_bool("def targets():" in np_build).equals(False)
+    env.expect.that_str(np_build).contains('package_name = "numpy"')
+    env.expect.that_str(np_build).contains('package_version = "1.26.4"')
+    env.expect.that_str(pd_build).contains('package_name = "pandas"')
+    env.expect.that_str(pd_build).contains('package_version = "2.1.0"')
+    env.expect.that_str(np_build).contains("pycross_dist_info(")
 
-    # Should have targets() function
-    env.expect.that_bool("def targets():" in res).equals(True)
+    # Pure universal wheel with no markers skips unused pep508_evaluator and wheel_chooser loads.
+    env.expect.that_bool("pycross_pep508_evaluator" in np_build).equals(False)
+    env.expect.that_bool("pycross_wheel_chooser" in np_build).equals(False)
 
-    # Should have pycross_wheel_library for both packages
-    env.expect.that_bool('package_name = "numpy"' in res).equals(True)
-    env.expect.that_bool('package_version = "1.26.4"' in res).equals(True)
-    env.expect.that_bool('package_name = "pandas"' in res).equals(True)
-    env.expect.that_bool('package_version = "2.1.0"' in res).equals(True)
-
-    # Should have dist_info targets
-    env.expect.that_bool("pycross_dist_info(" in res).equals(True)
-
-    # Should always have marker-related loads
-    env.expect.that_bool("pycross_pep508_evaluator" in res).equals(True)
-    env.expect.that_bool("pycross_wheel_chooser" in res).equals(True)
-
-def _test_lock_bzl_format(name):
+def _test_spoke_build_format(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_lock_bzl_format_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_spoke_build_format_impl)
 
 # buildifier: disable=unused-variable
 def _test_no_cycles_no_cycle_targets_impl(env, target):
-    """Verify that when there are no cycles, no _cycle_ targets are generated."""
+    """When there are no cycles, no _cycle_ targets are emitted and :_raw aliases :pkg."""
     lock = {
         "packages": {
             "a@1.0": {
-                "marker_dependencies": [
-                    {"key": "b@2.0", "marker": None},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "a-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "a_wheel"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "b@2.0", "marker": None}],
+                "wheel_candidates": [{"filename": "a-1.0-py3-none-any.whl", "file_reference": {"key": "a_wheel"}}],
             },
             "b@2.0": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "b-2.0-py3-none-any.whl",
-                        "file_reference": {"key": "b_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "b-2.0-py3-none-any.whl", "file_reference": {"key": "b_wheel"}}],
             },
         },
     }
-    repo_map = {
-        "a_wheel": "@repo//a:wheel",
-        "b_wheel": "@repo//b:wheel",
-    }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
-    env.expect.that_bool("_cycle_" not in res).equals(True)
-
-    # a should define its primary library target as "a@1.0" and expose a _raw_ alias
-    env.expect.that_bool('name = "a@1.0"' in res).equals(True)
-    env.expect.that_str(res).contains('name = "_raw_a@1.0",\n        actual = ":a@1.0",')
+    a_build = _render_spokes(lock, {"a_wheel": "@repo//a:wheel", "b_wheel": "@repo//b:wheel"}).spokes["a"]
+    env.expect.that_bool("_cycle_" not in a_build).equals(True)
+    env.expect.that_str(a_build).contains('name = "pkg"')
+    env.expect.that_str(a_build).contains('name = "_raw",\n    actual = ":pkg",')
 
 def _test_no_cycles_no_cycle_targets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -421,79 +309,33 @@ def _test_no_cycles_no_cycle_targets(name):
 
 # buildifier: disable=unused-variable
 def _test_marker_deps_rendering_impl(env, target):
-    """Verify marker_dependencies renders evaluator + config_setting + select."""
+    """Verify marker_dependencies renders evaluator + config_setting + select and universal fast path."""
     lock = {
         "packages": {
             "foo@1.0": {
                 "marker_dependencies": [
                     {"key": "bar@2.0", "marker": None},
-                    {
-                        "key": "baz@3.0",
-                        "marker": "sys_platform == \"linux\"",
-                        "marker_ast": {
-                            "op": "==",
-                            "lhs": {"type": "marker", "value": "sys_platform"},
-                            "rhs": {"type": "string", "value": "linux"},
-                        },
-                    },
+                    {"key": "baz@3.0", "marker": 'sys_platform == "linux"'},
                 ],
-                "wheel_candidates": [
-                    {
-                        "filename": "foo-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "foo_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "foo-1.0-py3-none-any.whl", "file_reference": {"key": "foo_wheel"}}],
             },
-            "bar@2.0": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "bar-2.0-py3-none-any.whl",
-                        "file_reference": {"key": "bar_wheel"},
-                    },
-                ],
-            },
-            "baz@3.0": {
-                "marker_dependencies": [],
-                "wheel_candidates": [
-                    {
-                        "filename": "baz-3.0-py3-none-any.whl",
-                        "file_reference": {"key": "baz_wheel"},
-                    },
-                ],
-            },
+            "bar@2.0": {"wheel_candidates": [{"filename": "bar-2.0-py3-none-any.whl", "file_reference": {"key": "bar_wheel"}}]},
+            "baz@3.0": {"wheel_candidates": [{"filename": "baz-3.0-py3-none-any.whl", "file_reference": {"key": "baz_wheel"}}]},
         },
     }
-    repo_map = {
-        "foo_wheel": "@repo//foo:wheel",
-        "bar_wheel": "@repo//bar:wheel",
-        "baz_wheel": "@repo//baz:wheel",
-    }
-    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+    foo = _render_spokes(lock, {"foo_wheel": "@repo//foo:wheel", "bar_wheel": "@repo//bar:wheel", "baz_wheel": "@repo//baz:wheel"}).spokes["foo"]
 
-    # Should load the marker-related symbols
-    env.expect.that_bool("pycross_pep508_evaluator" in res).equals(True)
-    env.expect.that_bool("pycross_wheel_chooser" in res).equals(True)
+    env.expect.that_str(foo).contains("pycross_pep508_evaluator")
+    env.expect.that_str(foo).contains("_marker_eval_")
+    env.expect.that_str(foo).contains("sys_platform")
+    env.expect.that_str(foo).contains("_match")
+    env.expect.that_str(foo).contains('"@ws__pkg_bar//:pkg"')
+    env.expect.that_str(foo).contains('"@ws__pkg_baz//:pkg"')
+    env.expect.that_bool("select({" in foo).equals(True)
 
-    # Should have an evaluator target for the sys_platform marker
-    env.expect.that_bool("_marker_eval_" in res).equals(True)
-    env.expect.that_bool("sys_platform" in res).equals(True)
-
-    # Should have a config_setting matching the evaluator
-    env.expect.that_bool("_match" in res).equals(True)
-
-    # bar@2.0 should be an unconditional dep (no marker)
-    env.expect.that_bool('":bar@2.0"' in res).equals(True)
-
-    # baz@3.0 should be a conditional dep behind select
-    env.expect.that_bool('":baz@3.0"' in res).equals(True)
-    env.expect.that_bool("select({" in res).equals(True)
-
-    # Single universal py3-none-any wheel bypasses pycross_wheel_chooser with a direct alias
-    env.expect.that_bool("_wheel_chooser_foo@1.0" in res).equals(False)
-    env.expect.that_bool("native.alias(" in res).equals(True)
-    env.expect.that_str(res).contains('name = "_wheel_foo@1.0"')
-    env.expect.that_str(res).contains('actual = "@repo//foo:wheel"')
+    # Single universal py3-none-any wheel bypasses pycross_wheel_chooser with a direct alias.
+    env.expect.that_bool("_wheel_chooser" in foo).equals(False)
+    env.expect.that_str(foo).contains('name = "_wheel_sel",\n    actual = "@repo//foo:wheel",')
 
 def _test_marker_deps_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -501,84 +343,51 @@ def _test_marker_deps_rendering(name):
 
 # buildifier: disable=unused-variable
 def _test_multi_platform_repo_map_impl(env, target):
-    """Verify multi-platform repo_map entries render correctly as string references."""
+    """Verify multi-platform repo_map entries render cleanly in spoke wheel chooser."""
     lock = {
         "packages": {
             "crypto@1.0": {
                 "wheel_candidates": [
-                    {
-                        "filename": "crypto-1.0-cp311-cp311-manylinux_2_17_x86_64.whl",
-                        "file_reference": {"key": "crypto_linux_x86"},
-                    },
-                    {
-                        "filename": "crypto-1.0-cp311-cp311-win_amd64.whl",
-                        "file_reference": {"key": "crypto_win"},
-                    },
-                    {
-                        "filename": "crypto-1.0-cp311-cp311-win32.whl",
-                        "file_reference": {"key": "crypto_win32"},
-                    },
-                    {
-                        "filename": "crypto-1.0-cp311-cp311-macosx_11_0_arm64.whl",
-                        "file_reference": {"key": "crypto_macos"},
-                    },
+                    {"filename": "crypto-1.0-cp311-cp311-manylinux_2_17_x86_64.whl", "file_reference": {"key": "crypto_linux_x86"}},
+                    {"filename": "crypto-1.0-cp311-cp311-win_amd64.whl", "file_reference": {"key": "crypto_win"}},
+                    {"filename": "crypto-1.0-cp311-cp311-win32.whl", "file_reference": {"key": "crypto_win32"}},
+                    {"filename": "crypto-1.0-cp311-cp311-macosx_11_0_arm64.whl", "file_reference": {"key": "crypto_macos"}},
                 ],
             },
         },
     }
-
-    # repo_map uses string keys (file_key -> label), not label keys.
-    # This mirrors the fix in ea1480c where we switched from
-    # label_keyed_string_dict to string_dict.
     repo_map = {
         "crypto_linux_x86": "@pypi_crypto_linux//:wheel",
         "crypto_win": "@pypi_crypto_win//:wheel",
         "crypto_win32": "@pypi_crypto_win32//:wheel",
         "crypto_macos": "@pypi_crypto_macos//:wheel",
     }
-    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
-
-    # All platform-specific labels should appear as string references
-    # in the rendered output.
-    env.expect.that_bool("@pypi_crypto_linux//:wheel" in res).equals(True)
-    env.expect.that_bool("@pypi_crypto_win//:wheel" in res).equals(True)
-    env.expect.that_bool("@pypi_crypto_win32//:wheel" in res).equals(True)
-    env.expect.that_bool("@pypi_crypto_macos//:wheel" in res).equals(True)
-
-    # Should have a wheel chooser for the multi-platform package
-    env.expect.that_bool("pycross_wheel_chooser(" in res).equals(True)
-    env.expect.that_bool("_wheel_chooser_crypto@1.0" in res).equals(True)
+    res = _render_spokes(lock, repo_map).spokes["crypto"]
+    env.expect.that_str(res).contains("@pypi_crypto_linux//:wheel")
+    env.expect.that_str(res).contains("@pypi_crypto_win//:wheel")
+    env.expect.that_str(res).contains("@pypi_crypto_win32//:wheel")
+    env.expect.that_str(res).contains("@pypi_crypto_macos//:wheel")
+    env.expect.that_str(res).contains('name = "_wheel_chooser"')
 
 def _test_multi_platform_repo_map(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_multi_platform_repo_map_impl)
 
-# ── Test: _available_ config_setting_group ─────────────────────────
-
 # buildifier: disable=unused-variable
 def _test_available_config_setting_group_impl(env, target):
-    """Verify _available_ config_setting_group is emitted for packages without sdist."""
+    """Verify _wheel_available config_setting_group is emitted for wheel-only packages without sdist."""
     lock = {
         "packages": {
             "platform_pkg@1.0": {
                 "wheel_candidates": [
-                    {
-                        "filename": "platform_pkg-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
-                        "file_reference": {"key": "plat_linux"},
-                    },
-                    {
-                        "filename": "platform_pkg-1.0-cp310-cp310-win_amd64.whl",
-                        "file_reference": {"key": "plat_win"},
-                    },
+                    {"filename": "platform_pkg-1.0-cp310-cp310-manylinux_2_17_x86_64.whl", "file_reference": {"key": "plat_linux"}},
+                    {"filename": "platform_pkg-1.0-cp310-cp310-win_amd64.whl", "file_reference": {"key": "plat_win"}},
                 ],
             },
             "sdist_pkg@2.0": {
                 "sdist_file": {"key": "sdist_key"},
                 "wheel_candidates": [
-                    {
-                        "filename": "sdist_pkg-2.0-cp310-cp310-manylinux_2_17_x86_64.whl",
-                        "file_reference": {"key": "sdist_linux"},
-                    },
+                    {"filename": "sdist_pkg-2.0-cp310-cp310-manylinux_2_17_x86_64.whl", "file_reference": {"key": "sdist_linux"}},
                 ],
             },
         },
@@ -589,74 +398,35 @@ def _test_available_config_setting_group_impl(env, target):
         "sdist_linux": "@repo//sdist:linux_wheel",
         "sdist_key": "@repo//sdist:sdist",
     }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+    out = _render_spokes(lock, repo_map)
+    plat_build = out.spokes["platform-pkg"]
+    sdist_build = out.spokes["sdist-pkg"]
 
-    # Platform-specific package (no sdist) should get _wheel_available_ group, not dead _available_.
-    env.expect.that_bool("_wheel_available_platform_pkg@1.0" in res).equals(True)
-    env.expect.that_bool('"_available_' in res).equals(False)
-    env.expect.that_bool("config_setting_group(" in res).equals(True)
+    env.expect.that_str(plat_build).contains('name = "_wheel_available"')
+    env.expect.that_bool('"_available_' in plat_build).equals(False)
+    env.expect.that_bool("config_setting_group(" in plat_build).equals(True)
+    env.expect.that_bool("selects" in plat_build).equals(True)
 
-    # Package with sdist should NOT get _wheel_available_ group.
-    env.expect.that_bool("_wheel_available_sdist_pkg@2.0" in res).equals(False)
-
-    # Selects load should be present (at least one platform-specific package).
-    env.expect.that_bool("selects" in res).equals(True)
+    env.expect.that_bool("_wheel_available" in sdist_build).equals(False)
+    env.expect.that_bool("selects" in sdist_build).equals(False)
 
 def _test_available_config_setting_group(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_available_config_setting_group_impl)
 
-# ── Test: no _wheel_available_ when all have sdist ────────────────
-
-# buildifier: disable=unused-variable
-def _test_no_available_when_all_have_sdist_impl(env, target):
-    """Verify no selects load and no _wheel_available_ when all packages have sdist."""
-    lock = {
-        "packages": {
-            "pkg@1.0": {
-                "sdist_file": {"key": "sdist_key"},
-                "wheel_candidates": [
-                    {
-                        "filename": "pkg-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
-                        "file_reference": {"key": "pkg_wheel"},
-                    },
-                ],
-            },
-        },
-    }
-    repo_map = {
-        "pkg_wheel": "@repo//pkg:wheel",
-        "sdist_key": "@repo//pkg:sdist",
-    }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
-
-    env.expect.that_bool("_available_" in res).equals(False)
-    env.expect.that_bool("selects" in res).equals(False)
-
-def _test_no_available_when_all_have_sdist(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_no_available_when_all_have_sdist_impl)
-
 # buildifier: disable=unused-variable
 def _test_extras_inherit_base_available_impl(env, target):
-    """Extras of a wheel-only package rely on the base's _wheel_available_ group (no dead _available_ alias)."""
+    """Extras of a wheel-only package rely on the base's _wheel_available group."""
     lock = {
         "packages": {
             "plat@1.0": {
-                "wheel_candidates": [
-                    {
-                        "filename": "plat-1.0-cp310-cp310-win_amd64.whl",
-                        "file_reference": {"key": "plat_win"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "plat-1.0-cp310-cp310-win_amd64.whl", "file_reference": {"key": "plat_win"}}],
             },
             "plat[extra]@1.0": {},
         },
     }
-    repo_map = {"plat_win": "@repo//plat:win_wheel"}
-    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
-
-    env.expect.that_str(res).contains('name = "_wheel_available_plat@1.0"')
+    res = _render_spokes(lock, {"plat_win": "@repo//plat:win_wheel"}).spokes["plat"]
+    env.expect.that_str(res).contains('name = "_wheel_available"')
     env.expect.that_bool('"_available_' in res).equals(False)
 
 def _test_extras_inherit_base_available(name):
@@ -665,193 +435,89 @@ def _test_extras_inherit_base_available(name):
 
 # buildifier: disable=unused-variable
 def _test_build_mode_never_no_sdist_fallback_impl(env, target):
-    """build_mode = "never" packages don't fall back to the sdist build and get _wheel_available_."""
+    """build_mode = "never" packages don't fall back to the sdist build and get _wheel_available."""
     lock = {
         "packages": {
             "pkg@1.0": {
                 "sdist_file": {"key": "sdist_key"},
                 "build_mode": "never",
-                "wheel_candidates": [
-                    {
-                        "filename": "pkg-1.0-cp310-cp310-win_amd64.whl",
-                        "file_reference": {"key": "pkg_win"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "pkg-1.0-cp310-cp310-win_amd64.whl", "file_reference": {"key": "pkg_win"}}],
             },
         },
     }
-    repo_map = {
-        "pkg_win": "@repo//pkg:win_wheel",
-        "sdist_key": "@repo//pkg:sdist",
-    }
-    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
-
-    env.expect.that_bool("my_rctx_sdist_" in res).equals(False)
+    res = _render_spokes(lock, {"pkg_win": "@repo//pkg:win_wheel", "sdist_key": "@repo//pkg:sdist"}).spokes["pkg"]
+    env.expect.that_bool("ws__sdist_" in res).equals(False)
     env.expect.that_str(res).contains("@rules_pycross//pycross/private:no_match_error")
-    env.expect.that_str(res).contains('name = "_wheel_available_pkg@1.0"')
+    env.expect.that_str(res).contains('name = "_wheel_available"')
 
 def _test_build_mode_never_no_sdist_fallback(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_build_mode_never_no_sdist_fallback_impl)
 
 # buildifier: disable=unused-variable
-def _test_resolution_marker_evaluator_rendering_impl(env, target):
-    """Verify resolution_marker_exprs generate evaluator + config_setting targets."""
-    lock = {
-        "packages": {
-            "numpy@2.3.4": {
-                "wheel_candidates": [
-                    {
-                        "filename": "numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl",
-                        "file_reference": {"key": "numpy_wheel_linux"},
-                    },
-                ],
-            },
-            "numpy@2.3.3": {
-                "wheel_candidates": [
-                    {
-                        "filename": "numpy-2.3.3-cp312-cp312-macosx_11_0_arm64.whl",
-                        "file_reference": {"key": "numpy_wheel_mac"},
-                    },
-                ],
-            },
-        },
-        "resolution_marker_exprs": {
-            "res_numpy_2_3_4": "sys_platform == 'linux'",
-            "res_numpy_2_3_3": "sys_platform == 'darwin'",
-        },
-    }
-    repo_map = {
-        "numpy_wheel_linux": "@repo//numpy:wheel_linux",
-        "numpy_wheel_mac": "@repo//numpy:wheel_mac",
-    }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
-
-    # Should generate pycross_pep508_evaluator for each fork
-    env.expect.that_bool("pycross_pep508_evaluator(" in res).equals(True)
-    env.expect.that_bool("_res_eval_res_numpy_2_3_4" in res).equals(True)
-    env.expect.that_bool("_res_eval_res_numpy_2_3_3" in res).equals(True)
-
-    # Should generate config_settings with is_ prefix
-    env.expect.that_bool('"is_res_numpy_2_3_4"' in res).equals(True)
-    env.expect.that_bool('"is_res_numpy_2_3_3"' in res).equals(True)
-
-    # Should contain the marker expressions
-    env.expect.that_bool("sys_platform == 'linux'" in res).equals(True)
-    env.expect.that_bool("sys_platform == 'darwin'" in res).equals(True)
-
-def _test_resolution_marker_evaluator_rendering(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_resolution_marker_evaluator_rendering_impl)
-
-# buildifier: disable=unused-variable
-def _test_resolution_marker_compound_rendering_impl(env, target):
-    """Verify compound resolution-marker constraints use config_setting_group."""
-    lock = {
-        "packages": {
-            "numpy@2.3.4": {
-                "wheel_candidates": [
-                    {
-                        "filename": "numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl",
-                        "file_reference": {"key": "numpy_whl"},
-                    },
-                ],
-            },
-        },
-        "resolution_marker_exprs": {
-            "res_numpy_2_3_4": "sys_platform == 'linux'",
-            "extra_science_res_numpy_2_3_4": {
+def _test_resolution_marker_member_rendering_impl(env, target):
+    """Verify member-local _markers/BUILD.bazel renders resolution_marker_exprs and compound groups."""
+    markers = render_member_markers_build(
+        {},
+        {
+            "res_aaaa1111": "sys_platform == 'linux'",
+            "res_bbbb2222": "sys_platform == 'darwin'",
+            "extra_science_res_aaaa1111": {
                 "variant": "extra_science",
-                "marker": "res_numpy_2_3_4",
+                "marker": "res_aaaa1111",
             },
         },
-    }
-    repo_map = {"numpy_whl": "@repo//numpy:wheel"}
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+        "ws__state",
+        has_variants = True,
+    )
+    env.expect.that_str(markers).contains("pycross_pep508_evaluator(")
+    env.expect.that_str(markers).contains('name = "_res_eval_res_aaaa1111"')
+    env.expect.that_str(markers).contains('name = "_res_eval_res_bbbb2222"')
+    env.expect.that_str(markers).contains('name = "is_res_aaaa1111"')
+    env.expect.that_str(markers).contains('name = "is_res_bbbb2222"')
+    env.expect.that_str(markers).contains("selects.config_setting_group(")
+    env.expect.that_str(markers).contains('name = "is_extra_science_res_aaaa1111"')
+    env.expect.that_str(markers).contains("match_all")
+    env.expect.that_str(markers).contains('"@ws__state//:is_extra_science"')
+    env.expect.that_str(markers).contains('":is_res_aaaa1111"')
+    env.expect.that_str(markers).contains('load("@bazel_skylib//lib:selects.bzl"')
 
-    # Compound should use config_setting_group
-    env.expect.that_bool("selects.config_setting_group(" in res).equals(True)
-    env.expect.that_bool('"is_extra_science_res_numpy_2_3_4"' in res).equals(True)
-    env.expect.that_bool("match_all" in res).equals(True)
-    env.expect.that_bool('"is_extra_science"' in res).equals(True)
-    env.expect.that_bool('"is_res_numpy_2_3_4"' in res).equals(True)
-
-    # selects.bzl should be loaded
-    env.expect.that_bool('load("@bazel_skylib//lib:selects.bzl"' in res).equals(True)
-
-def _test_resolution_marker_compound_rendering(name):
+def _test_resolution_marker_member_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_resolution_marker_compound_rendering_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_resolution_marker_member_rendering_impl)
 
 # buildifier: disable=unused-variable
-def _test_wheel_library_tags_rendering_impl(env, target):
-    """Verify that wheel_library_tags is rendered as tags on pycross_wheel_library."""
-    lock = {
-        "packages": {
-            "foo@1.0": {
-                "wheel_candidates": [
-                    {
-                        "filename": "foo-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "foo_wheel"},
-                    },
-                ],
-                "wheel_library_tags": ["no-remote", "custom-tag"],
-            },
-        },
-    }
-    repo_map = {"foo_wheel": "@my_repo//foo:wheel"}
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
-
-    env.expect.that_bool("tags = [" in res).equals(True)
-    env.expect.that_bool('"no-remote",' in res).equals(True)
-    env.expect.that_bool('"custom-tag",' in res).equals(True)
-
-def _test_wheel_library_tags_rendering(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_rendering_impl)
-
-# buildifier: disable=unused-variable
-def _test_precompile_rendering_impl(env, target):
-    """Verify that precompile is rendered on pycross_wheel_library only when non-empty."""
+def _test_wheel_library_tags_and_precompile_rendering_impl(env, target):
+    """Verify wheel_library_tags and precompile render on pycross_wheel_library only when non-empty."""
     lock = {
         "packages": {
             "compiled@1.0": {
-                "wheel_candidates": [
-                    {
-                        "filename": "compiled-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "compiled_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "compiled-1.0-py3-none-any.whl", "file_reference": {"key": "compiled_wheel"}}],
+                "wheel_library_tags": ["no-remote", "custom-tag"],
                 "precompile": "enabled",
             },
             "default_pkg@1.0": {
-                "wheel_candidates": [
-                    {
-                        "filename": "default_pkg-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "default_wheel"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "default_pkg-1.0-py3-none-any.whl", "file_reference": {"key": "default_wheel"}}],
                 "precompile": "",
             },
         },
     }
-    repo_map = {
-        "compiled_wheel": "@my_repo//compiled:wheel",
-        "default_wheel": "@my_repo//default_pkg:wheel",
-    }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+    out = _render_spokes(lock, {"compiled_wheel": "@my_repo//compiled:wheel", "default_wheel": "@my_repo//default_pkg:wheel"})
+    compiled = out.spokes["compiled"]
+    default_pkg = out.spokes["default-pkg"]
+    env.expect.that_str(compiled).contains("tags = [")
+    env.expect.that_str(compiled).contains('"no-remote",')
+    env.expect.that_str(compiled).contains('"custom-tag",')
+    env.expect.that_str(compiled).contains('precompile = "enabled",')
+    env.expect.that_bool("precompile =" in default_pkg).equals(False)
 
-    env.expect.that_bool('precompile = "enabled",' in res).equals(True)
-    env.expect.that_bool('precompile = ""' in res).equals(False)
-    env.expect.that_int(res.count("precompile =")).equals(1)
-
-def _test_precompile_rendering(name):
+def _test_wheel_library_tags_and_precompile_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_precompile_rendering_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_and_precompile_rendering_impl)
 
 # buildifier: disable=unused-variable
 def _test_epoch_sdist_repo_name_impl(env, target):
-    """The sdist repo label must use the same sanitization as lock_repo_creation (e.g. epoch '!')."""
+    """Version-free sdist slot repo names avoid epoch punctuation issues."""
     lock = {
         "packages": {
             "foo@1!2.0": {
@@ -860,8 +526,8 @@ def _test_epoch_sdist_repo_name_impl(env, target):
             },
         },
     }
-    res = render_lock_bzl(lock, {"foo_sdist": "@repo//file:foo-1!2.0.tar.gz"}, rctx_name = "uv__pkgs")
-    env.expect.that_bool("@@uv__pkgs_sdist_foo_1_2_0//:wheel" in res).equals(True)
+    res = _render_spokes(lock, {"foo_sdist": "@repo//file:foo-1!2.0.tar.gz"}, workspace_name = "uv").spokes["foo"]
+    env.expect.that_str(res).contains("@uv__sdist_foo//:wheel")
 
 def _test_epoch_sdist_repo_name(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -869,24 +535,17 @@ def _test_epoch_sdist_repo_name(name):
 
 # buildifier: disable=unused-variable
 def _test_conflict_state_rendering_impl(env, target):
-    """Verify variants is emitted only on __variant_-referencing evaluators when has_variants is True."""
+    """Verify variants is emitted only on __variant_-referencing evaluators across spokes and member _markers."""
     t_cuda = "__variant_group_cuda"
     conflict_marker = "sys_platform == 'linux' and extra == '{}'".format(t_cuda)
     plain_extra_marker = "extra == 'cudart'"
     plain_marker = "sys_platform == 'darwin'"
     lock = {
-        "cycle_groups": {
-            "cycle_group_c1": ["cyca@1.0", "cycb@1.0", "cycc@1.0"],
-        },
+        "cycle_groups": {"cycle_group_c1": ["cyca@1.0", "cycb@1.0", "cycc@1.0"]},
         "packages": {
             "cuda-toolkit@13.0.2": {
                 "availability_markers": [conflict_marker],
-                "wheel_candidates": [
-                    {
-                        "filename": "cuda_toolkit-13.0.2-py3-none-any.whl",
-                        "file_reference": {"key": "ct_whl"},
-                    },
-                ],
+                "wheel_candidates": [{"filename": "cuda_toolkit-13.0.2-py3-none-any.whl", "file_reference": {"key": "ct_whl"}}],
             },
             "cuda-toolkit[cudart]@13.0.2": {
                 "marker_dependencies": [
@@ -895,57 +554,22 @@ def _test_conflict_state_rendering_impl(env, target):
                     {"key": "dep_b@1.0", "marker": plain_extra_marker},
                 ],
             },
-            "dep_a@1.0": {
-                "wheel_candidates": [
-                    {
-                        "filename": "dep_a-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "da_whl"},
-                    },
-                ],
-            },
-            "dep_b@1.0": {
-                "wheel_candidates": [
-                    {
-                        "filename": "dep_b-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "db_whl"},
-                    },
-                ],
-            },
+            "dep_a@1.0": {"wheel_candidates": [{"filename": "dep_a-1.0-py3-none-any.whl", "file_reference": {"key": "da_whl"}}]},
+            "dep_b@1.0": {"wheel_candidates": [{"filename": "dep_b-1.0-py3-none-any.whl", "file_reference": {"key": "db_whl"}}]},
             "cyca@1.0": {
                 "cycle_group": "cycle_group_c1",
-                "marker_dependencies": [
-                    {"key": "cycb@1.0", "marker": conflict_marker},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "cyca-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "ca_whl"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "cycb@1.0", "marker": conflict_marker}],
+                "wheel_candidates": [{"filename": "cyca-1.0-py3-none-any.whl", "file_reference": {"key": "ca_whl"}}],
             },
             "cycb@1.0": {
                 "cycle_group": "cycle_group_c1",
-                "marker_dependencies": [
-                    {"key": "cycc@1.0", "marker": plain_marker},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "cycb-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "cb_whl"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "cycc@1.0", "marker": plain_marker}],
+                "wheel_candidates": [{"filename": "cycb-1.0-py3-none-any.whl", "file_reference": {"key": "cb_whl"}}],
             },
             "cycc@1.0": {
                 "cycle_group": "cycle_group_c1",
-                "marker_dependencies": [
-                    {"key": "cyca@1.0", "marker": None},
-                ],
-                "wheel_candidates": [
-                    {
-                        "filename": "cycc-1.0-py3-none-any.whl",
-                        "file_reference": {"key": "cc_whl"},
-                    },
-                ],
+                "marker_dependencies": [{"key": "cyca@1.0", "marker": None}],
+                "wheel_candidates": [{"filename": "cycc-1.0-py3-none-any.whl", "file_reference": {"key": "cc_whl"}}],
             },
         },
         "resolution_marker_exprs": {
@@ -961,28 +585,23 @@ def _test_conflict_state_rendering_impl(env, target):
         "cb_whl": "@repo//cb:wheel",
         "cc_whl": "@repo//cc:wheel",
     }
-    res_with_variants = render_lock_bzl(
-        lock,
-        repo_map,
-        rctx_name = "my_rctx",
-        has_variants = True,
-    )
-    res_without_variants = render_lock_bzl(
-        lock,
-        repo_map,
-        rctx_name = "my_rctx",
-    )
+    spokes_with = _render_spokes(lock, repo_map, has_variants = True)
+    spokes_without = _render_spokes(lock, repo_map, has_variants = False)
+    markers_with = render_member_markers_build(lock["packages"], lock["resolution_marker_exprs"], "ws__state", has_variants = True)
+    markers_without = render_member_markers_build(lock["packages"], lock["resolution_marker_exprs"], "ws__state", has_variants = False)
 
-    # Without has_variants, variants is never emitted.
-    env.expect.that_int(res_without_variants.count('variants = [":_variant_state"]')).equals(0)
+    env.expect.that_int((spokes_without.all + markers_without).count('variants = ["@ws__state//:_variant_state"]')).equals(0)
 
-    # With has_variants, variants = [":_variant_state"] appears on:
-    # - _marker_eval_* for availability_markers (extra="") (1)
-    # - _marker_eval_* for cuda-toolkit[cudart] (extra="cudart") (1)
-    # - _res_eval_res_fork_conflict (1)
-    # - the multi-hop pycross_cycle_dep_needed evaluator (_cycle_needed_cyca_1_0_cycc_1_0) (1)
-    # and NOT on plain_marker, plain_extra_marker, or res_fork_plain!
-    env.expect.that_int(res_with_variants.count('variants = [":_variant_state"]')).equals(4)
+    # Spoke evaluators with variants:
+    # - cuda-toolkit[cudart] conflict_marker evaluator (1)
+    # - cyca conflict_marker evaluator (1) + multi-hop pycross_cycle_dep_needed (1)
+    # - cycb & cycc multi-hop pycross_cycle_dep_needed evaluators also get variants when emitted.
+    env.expect.that_int(spokes_with.spokes["cuda-toolkit"].count('variants = ["@ws__state//:_variant_state"]')).equals(1)
+    env.expect.that_str(spokes_with.spokes["cyca"]).contains('variants = ["@ws__state//:_variant_state"]')
+
+    # Member _markers evaluators with variants: availability_markers conflict_marker (1) + res_fork_conflict (1),
+    # and NOT res_fork_plain.
+    env.expect.that_int(markers_with.count('variants = ["@ws__state//:_variant_state"]')).equals(2)
 
 def _test_conflict_state_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1005,14 +624,14 @@ def _reset_lock(packages, cycle_groups = None):
     lock = {"packages": packages}
     if cycle_groups:
         lock["cycle_groups"] = cycle_groups
-    return render_lock_bzl(lock, repo_map, "ws__pkgs", reset_conflict_sets = _RESET_SETS)
+    return _render_spokes(lock, repo_map, reset_conflict_sets = _RESET_SETS)
 
-def _library(res, key):
-    """The rule kind and gate of a package's library target."""
+def _library(spoke_build, target_name):
+    """The rule kind and gate of a spoke's library target."""
     for kind in ("pycross_resettable_wheel_library(", "pycross_wheel_library("):
-        marker = '{}\n        name = "{}",'.format(kind, key)
-        if marker in res:
-            body = res.split(marker)[1].split("\n    )")[0]
+        marker = '{}\n    name = "{}",'.format(kind, target_name)
+        if marker in spoke_build:
+            body = spoke_build.split(marker)[1].split("\n)")[0]
             gate = body.split("reset_gate = ")[1].split(",")[0] if "reset_gate = " in body else None
             return (kind[:-1], gate)
     return (None, None)
@@ -1020,9 +639,8 @@ def _library(res, key):
 # buildifier: disable=unused-variable
 def _test_reset_plan_impl(env, target):
     """Packages that don't depend on variants install with them reset; others don't."""
-    res = _reset_lock({
+    out = _reset_lock({
         "leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]},
-        # Two items of one conflict set can't both be active, so this edge isn't variant-gated.
         "uses-leaf@1.0": {
             "wheel_candidates": [_whl("uses_whl", "uses_leaf-1.0-py3-none-any.whl")],
             "marker_dependencies": [{"key": "leaf@1.0", "marker": "sys_platform == 'win32' or (extra == '__variant_extra_app_cpu' and extra == '__variant_extra_app_gpu')"}],
@@ -1053,17 +671,16 @@ def _test_reset_plan_impl(env, target):
             "marker_dependencies": [{"key": "cyc@1.0"}],
         },
     })
-    env.expect.that_str(res).contains('load(":reset.bzl", "pycross_resettable_wheel_library")')
-    env.expect.that_collection(_library(res, "leaf@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "uses-leaf@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_str(_library(res, "gated@1.0")[0]).equals("pycross_wheel_library")
-    env.expect.that_str(_library(res, "above-gated@1.0")[0]).equals("pycross_wheel_library")
-    env.expect.that_str(_library(res, "patched@1.0")[0]).equals("pycross_wheel_library")
-
-    # Packages without wheels stay; pure-wheel cycle members and callers above them reset.
-    env.expect.that_str(_library(res, "above-no-wheel@1.0")[0]).equals("pycross_wheel_library")
-    env.expect.that_collection(_library(res, "_raw_cyc@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "above-cyc@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    sp = out.spokes
+    env.expect.that_str(sp["leaf"]).contains('load("@ws__state//:reset.bzl", "pycross_resettable_wheel_library")')
+    env.expect.that_collection(_library(sp["leaf"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["uses-leaf"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(sp["gated"], "pkg")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(sp["above-gated"], "pkg")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(sp["patched"], "pkg")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(sp["above-no-wheel"], "pkg")[0]).equals("pycross_wheel_library")
+    env.expect.that_collection(_library(sp["cyc"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["above-cyc"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
 
 def _test_reset_plan(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1086,7 +703,6 @@ def _test_marker_depends_on_variants_cache_impl(env, target):
     env.expect.that_dict(cache).contains_exactly({m: exp for m, exp in markers})
     env.expect.that_collection(parse_cache.keys()).contains_exactly([markers[0][0], markers[1][0]])
 
-    # Pre-populated cache entries return directly without parsing.
     sentinel_t = "invalid syntax __variant_t ==="
     sentinel_f = "invalid syntax __variant_f ==="
     cache[sentinel_t] = True
@@ -1100,261 +716,256 @@ def _test_marker_depends_on_variants_cache(name):
 
 # buildifier: disable=unused-variable
 def _test_reset_cycles_impl(env, target):
-    """Cycle members reset their _raw_ installs independently; callers reset across pure SCCs."""
-    res = _reset_lock({
-        # 1. Pure-wheel cycle: both _raw_ targets and upstream caller reset unconditionally.
-        "pure-a@1.0": {
-            "wheel_candidates": [_whl("pa", "pure_a-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_pure",
-            "marker_dependencies": [{"key": "pure-b@1.0"}],
+    """Cycle members reset their :_raw installs independently; callers reset across pure/gated SCCs."""
+    out = _reset_lock(
+        {
+            "pure-a@1.0": {
+                "wheel_candidates": [_whl("pa", "pure_a-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_pure",
+                "marker_dependencies": [{"key": "pure-b@1.0"}],
+            },
+            "pure-b@1.0": {
+                "wheel_candidates": [_whl("pb", "pure_b-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_pure",
+                "marker_dependencies": [{"key": "pure-a@1.0", "marker": "sys_platform == 'win32'"}],
+            },
+            "above-pure@1.0": {
+                "wheel_candidates": [_whl("ap", "above_pure-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "pure-a@1.0"}],
+            },
+            "var-a@1.0": {
+                "wheel_candidates": [_whl("va", "var_a-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_var",
+                "marker_dependencies": [{"key": "var-b@1.0", "marker": "extra == '__variant_extra_app_cpu'"}],
+            },
+            "var-b@1.0": {
+                "wheel_candidates": [_whl("vb", "var_b-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_var",
+                "marker_dependencies": [{"key": "var-a@1.0"}],
+            },
+            "above-var@1.0": {
+                "wheel_candidates": [_whl("av", "above_var-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "var-a@1.0"}],
+            },
+            "mix-a@1.0": {
+                "wheel_candidates": [_whl("ma", "mix_a-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_mix",
+                "marker_dependencies": [{"key": "mix-b@1.0"}],
+            },
+            "mix-b@1.0": {
+                "sdist_file": {"key": "mb_sdist"},
+                "cycle_group": "cycle_mix",
+                "marker_dependencies": [{"key": "mix-a@1.0"}],
+            },
+            "above-mix@1.0": {
+                "wheel_candidates": [_whl("am", "above_mix-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "mix-a@1.0"}],
+            },
+            "gate-a@1.0": {
+                "wheel_candidates": [_whl("ga", "gate_a-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
+                "sdist_file": {"key": "ga_sdist"},
+                "cycle_group": "cycle_gate",
+                "marker_dependencies": [{"key": "gate-b@1.0"}],
+            },
+            "gate-b@1.0": {
+                "wheel_candidates": [_whl("gb", "gate_b-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
+                "sdist_file": {"key": "gb_sdist"},
+                "cycle_group": "cycle_gate",
+                "marker_dependencies": [{"key": "gate-a@1.0"}],
+            },
+            "above-gate@1.0": {
+                "wheel_candidates": [_whl("ag", "above_gate-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "gate-a@1.0"}],
+            },
+            "c1-a@1.0": {
+                "wheel_candidates": [_whl("c1a", "c1_a-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_c1",
+                "marker_dependencies": [{"key": "c1-b@1.0"}, {"key": "c2-a@1.0"}],
+            },
+            "c1-b@1.0": {
+                "wheel_candidates": [_whl("c1b", "c1_b-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_c1",
+                "marker_dependencies": [{"key": "c1-a@1.0"}],
+            },
+            "c2-a@1.0": {
+                "wheel_candidates": [_whl("c2a", "c2_a-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_c2",
+                "marker_dependencies": [{"key": "c2-b@1.0"}],
+            },
+            "c2-b@1.0": {
+                "wheel_candidates": [_whl("c2b", "c2_b-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_c2",
+                "marker_dependencies": [{"key": "c2-a@1.0"}],
+            },
+            "above-chain@1.0": {
+                "wheel_candidates": [_whl("ach", "above_chain-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "c1-a@1.0"}],
+            },
+            "bad-sdist@1.0": {
+                "sdist_file": {"key": "bad_sdist"},
+                "cycle_group": "cycle_bad2",
+                "marker_dependencies": [{"key": "bad-w@1.0"}],
+            },
+            "bad-w@1.0": {
+                "wheel_candidates": [_whl("bw", "bad_w-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_bad2",
+                "marker_dependencies": [{"key": "bad-sdist@1.0"}],
+            },
+            "bad1-a@1.0": {
+                "wheel_candidates": [_whl("b1a", "bad1_a-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_bad1",
+                "marker_dependencies": [{"key": "bad1-b@1.0"}, {"key": "bad-w@1.0"}],
+            },
+            "bad1-b@1.0": {
+                "wheel_candidates": [_whl("b1b", "bad1_b-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_bad1",
+                "marker_dependencies": [{"key": "bad1-a@1.0"}],
+            },
+            "above-bad-chain@1.0": {
+                "wheel_candidates": [_whl("abc", "above_bad_chain-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "bad1-a@1.0"}],
+            },
+            "sdist-leaf@1.0": {"sdist_file": {"key": "sl_sdist"}},
+            "cond-a@1.0": {
+                "wheel_candidates": [_whl("ca", "cond_a-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_cond",
+                "marker_dependencies": [
+                    {"key": "cond-b@1.0"},
+                    {"key": "sdist-leaf@1.0", "marker": "sys_platform == 'win32'"},
+                ],
+            },
+            "cond-b@1.0": {
+                "wheel_candidates": [_whl("cb", "cond_b-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_cond",
+                "marker_dependencies": [{"key": "cond-a@1.0"}],
+            },
+            "above-cond@1.0": {
+                "wheel_candidates": [_whl("ac", "above_cond-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "cond-a@1.0"}],
+            },
+            "ex-same@1.0": {
+                "wheel_candidates": [_whl("es", "ex_same-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_ex_same",
+                "marker_dependencies": [{"key": "ex-same[x]@1.0"}],
+            },
+            "ex-same[x]@1.0": {
+                "cycle_group": "cycle_ex_same",
+                "marker_dependencies": [{"key": "ex-same@1.0"}],
+            },
+            "above-ex-same@1.0": {
+                "wheel_candidates": [_whl("aes", "above_ex_same-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "ex-same[x]@1.0"}],
+            },
+            "plain-base@1.0": {"wheel_candidates": [_whl("plb", "plain_base-1.0-py3-none-any.whl")]},
+            "plain-base[x]@1.0": {
+                "cycle_group": "cycle_ex_ext",
+                "marker_dependencies": [{"key": "ex-ext-peer@1.0"}],
+            },
+            "ex-ext-peer@1.0": {
+                "wheel_candidates": [_whl("eep", "ex_ext_peer-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_ex_ext",
+                "marker_dependencies": [{"key": "plain-base[x]@1.0"}],
+            },
+            "above-ex-ext@1.0": {
+                "wheel_candidates": [_whl("aee", "above_ex_ext-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "plain-base[x]@1.0"}],
+            },
+            "pure-a[x]@1.0": {
+                "cycle_group": "cycle_ex_cycbase",
+                "marker_dependencies": [{"key": "ex-cyc-peer@1.0"}],
+            },
+            "ex-cyc-peer@1.0": {
+                "wheel_candidates": [_whl("ecp", "ex_cyc_peer-1.0-py3-none-any.whl")],
+                "cycle_group": "cycle_ex_cycbase",
+                "marker_dependencies": [{"key": "pure-a[x]@1.0"}],
+            },
+            "above-ex-cycbase@1.0": {
+                "wheel_candidates": [_whl("aecb", "above_ex_cycbase-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "pure-a[x]@1.0"}],
+            },
+            "pure-b[y]@1.0": {},
+            "above-noncyc-extra@1.0": {
+                "wheel_candidates": [_whl("ance", "above_noncyc_extra-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "pure-b[y]@1.0"}],
+            },
         },
-        "pure-b@1.0": {
-            "wheel_candidates": [_whl("pb", "pure_b-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_pure",
-            "marker_dependencies": [{"key": "pure-a@1.0", "marker": "sys_platform == 'win32'"}],
+        cycle_groups = {
+            "cycle_pure": ["pure-a@1.0", "pure-b@1.0"],
+            "cycle_var": ["var-a@1.0", "var-b@1.0"],
+            "cycle_mix": ["mix-a@1.0", "mix-b@1.0"],
+            "cycle_gate": ["gate-a@1.0", "gate-b@1.0"],
+            "cycle_c1": ["c1-a@1.0", "c1-b@1.0"],
+            "cycle_c2": ["c2-a@1.0", "c2-b@1.0"],
+            "cycle_bad1": ["bad1-a@1.0", "bad1-b@1.0"],
+            "cycle_bad2": ["bad-sdist@1.0", "bad-w@1.0"],
+            "cycle_cond": ["cond-a@1.0", "cond-b@1.0"],
+            "cycle_ex_same": ["ex-same@1.0", "ex-same[x]@1.0"],
+            "cycle_ex_ext": ["plain-base[x]@1.0", "ex-ext-peer@1.0"],
+            "cycle_ex_cycbase": ["pure-a[x]@1.0", "ex-cyc-peer@1.0"],
         },
-        "above-pure@1.0": {
-            "wheel_candidates": [_whl("ap", "above_pure-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "pure-a@1.0"}],
-        },
-        # 2. Variant-gated intra-SCC edge: _raw_ wheel installs still reset, caller does not.
-        "var-a@1.0": {
-            "wheel_candidates": [_whl("va", "var_a-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_var",
-            "marker_dependencies": [{"key": "var-b@1.0", "marker": "extra == '__variant_extra_app_cpu'"}],
-        },
-        "var-b@1.0": {
-            "wheel_candidates": [_whl("vb", "var_b-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_var",
-            "marker_dependencies": [{"key": "var-a@1.0"}],
-        },
-        "above-var@1.0": {
-            "wheel_candidates": [_whl("av", "above_var-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "var-a@1.0"}],
-        },
-        # 3. Mixed cycle with one sdist-only member: wheel member's _raw_ resets, caller does not.
-        "mix-a@1.0": {
-            "wheel_candidates": [_whl("ma", "mix_a-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_mix",
-            "marker_dependencies": [{"key": "mix-b@1.0"}],
-        },
-        "mix-b@1.0": {
-            "sdist_file": {"key": "mb_sdist"},
-            "cycle_group": "cycle_mix",
-            "marker_dependencies": [{"key": "mix-a@1.0"}],
-        },
-        "above-mix@1.0": {
-            "wheel_candidates": [_whl("am", "above_mix-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "mix-a@1.0"}],
-        },
-        # 4. Two sdist-fallback cycle members: caller gets match_all _reset_cycle_ gate.
-        "gate-a@1.0": {
-            "wheel_candidates": [_whl("ga", "gate_a-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
-            "sdist_file": {"key": "ga_sdist"},
-            "cycle_group": "cycle_gate",
-            "marker_dependencies": [{"key": "gate-b@1.0"}],
-        },
-        "gate-b@1.0": {
-            "wheel_candidates": [_whl("gb", "gate_b-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
-            "sdist_file": {"key": "gb_sdist"},
-            "cycle_group": "cycle_gate",
-            "marker_dependencies": [{"key": "gate-a@1.0"}],
-        },
-        "above-gate@1.0": {
-            "wheel_candidates": [_whl("ag", "above_gate-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "gate-a@1.0"}],
-        },
-        # 5. Chained pure-wheel cycles (SCC1 -> SCC2): both SCCs and caller reset.
-        "c1-a@1.0": {
-            "wheel_candidates": [_whl("c1a", "c1_a-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_c1",
-            "marker_dependencies": [{"key": "c1-b@1.0"}, {"key": "c2-a@1.0"}],
-        },
-        "c1-b@1.0": {
-            "wheel_candidates": [_whl("c1b", "c1_b-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_c1",
-            "marker_dependencies": [{"key": "c1-a@1.0"}],
-        },
-        "c2-a@1.0": {
-            "wheel_candidates": [_whl("c2a", "c2_a-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_c2",
-            "marker_dependencies": [{"key": "c2-b@1.0"}],
-        },
-        "c2-b@1.0": {
-            "wheel_candidates": [_whl("c2b", "c2_b-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_c2",
-            "marker_dependencies": [{"key": "c2-a@1.0"}],
-        },
-        "above-chain@1.0": {
-            "wheel_candidates": [_whl("ach", "above_chain-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "c1-a@1.0"}],
-        },
-        # 6. Negative chain: SCC1 depends unconditionally on non-resettable SCC2.
-        "bad-sdist@1.0": {
-            "sdist_file": {"key": "bad_sdist"},
-            "cycle_group": "cycle_bad2",
-            "marker_dependencies": [{"key": "bad-w@1.0"}],
-        },
-        "bad-w@1.0": {
-            "wheel_candidates": [_whl("bw", "bad_w-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_bad2",
-            "marker_dependencies": [{"key": "bad-sdist@1.0"}],
-        },
-        "bad1-a@1.0": {
-            "wheel_candidates": [_whl("b1a", "bad1_a-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_bad1",
-            "marker_dependencies": [{"key": "bad1-b@1.0"}, {"key": "bad-w@1.0"}],
-        },
-        "bad1-b@1.0": {
-            "wheel_candidates": [_whl("b1b", "bad1_b-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_bad1",
-            "marker_dependencies": [{"key": "bad1-a@1.0"}],
-        },
-        "above-bad-chain@1.0": {
-            "wheel_candidates": [_whl("abc", "above_bad_chain-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "bad1-a@1.0"}],
-        },
-        # 7. Cycle member with conditional non-variant external edge to non-resettable dep.
-        "sdist-leaf@1.0": {"sdist_file": {"key": "sl_sdist"}},
-        "cond-a@1.0": {
-            "wheel_candidates": [_whl("ca", "cond_a-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_cond",
-            "marker_dependencies": [
-                {"key": "cond-b@1.0"},
-                {"key": "sdist-leaf@1.0", "marker": "sys_platform == 'win32'"},
-            ],
-        },
-        "cond-b@1.0": {
-            "wheel_candidates": [_whl("cb", "cond_b-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_cond",
-            "marker_dependencies": [{"key": "cond-a@1.0"}],
-        },
-        "above-cond@1.0": {
-            "wheel_candidates": [_whl("ac", "above_cond-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "cond-a@1.0"}],
-        },
-        # 8. Positive extras-only cycle member (same-cycle wheel base), external non-cycle base,
-        #    external cycle base, and non-cycle extra whose base is a cycle member.
-        "ex-same@1.0": {
-            "wheel_candidates": [_whl("es", "ex_same-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_ex_same",
-            "marker_dependencies": [{"key": "ex-same[x]@1.0"}],
-        },
-        "ex-same[x]@1.0": {
-            "cycle_group": "cycle_ex_same",
-            "marker_dependencies": [{"key": "ex-same@1.0"}],
-        },
-        "above-ex-same@1.0": {
-            "wheel_candidates": [_whl("aes", "above_ex_same-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "ex-same[x]@1.0"}],
-        },
-        "plain-base@1.0": {
-            "wheel_candidates": [_whl("plb", "plain_base-1.0-py3-none-any.whl")],
-        },
-        "plain-base[x]@1.0": {
-            "cycle_group": "cycle_ex_ext",
-            "marker_dependencies": [{"key": "ex-ext-peer@1.0"}],
-        },
-        "ex-ext-peer@1.0": {
-            "wheel_candidates": [_whl("eep", "ex_ext_peer-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_ex_ext",
-            "marker_dependencies": [{"key": "plain-base[x]@1.0"}],
-        },
-        "above-ex-ext@1.0": {
-            "wheel_candidates": [_whl("aee", "above_ex_ext-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "plain-base[x]@1.0"}],
-        },
-        "pure-a[x]@1.0": {
-            "cycle_group": "cycle_ex_cycbase",
-            "marker_dependencies": [{"key": "ex-cyc-peer@1.0"}],
-        },
-        "ex-cyc-peer@1.0": {
-            "wheel_candidates": [_whl("ecp", "ex_cyc_peer-1.0-py3-none-any.whl")],
-            "cycle_group": "cycle_ex_cycbase",
-            "marker_dependencies": [{"key": "pure-a[x]@1.0"}],
-        },
-        "above-ex-cycbase@1.0": {
-            "wheel_candidates": [_whl("aecb", "above_ex_cycbase-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "pure-a[x]@1.0"}],
-        },
-        "pure-b[y]@1.0": {},
-        "above-noncyc-extra@1.0": {
-            "wheel_candidates": [_whl("ance", "above_noncyc_extra-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "pure-b[y]@1.0"}],
-        },
-    }, cycle_groups = {
-        "cycle_pure": ["pure-a@1.0", "pure-b@1.0"],
-    })
+    )
+    sp = out.spokes
 
-    env.expect.that_collection(_library(res, "_raw_pure-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "_raw_pure-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "above-pure@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["pure-a"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["pure-b"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["above-pure"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(sp["pure-a"]).contains('pycross_library_proxy(\n    name = "pkg",\n    actual = ":_raw",')
 
-    # Lock-level cycle_groups renders the public cycle wrapper alongside the resettable _raw_ target.
-    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "pure-a@1.0",\n        actual = ":_raw_pure-a@1.0",')
+    env.expect.that_collection(_library(sp["var-a"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["var-b"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(sp["above-var"], "pkg")[0]).equals("pycross_wheel_library")
 
-    env.expect.that_collection(_library(res, "_raw_var-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "_raw_var-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_str(_library(res, "above-var@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_collection(_library(sp["mix-a"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(sp["mix-b"], "_raw")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(sp["above-mix"], "pkg")[0]).equals("pycross_wheel_library")
 
-    env.expect.that_collection(_library(res, "_raw_mix-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_str(_library(res, "_raw_mix-b@1.0")[0]).equals("pycross_wheel_library")
-    env.expect.that_str(_library(res, "above-mix@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_collection(_library(sp["gate-a"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", '":_raw_reset_gate"']).in_order()
+    env.expect.that_collection(_library(sp["gate-b"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", '":_raw_reset_gate"']).in_order()
+    scc_gate = sp["gate-a"].split('name = "_scc_reset_gate",')[1].split(")")[0]
+    env.expect.that_str(scc_gate).contains('":_raw_reset_gate"')
+    env.expect.that_str(scc_gate).contains('"@ws__pkg_gate_b//:_raw_reset_gate"')
+    env.expect.that_str(sp["above-gate"]).contains('actual = "@ws__pkg_gate_a//:_reset_gate"')
+    env.expect.that_collection(_library(sp["above-gate"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", '":_reset_gate"']).in_order()
 
-    gate_a = '":_wheel_cs_gate-a@1.0_gate_a_1_0_cp312_cp312_manylinux_2_17_x86_64_whl"'
-    gate_b = '":_wheel_cs_gate-b@1.0_gate_b_1_0_cp312_cp312_manylinux_2_17_x86_64_whl"'
-    env.expect.that_collection(_library(res, "_raw_gate-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", gate_a]).in_order()
-    env.expect.that_collection(_library(res, "_raw_gate-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", gate_b]).in_order()
-    env.expect.that_collection(_library(res, "above-gate@1.0")).contains_exactly([
-        "pycross_resettable_wheel_library",
-        '":_reset_cycle_cycle_gate"',
-    ]).in_order()
-    cycle_gate_block = res.split('name = "_reset_cycle_cycle_gate",')[1].split(")")[0]
-    env.expect.that_str(cycle_gate_block).contains(gate_a)
-    env.expect.that_str(cycle_gate_block).contains(gate_b)
+    env.expect.that_collection(_library(sp["c1-a"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["c2-b"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["above-chain"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
 
-    env.expect.that_collection(_library(res, "_raw_c1-a@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "_raw_c2-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "above-chain@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(sp["bad1-a"], "_raw")[0]).equals("pycross_wheel_library")
+    env.expect.that_collection(_library(sp["bad1-b"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["bad-w"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(sp["above-bad-chain"], "pkg")[0]).equals("pycross_wheel_library")
 
-    # Negative chain: bad1-a depends on non-resettable SCC2 (so bad1-a and above-bad-chain stay unreset),
-    # while bad1-b and bad-w still reset their own _raw_ wheel installs independently.
-    env.expect.that_str(_library(res, "_raw_bad1-a@1.0")[0]).equals("pycross_wheel_library")
-    env.expect.that_collection(_library(res, "_raw_bad1-b@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "_raw_bad-w@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_str(_library(res, "above-bad-chain@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_collection(_library(sp["cond-a"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", '":_raw_reset_gate"']).in_order()
+    env.expect.that_str(sp["cond-a"]).contains("_nomatch")
+    env.expect.that_collection(_library(sp["above-cond"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", '":_reset_gate"']).in_order()
 
-    # Conditional non-variant external edge to non-resettable dep propagates _nomatch to both raw and caller.
-    cond_kind, cond_gate = _library(res, "_raw_cond-a@1.0")
-    env.expect.that_str(cond_kind).equals("pycross_resettable_wheel_library")
-    env.expect.that_str(cond_gate).contains("_nomatch")
-    env.expect.that_collection(_library(res, "above-cond@1.0")).contains_exactly(["pycross_resettable_wheel_library", cond_gate]).in_order()
+    env.expect.that_collection(_library(sp["ex-same"], "_raw")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["above-ex-same"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["above-ex-ext"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["above-ex-cycbase"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(sp["above-noncyc-extra"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
 
-    # Positive extras cases: same-cycle base, external plain base, external cycle base, and non-cycle extra of cycle base.
-    env.expect.that_collection(_library(res, "_raw_ex-same@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "above-ex-same@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "above-ex-ext@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "above-ex-cycbase@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_collection(_library(res, "above-noncyc-extra@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-
-    # Extras-only cycle member whose same-cycle base is sdist-only must not trigger a reset.bzl load.
-    sdist_extra_res = _reset_lock({
-        "ext@1.0": {
-            "sdist_file": {"key": "ext_sdist"},
-            "cycle_group": "cycle_ext",
-            "marker_dependencies": [{"key": "ext[x]@1.0"}],
+    sdist_extra_out = _reset_lock(
+        {
+            "ext@1.0": {
+                "sdist_file": {"key": "ext_sdist"},
+                "cycle_group": "cycle_ext",
+                "marker_dependencies": [{"key": "ext[x]@1.0"}],
+            },
+            "ext[x]@1.0": {
+                "cycle_group": "cycle_ext",
+                "marker_dependencies": [{"key": "ext@1.0"}],
+            },
+            "above-ext@1.0": {
+                "wheel_candidates": [_whl("ae", "above_ext-1.0-py3-none-any.whl")],
+                "marker_dependencies": [{"key": "ext[x]@1.0"}],
+            },
         },
-        "ext[x]@1.0": {
-            "cycle_group": "cycle_ext",
-            "marker_dependencies": [{"key": "ext@1.0"}],
-        },
-        "above-ext@1.0": {
-            "wheel_candidates": [_whl("ae", "above_ext-1.0-py3-none-any.whl")],
-            "marker_dependencies": [{"key": "ext[x]@1.0"}],
-        },
-    })
-    env.expect.that_bool('load(":reset.bzl"' in sdist_extra_res).equals(False)
-    env.expect.that_str(_library(sdist_extra_res, "above-ext@1.0")[0]).equals("pycross_wheel_library")
+        cycle_groups = {"cycle_ext": ["ext@1.0", "ext[x]@1.0"]},
+    )
+    env.expect.that_bool("reset.bzl" in sdist_extra_out.all).equals(False)
+    env.expect.that_str(_library(sdist_extra_out.spokes["above-ext"], "pkg")[0]).equals("pycross_wheel_library")
 
 def _test_reset_cycles(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1363,13 +974,11 @@ def _test_reset_cycles(name):
 # buildifier: disable=unused-variable
 def _test_reset_gates_impl(env, target):
     """Packages that can fall back to an sdist only reset where a wheel matches."""
-    res = _reset_lock({
+    out = _reset_lock({
         "one@1.0": {
             "wheel_candidates": [_whl("one_whl", "one-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
             "sdist_file": {"key": "one_sdist"},
         },
-        # A universal py3-none-any wheel always matches, so sdist fallback is
-        # impossible and it resets unconditionally with no wheel chooser.
         "pure@1.0": {
             "wheel_candidates": [_whl("pure_whl", "pure-1.0-py3-none-any.whl")],
             "sdist_file": {"key": "pure_sdist"},
@@ -1381,7 +990,6 @@ def _test_reset_gates_impl(env, target):
             ],
             "sdist_file": {"key": "win_sdist"},
         },
-        # 3+ platform-specific wheels use pycross_wheel_matched instead of a W-way match_any.
         "many@1.0": {
             "wheel_candidates": [
                 _whl("m1", "many-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
@@ -1390,7 +998,6 @@ def _test_reset_gates_impl(env, target):
             ],
             "sdist_file": {"key": "many_sdist"},
         },
-        # An extras proxy forwards its base package's gate.
         "one[ext]@1.0": {"marker_dependencies": [{"key": "one@1.0"}]},
         "uses-extra@1.0": {
             "wheel_candidates": [_whl("uses_extra_whl", "uses_extra-1.0-py3-none-any.whl")],
@@ -1404,7 +1011,6 @@ def _test_reset_gates_impl(env, target):
                 {"key": "win@1.0", "marker": "sys_platform == 'cygwin'"},
             ],
         },
-        # Blocked by a dep without wheels: must not leave a dead `_reset_wheel_` target.
         "no-wheel@1.0": {"sdist_file": {"key": "no_wheel_sdist"}},
         "blocked@1.0": {
             "wheel_candidates": [
@@ -1414,44 +1020,42 @@ def _test_reset_gates_impl(env, target):
             "sdist_file": {"key": "blk_sdist"},
             "marker_dependencies": [{"key": "no-wheel@1.0"}],
         },
-        # Conditional non-variant edge to a non-resettable dep resets behind _nomatch.
         "cond-blocked@1.0": {
             "wheel_candidates": [_whl("cb_whl", "cond_blocked-1.0-py3-none-any.whl")],
             "marker_dependencies": [{"key": "no-wheel@1.0", "marker": "sys_platform == 'win32'"}],
         },
     })
+    sp = out.spokes
 
-    # A single platform-specific wheel reuses its config_setting; 2 get match_any; 3+ use pycross_wheel_matched.
-    env.expect.that_str(_library(res, "one@1.0")[1]).equals('":_wheel_cs_one@1.0_one_1_0_cp312_cp312_manylinux_2_17_x86_64_whl"')
-    env.expect.that_collection(_library(res, "pure@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
-    env.expect.that_bool("_wheel_chooser_pure@1.0" in res).equals(False)
-    env.expect.that_str(_library(res, "win@1.0")[1]).equals('":_reset_wheel_win@1.0"')
-    env.expect.that_str(_library(res, "many@1.0")[1]).equals('":_reset_wheel_many@1.0"')
-    env.expect.that_str(res).contains('name = "_wheel_matched_many@1.0"')
-    env.expect.that_str(res).contains('"pycross_wheel_matched"')
+    env.expect.that_str(_library(sp["one"], "pkg")[1]).equals('":_reset_gate"')
+    env.expect.that_str(sp["one"]).contains('name = "_reset_gate",\n    actual = ":_wheel_cs_one_1_0_cp312_cp312_manylinux_2_17_x86_64_whl",')
+    env.expect.that_collection(_library(sp["pure"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_bool("_wheel_chooser" in sp["pure"]).equals(False)
+    env.expect.that_str(_library(sp["win"], "pkg")[1]).equals('":_reset_gate"')
+    env.expect.that_str(sp["win"]).contains('name = "_reset_wheel"')
+    env.expect.that_str(sp["many"]).contains('name = "_wheel_matched"')
+    env.expect.that_str(sp["many"]).contains('"pycross_wheel_matched"')
 
-    # Conditional non-variant edge to a non-resettable dep resets behind :<eval>_nomatch.
-    cb_kind, cb_gate = _library(res, "cond-blocked@1.0")
-    env.expect.that_str(cb_kind).equals("pycross_resettable_wheel_library")
-    env.expect.that_str(cb_gate).contains("_nomatch")
+    env.expect.that_collection(_library(sp["cond-blocked"], "pkg")).contains_exactly(["pycross_resettable_wheel_library", '":_reset_gate"']).in_order()
+    env.expect.that_str(sp["cond-blocked"]).contains("_nomatch")
 
-    # Conditional edges only need win's gate where they apply, and two edges to
-    # the same dep with different markers get distinct target names.
-    env.expect.that_str(_library(res, "top@1.0")[1]).equals('":_reset_ok_top@1.0"')
+    top = sp["top"]
+    env.expect.that_str(_library(top, "pkg")[1]).equals('":_reset_gate"')
     edge_names = [
         line.split('"')[1]
-        for line in res.split("\n")
-        if 'name = "_reset_edge_' in line and '_win@1.0",' in line
+        for line in top.split("\n")
+        if 'name = "_reset_edge_' in line
     ]
     env.expect.that_int(len(edge_names)).equals(2)
     env.expect.that_bool(edge_names[0] != edge_names[1]).equals(True)
-    edge = res.split('name = "{}",'.format(edge_names[0]))[1].split(")")[0]
+    edge = top.split('name = "{}",'.format(edge_names[0]))[1].split(")")[0]
     env.expect.that_str(edge).contains("match_any")
     env.expect.that_str(edge).contains("_nomatch")
-    env.expect.that_str(edge).contains(":_reset_wheel_win@1.0")
-    env.expect.that_str(res).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
-    env.expect.that_str(_library(res, "uses-extra@1.0")[1]).equals('":_wheel_cs_one@1.0_one_1_0_cp312_cp312_manylinux_2_17_x86_64_whl"')
-    env.expect.that_bool("_reset_wheel_blocked@1.0" in res).equals(False)
+    env.expect.that_str(edge).contains("@ws__pkg_win//:_reset_gate")
+    env.expect.that_str(top).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
+
+    env.expect.that_str(sp["uses-extra"]).contains('actual = "@ws__pkg_one//:_reset_gate_[ext]"')
+    env.expect.that_bool("_reset_wheel" in sp["blocked"]).equals(False)
 
 def _test_reset_gates(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1459,23 +1063,22 @@ def _test_reset_gates(name):
 
 # buildifier: disable=unused-variable
 def _test_reset_bzl_impl(env, target):
-    """reset.bzl resets canonical //_lock:_state and each flag once."""
-    res = render_reset_bzl(
+    """state reset.bzl resets canonical //:_state and each flag once via str(Label(...))."""
+    res = render_state_reset_bzl(
         ["@r1//_variants:x", "@r1//_variants:x", "@r2//_variants:y"],
         string_flag_labels = ["@r1//_variants:_variants", "@r1//_variants:_variants", "@r2//_variants:_variants"],
     )
-    env.expect.that_str(res).contains('"//_lock:_state": "",')
+    env.expect.that_str(res).contains('str(Label("//:_state")): "",')
     env.expect.that_bool("_pin_" in res).equals(False)
     env.expect.that_bool("_default_" in res).equals(False)
     env.expect.that_bool("_usable_" in res).equals(False)
-    env.expect.that_int(res.count('"@r1//_variants:x": False,')).equals(1)
-    env.expect.that_str(res).contains('"@r2//_variants:y": False,')
-    env.expect.that_int(res.count('"@r1//_variants:_variants": "",')).equals(1)
-    env.expect.that_str(res).contains('"@r2//_variants:_variants": "",')
+    env.expect.that_int(res.count('str(Label("@r1//_variants:x")): False,')).equals(1)
+    env.expect.that_str(res).contains('str(Label("@r2//_variants:y")): False,')
+    env.expect.that_int(res.count('str(Label("@r1//_variants:_variants")): "",')).equals(1)
+    env.expect.that_str(res).contains('str(Label("@r2//_variants:_variants")): "",')
 
-    # Without conflict sets nothing resets.
     lock = {"packages": {"leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]}}}
-    plain = render_lock_bzl(lock, {"leaf_whl": "@r//leaf:wheel"}, "ws__pkgs")
+    plain = _render_spokes(lock, {"leaf_whl": "@r//leaf:wheel"}).spokes["leaf"]
     env.expect.that_bool("reset.bzl" in plain).equals(False)
 
 def _test_reset_bzl(name):
@@ -1494,9 +1097,7 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
             "cyca@1.0": {
                 "cycle_group": "cycle_group_g1",
                 "wheel_candidates": [_whl("ca", "cyca-1.0-py3-none-any.whl")],
-                "marker_dependencies": [
-                    {"key": "cycb@1.0", "marker": "extra == '__variant_group_app_gpu'"},
-                ],
+                "marker_dependencies": [{"key": "cycb@1.0", "marker": "extra == '__variant_group_app_gpu'"}],
             },
             "cycb@1.0": {
                 "cycle_group": "cycle_group_g1",
@@ -1506,16 +1107,12 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
             "mha@1.0": {
                 "cycle_group": "cycle_group_g2",
                 "wheel_candidates": [_whl("mha", "mha-1.0-py3-none-any.whl")],
-                "marker_dependencies": [
-                    {"key": "mhb@1.0", "marker": "extra == '__variant_group_app_gpu'"},
-                ],
+                "marker_dependencies": [{"key": "mhb@1.0", "marker": "extra == '__variant_group_app_gpu'"}],
             },
             "mhb@1.0": {
                 "cycle_group": "cycle_group_g2",
                 "wheel_candidates": [_whl("mhb", "mhb-1.0-py3-none-any.whl")],
-                "marker_dependencies": [
-                    {"key": "mhc@1.0", "marker": "sys_platform == 'win32'"},
-                ],
+                "marker_dependencies": [{"key": "mhc@1.0", "marker": "sys_platform == 'win32'"}],
             },
             "mhc@1.0": {
                 "cycle_group": "cycle_group_g2",
@@ -1533,12 +1130,8 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
                     {"key": "dep_c@1.0", "marker": "extra == '__variant_group_app_gpu'"},
                 ],
             },
-            "dep_a@1.0": {
-                "wheel_candidates": [_whl("da", "dep_a-1.0-py3-none-any.whl")],
-            },
-            "dep_b@1.0": {
-                "wheel_candidates": [_whl("db", "dep_b-1.0-py3-none-any.whl")],
-            },
+            "dep_a@1.0": {"wheel_candidates": [_whl("da", "dep_a-1.0-py3-none-any.whl")]},
+            "dep_b@1.0": {"wheel_candidates": [_whl("db", "dep_b-1.0-py3-none-any.whl")]},
             "dep_c@1.0": {
                 "wheel_candidates": [
                     _whl("dc1", "dep_c-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
@@ -1546,9 +1139,6 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
                     _whl("dc3", "dep_c-1.0-cp312-cp312-win_amd64.whl"),
                 ],
             },
-        },
-        "resolution_marker_exprs": {
-            "res_other": "extra == '__variant_extra_other_x'",
         },
     }
     repo_map = {
@@ -1565,45 +1155,33 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
         "dc2": "@r//dc:w2",
         "dc3": "@r//dc:w3",
     }
-    res = render_lock_bzl(
-        lock,
-        repo_map,
-        rctx_name = "ws__pkgs",
-        has_variants = True,
-    )
+    out = _render_spokes(lock, repo_map, has_variants = True)
+    sp = out.spokes
 
-    # dep_a and dep_b share the same sys_platform == 'win32' marker -> single select().
-    env.expect.that_str(res).contains('[":dep_a@1.0", ":dep_b@1.0"]')
+    env.expect.that_str(sp["app"]).contains('["@ws__pkg_dep_a//:pkg", "@ws__pkg_dep_b//:pkg"]')
+    env.expect.that_str(sp["app"]).contains('name = "_wheel_chooser"')
+    env.expect.that_bool("_wheel_available" in sp["app"]).equals(False)
 
-    # Mixed native + universal keeps chooser (to prefer native) but emits no _wheel_available_ group.
-    env.expect.that_str(res).contains('name = "_wheel_chooser_app@1.0"')
-    env.expect.that_bool("_wheel_available_app@1.0" in res).equals(False)
+    env.expect.that_str(sp["dep-c"]).contains('name = "_wheel_matched"')
+    env.expect.that_str(sp["dep-c"]).contains('name = "_wheel_available"')
+    env.expect.that_bool("selects.config_setting_group(" in sp["dep-c"]).equals(False)
 
-    # 3+ platform-specific wheel-only package uses pycross_wheel_matched for _wheel_available_.
-    env.expect.that_str(res).contains('name = "_wheel_matched_dep_c@1.0"')
-    env.expect.that_str(res).contains('name = "_wheel_available_dep_c@1.0"')
-    env.expect.that_bool("selects.config_setting_group(" in res).equals(False)
-
-    # Every variant-referencing evaluator receives the single :_variant_state target;
-    # non-variant evaluators omit variants.
     eval_blocks = [
-        b.split("\n    )")[0]
-        for b in res.split("pycross_pep508_evaluator(\n")[1:]
+        b.split("\n)")[0]
+        for b in out.all.split("pycross_pep508_evaluator(\n")[1:]
     ]
     for block in eval_blocks:
         expr = block.split('expr = "')[1].split('",')[0]
         if "__variant_" in expr:
-            env.expect.that_str(block).contains('variants = [":_variant_state"]')
+            env.expect.that_str(block).contains('variants = ["@ws__state//:_variant_state"]')
         else:
             env.expect.that_bool("variants =" in block).equals(False)
 
-    # 1-hop variant cycle (cycle_group_g1) reuses _marker_eval_*_match with no _EDGES_JSON or _cycle_needed_.
-    env.expect.that_bool("_CYCLE_GROUP_G1_EDGES" in res).equals(False)
-    env.expect.that_bool("_cycle_needed_cyca" in res).equals(False)
+    env.expect.that_bool("_CYCLE_EDGES_JSON" in sp["cyca"]).equals(False)
+    env.expect.that_bool("_cycle_needed_" in sp["cyca"]).equals(False)
 
-    # Multi-hop variant cycle (cycle_group_g2) emits pycross_cycle_dep_needed with :_variant_state.
-    cyc_block = res.split('pycross_cycle_dep_needed(\n        name = "_cycle_needed_mha_1_0_mhc_1_0",')[1].split("\n    )")[0]
-    env.expect.that_str(cyc_block).contains('variants = [":_variant_state"]')
+    cyc_block = sp["mha"].split('pycross_cycle_dep_needed(\n    name = "_cycle_needed_mha_mhc",')[1].split("\n)")[0]
+    env.expect.that_str(cyc_block).contains('variants = ["@ws__state//:_variant_state"]')
 
 def _test_scoped_variants_and_grouped_deps(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1611,7 +1189,7 @@ def _test_scoped_variants_and_grouped_deps(name):
 
 # buildifier: disable=unused-variable
 def _test_extras_in_cycle_impl(env, target):
-    """Extras proxy inside a cycle emits _raw_<extra> pointing to _raw_<base> and records the base edge."""
+    """Extras proxy inside a cycle emits :_raw_[extra] pointing to :_raw and records the version-free base edge."""
     lock = {
         "cycle_groups": {
             "cycle_group_c1": ["alpha@1.0", "alpha[extra]@1.0", "alpha[explicit]@1.0", "beta@1.0", "gamma[cyc]@1.0"],
@@ -1635,37 +1213,33 @@ def _test_extras_in_cycle_impl(env, target):
                 "wheel_candidates": [_whl("b_whl", "beta-1.0-py3-none-any.whl")],
                 "marker_dependencies": [{"key": "alpha[extra]@1.0"}, {"key": "gamma[cyc]@1.0"}],
             },
-            "gamma@1.0": {
-                "wheel_candidates": [_whl("g_whl", "gamma-1.0-py3-none-any.whl")],
-            },
+            "gamma@1.0": {"wheel_candidates": [_whl("g_whl", "gamma-1.0-py3-none-any.whl")]},
             "gamma[cyc]@1.0": {
                 "cycle_group": "cycle_group_c1",
                 "marker_dependencies": [{"key": "beta@1.0"}],
             },
         },
     }
-    res = render_lock_bzl(
-        lock,
-        {"a_whl": "@r//a:whl", "b_whl": "@r//b:whl", "g_whl": "@r//g:whl"},
-        "ws__pkgs",
-    )
+    out = _render_spokes(lock, {"a_whl": "@r//a:whl", "b_whl": "@r//b:whl", "g_whl": "@r//g:whl"})
+    alpha = out.spokes["alpha"]
+    gamma = out.spokes["gamma"]
 
-    # Extras proxy uses _raw_ name and points to _raw_ base so there is no target collision or cycle.
-    env.expect.that_str(res).contains('name = "_raw_alpha[extra]@1.0",')
-    env.expect.that_str(res).contains('actual = ":_raw_alpha@1.0",')
-    env.expect.that_int(res.count('name = "alpha[extra]@1.0",')).equals(1)
-    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "alpha[extra]@1.0",\n        actual = ":_raw_alpha[extra]@1.0",')
+    env.expect.that_str(alpha).contains('name = "_raw_[extra]",')
+    env.expect.that_str(alpha).contains('actual = ":_raw",')
+    env.expect.that_int(alpha.count('name = "[extra]",')).equals(1)
+    env.expect.that_str(alpha).contains('pycross_library_proxy(\n    name = "[extra]",\n    actual = ":_raw_[extra]",')
 
-    # Extras proxy inside a cycle whose base is outside the cycle points to the non-_raw_ base.
-    gamma_proxy = res.split('pycross_library_proxy(\n        name = "_raw_gamma[cyc]@1.0",')[1].split(")")[0]
-    env.expect.that_str(gamma_proxy).contains('actual = ":gamma@1.0",')
+    # Extras proxy inside a cycle whose base is outside the cycle points to :pkg (non-_raw base).
+    gamma_proxy = gamma.split('pycross_library_proxy(\n    name = "_raw_[cyc]",')[1].split(")")[0]
+    env.expect.that_str(gamma_proxy).contains('actual = ":pkg",')
 
-    # Cycle edges include the implicit alpha[extra]@1.0 -> alpha@1.0 edge, do not
-    # duplicate explicit alpha[explicit]@1.0 -> alpha@1.0, and omit out-of-cycle gamma@1.0.
-    edges = build_cycle_edges_dict(lock["cycle_groups"]["cycle_group_c1"], lock["packages"])
-    env.expect.that_bool({"dep": "alpha@1.0"} in edges["alpha[extra]@1.0"]).equals(True)
-    env.expect.that_int(len([e for e in edges["alpha[explicit]@1.0"] if e == {"dep": "alpha@1.0"}])).equals(1)
-    env.expect.that_bool("gamma@1.0" in [e["dep"] for e in edges["gamma[cyc]@1.0"]]).equals(False)
+    # Cycle edges in payload include implicit alpha[extra] -> alpha, dedup explicit alpha[explicit] -> alpha,
+    # and omit out-of-cycle gamma.
+    alpha_entry = [e for e in out.payloads["alpha"]["entries"] if e["extra"] == "extra"][0]
+    edges = alpha_entry["cycle"]["edges"]
+    env.expect.that_bool({"dep": "alpha"} in edges["alpha[extra]"]).equals(True)
+    env.expect.that_int(len([e for e in edges["alpha[explicit]"] if e == {"dep": "alpha"}])).equals(1)
+    env.expect.that_bool("gamma" in [e["dep"] for e in edges["gamma[cyc]"]]).equals(False)
 
 def _test_extras_in_cycle(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1693,18 +1267,14 @@ def _test_marker_deps_dedup_impl(env, target):
             "overlap@1.0": {"wheel_candidates": [_whl("o_whl", "overlap-1.0-py3-none-any.whl")]},
         },
     }
-    res = render_lock_bzl(
-        lock,
-        {"app_whl": "@r//app:whl", "u_whl": "@r//u:whl", "s_whl": "@r//s:whl", "o_whl": "@r//o:whl"},
-        "ws__pkgs",
-    )
+    app = _render_spokes(lock, {"app_whl": "@r//app:whl", "u_whl": "@r//u:whl", "s_whl": "@r//s:whl", "o_whl": "@r//o:whl"}).spokes["app"]
 
-    deps_block = res.split("_app_1_0_deps = [")[1].split("\n\n")[0]
-    env.expect.that_int(deps_block.count('":uncond@1.0"')).equals(1)
-    env.expect.that_int(deps_block.count('":same_marker@1.0"')).equals(1)
-    env.expect.that_int(deps_block.count('":overlap@1.0"')).equals(1)
-    env.expect.that_str(res).contains('name = "_dep_any_app_1_0_')
-    env.expect.that_str(res).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
+    deps_block = app.split("_deps = [")[1].split("\n\n")[0]
+    env.expect.that_int(deps_block.count('"@ws__pkg_uncond//:pkg"')).equals(1)
+    env.expect.that_int(deps_block.count('"@ws__pkg_same_marker//:pkg"')).equals(1)
+    env.expect.that_int(deps_block.count('"@ws__pkg_overlap//:pkg"')).equals(1)
+    env.expect.that_str(app).contains('name = "_dep_any_')
+    env.expect.that_str(app).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
 
 def _test_marker_deps_dedup(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1730,10 +1300,9 @@ def _test_epoch_and_marker_sanitization_impl(env, target):
             "bar@1.0": {"wheel_candidates": [_whl("b_whl", "bar-1.0-py3-none-any.whl")]},
         },
     }
-    res = render_lock_bzl(lock, {"f_whl": "@r//f:whl", "b_whl": "@r//b:whl"}, "ws__pkgs")
-    env.expect.that_str(res).contains("_foo_1_2_0_0_deps = [")
-    env.expect.that_bool("_foo_1!2_0_0_deps" in res).equals(False)
-    env.expect.that_str(res).contains('name = "{}"'.format(colon_eval))
+    foo = _render_spokes(lock, {"f_whl": "@r//f:whl", "b_whl": "@r//b:whl"}).spokes["foo"]
+    env.expect.that_str(foo).contains("_deps = [")
+    env.expect.that_str(foo).contains('name = "{}"'.format(colon_eval))
 
 def _test_epoch_and_marker_sanitization(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1741,7 +1310,7 @@ def _test_epoch_and_marker_sanitization(name):
 
 # buildifier: disable=unused-variable
 def _test_wheel_available_always_emitted_impl(env, target):
-    """Wheel-only platform-specific packages always emit _wheel_available_<pkg> for thin-repo composition."""
+    """Wheel-only platform-specific packages always emit _wheel_available for thin-repo composition."""
     lock = {
         "packages": {
             "nomarker@1.0": {
@@ -1751,22 +1320,16 @@ def _test_wheel_available_always_emitted_impl(env, target):
                 ],
             },
             "withmarker@1.0": {
-                "wheel_candidates": [
-                    _whl("wm1", "withmarker-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
-                ],
+                "wheel_candidates": [_whl("wm1", "withmarker-1.0-cp312-cp312-manylinux_2_17_x86_64.whl")],
                 "availability_markers": ["sys_platform == 'linux'"],
             },
         },
     }
-    res = render_lock_bzl(
-        lock,
-        {"nm1": "@r//nm:w1", "nm2": "@r//nm:w2", "wm1": "@r//wm:w1"},
-        "ws__pkgs",
-    )
-    env.expect.that_str(res).contains('name = "_wheel_available_nomarker@1.0",')
-    env.expect.that_str(res).contains('name = "_wheel_available_withmarker@1.0",')
-    env.expect.that_bool('"_available_' in res).equals(False)
-    env.expect.that_bool('"_marker_available_' in res).equals(False)
+    out = _render_spokes(lock, {"nm1": "@r//nm:w1", "nm2": "@r//nm:w2", "wm1": "@r//wm:w1"})
+    env.expect.that_str(out.spokes["nomarker"]).contains('name = "_wheel_available",')
+    env.expect.that_str(out.spokes["withmarker"]).contains('name = "_wheel_available",')
+    env.expect.that_bool('"_available_' in out.all).equals(False)
+    env.expect.that_bool('"_marker_available_' in out.all).equals(False)
 
 def _test_wheel_available_always_emitted(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1774,11 +1337,9 @@ def _test_wheel_available_always_emitted(name):
 
 # buildifier: disable=unused-variable
 def _test_sdist_deps_proxy_rendering_impl(env, target):
-    """Sdist-buildable packages with deps emit _sdist_deps_<pkg> using marker-gated, cycle-filtered deps."""
+    """Sdist-buildable packages with deps emit :_sdist_deps using marker-gated, cycle-filtered deps."""
     lock = {
-        "cycle_groups": {
-            "cycle_0": ["cyc_sdist@1.0", "cyc_peer@1.0"],
-        },
+        "cycle_groups": {"cycle_0": ["cyc_sdist@1.0", "cyc_peer@1.0"]},
         "packages": {
             "cyc_sdist@1.0": {
                 "sdist_file": {"key": "cyc_sdist_tar"},
@@ -1799,12 +1360,8 @@ def _test_sdist_deps_proxy_rendering_impl(env, target):
                 "wheel_candidates": [_whl("w_whl", "win_dep-1.0-py3-none-any.whl")],
                 "marker_dependencies": [{"key": "common_dep@1.0"}],
             },
-            "common_dep@1.0": {
-                "wheel_candidates": [_whl("c_whl", "common_dep-1.0-py3-none-any.whl")],
-            },
-            "nodeps_sdist@1.0": {
-                "sdist_file": {"key": "nodeps_tar"},
-            },
+            "common_dep@1.0": {"wheel_candidates": [_whl("c_whl", "common_dep-1.0-py3-none-any.whl")]},
+            "nodeps_sdist@1.0": {"sdist_file": {"key": "nodeps_tar"}},
             "never_sdist@1.0": {
                 "sdist_file": {"key": "never_tar"},
                 "build_mode": "never",
@@ -1827,99 +1384,71 @@ def _test_sdist_deps_proxy_rendering_impl(env, target):
         "never_tar": "@r//never:sdist",
         "custom_tar": "@r//custom:sdist",
     }
-    res = render_lock_bzl(lock, repo_map, "ws__pkgs")
+    sp = _render_spokes(lock, repo_map).spokes
 
-    # Sdist-buildable package with deps gets _sdist_deps_<pkg> pointing at its marker-gated, cycle-filtered deps var.
-    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "_sdist_deps_cyc_sdist@1.0",\n        deps = _cyc_sdist_1_0_deps,\n    )')
+    env.expect.that_str(sp["cyc-sdist"]).contains('pycross_library_proxy(\n    name = "_sdist_deps",\n    deps = _deps,\n)')
+    env.expect.that_str(sp["cyc-peer"]).contains('pycross_library_proxy(\n    name = "_sdist_deps",\n    deps = _deps,\n)')
+    peer_deps_block = sp["cyc-peer"].split("_deps = [")[1].split("\n\n")[0]
+    env.expect.that_bool("cyc_sdist" in peer_deps_block).equals(False)
 
-    # Wheel + sdist fallback package whose only dep is same-cycle still emits _sdist_deps_ pointing at empty deps.
-    env.expect.that_str(res).contains('pycross_library_proxy(\n        name = "_sdist_deps_cyc_peer@1.0",\n        deps = _cyc_peer_1_0_deps,\n    )')
-    peer_deps_block = res.split("_cyc_peer_1_0_deps = [")[1].split("\n\n")[0]
-    env.expect.that_bool("cyc_sdist@1.0" in peer_deps_block).equals(False)
-
-    # _cyc_sdist_1_0_deps must skip same-cycle cyc_peer@1.0, keep common_dep@1.0 unconditionally,
-    # and gate win_dep@1.0 behind its marker select.
-    deps_block = res.split("_cyc_sdist_1_0_deps = [")[1].split("\n\n")[0]
-    env.expect.that_bool("cyc_peer@1.0" in deps_block).equals(False)
-    env.expect.that_str(deps_block).contains('":common_dep@1.0"')
-    env.expect.that_str(deps_block).contains('":win_dep@1.0"')
+    deps_block = sp["cyc-sdist"].split("_deps = [")[1].split("\n\n")[0]
+    env.expect.that_bool("cyc_peer" in deps_block).equals(False)
+    env.expect.that_str(deps_block).contains('"@ws__pkg_common_dep//:pkg"')
+    env.expect.that_str(deps_block).contains('"@ws__pkg_win_dep//:pkg"')
     env.expect.that_str(deps_block).contains("select({")
 
-    # Packages with no deps, build_mode="never", custom build_target, or wheel-only must not emit _sdist_deps_.
-    env.expect.that_bool("_sdist_deps_nodeps_sdist@1.0" in res).equals(False)
-    env.expect.that_bool("_sdist_deps_never_sdist@1.0" in res).equals(False)
-    env.expect.that_bool("_sdist_deps_custom_sdist@1.0" in res).equals(False)
-    env.expect.that_bool("_sdist_deps_win_dep@1.0" in res).equals(False)
+    env.expect.that_bool("_sdist_deps" in sp["nodeps-sdist"]).equals(False)
+    env.expect.that_bool("_sdist_deps" in sp["never-sdist"]).equals(False)
+    env.expect.that_bool("_sdist_deps" in sp["custom-sdist"]).equals(False)
+    env.expect.that_bool("_sdist_deps" in sp["win-dep"]).equals(False)
 
 def _test_sdist_deps_proxy_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_sdist_deps_proxy_rendering_impl)
 
 # buildifier: disable=unused-variable
-def _test_render_lock_with_meta_has_reset_impl(env, target):
-    """render_lock_bzl_with_meta.has_reset tracks whether :reset.bzl is loaded."""
-    conflict_sets = [["extra_a", "extra_b"]]
+def _test_reset_bzl_load_only_when_resettable_impl(env, target):
+    """Spokes load @<ws>__state//:reset.bzl only when an entry actually resets."""
+    sdist_only = _reset_lock({"src@1.0": {"sdist_file": {"key": "src_sdist"}}})
+    env.expect.that_bool("reset.bzl" in sdist_only.spokes["src"]).equals(False)
 
-    # Conflict sets present, but only an sdist-only package: nothing resets.
-    sdist_only = render_lock_bzl_with_meta(
-        {"packages": {"src@1.0": {"sdist_file": {"key": "src_sdist"}}}},
-        {"src_sdist": "@r//src:sdist"},
-        "ws__pkgs",
-        reset_conflict_sets = conflict_sets,
-    )
-    env.expect.that_bool(sdist_only.has_reset).equals(False)
-    env.expect.that_bool('load(":reset.bzl"' in sdist_only.content).equals(False)
+    with_wheel = _reset_lock({"leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]}})
+    env.expect.that_str(with_wheel.spokes["leaf"]).contains('load("@ws__state//:reset.bzl", "pycross_resettable_wheel_library")')
 
-    # Conflict sets present with a resettable wheel package: :reset.bzl is loaded.
-    with_wheel = render_lock_bzl_with_meta(
-        {"packages": {"leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]}}},
-        {"leaf_whl": "@r//leaf:wheel"},
-        "ws__pkgs",
-        reset_conflict_sets = conflict_sets,
-    )
-    env.expect.that_bool(with_wheel.has_reset).equals(True)
-    env.expect.that_str(with_wheel.content).contains('load(":reset.bzl", "pycross_resettable_wheel_library")')
-
-def _test_render_lock_with_meta_has_reset(name):
+def _test_reset_bzl_load_only_when_resettable(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_render_lock_with_meta_has_reset_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_reset_bzl_load_only_when_resettable_impl)
 
 # buildifier: disable=unused-variable
-def _test_reset_edge_dedup_identical_nomatch_impl(env, target):
-    """When a dep's reset gate equals the edge's own `_nomatch` label, reuse it without emitting a duplicate match_any."""
-    res = _reset_lock({
-        "sdist-leaf@1.0": {
-            "sdist_file": {"key": "leaf_sdist"},
-        },
+def _test_cross_spoke_gated_reset_chain_impl(env, target):
+    """A conditional dep on a gated downstream spoke composes local _nomatch with the dep's cross-spoke :_reset_gate."""
+    out = _reset_lock({
+        "sdist-leaf@1.0": {"sdist_file": {"key": "leaf_sdist"}},
         "mid@1.0": {
             "wheel_candidates": [_whl("mid_whl", "mid-1.0-py3-none-any.whl")],
-            "marker_dependencies": [
-                {"key": "sdist-leaf@1.0", "marker": "sys_platform == 'linux'"},
-            ],
+            "marker_dependencies": [{"key": "sdist-leaf@1.0", "marker": "sys_platform == 'linux'"}],
         },
         "top@1.0": {
             "wheel_candidates": [_whl("top_whl", "top-1.0-py3-none-any.whl")],
-            "marker_dependencies": [
-                {"key": "mid@1.0", "marker": "sys_platform == 'linux'"},
-            ],
+            "marker_dependencies": [{"key": "mid@1.0", "marker": "sys_platform == 'linux'"}],
         },
     })
     linux_eval = marker_evaluator_name("sys_platform == 'linux'")
-    nomatch_label = '":{}_nomatch"'.format(linux_eval)
-    env.expect.that_str(res).contains('name = "top@1.0",\n        reset_gate = ' + nomatch_label)
-    env.expect.that_bool("_reset_edge_{}_mid@1.0".format(linux_eval) in res).equals(False)
+    env.expect.that_str(out.spokes["mid"]).contains('actual = ":{}_nomatch",'.format(linux_eval))
+    env.expect.that_str(out.spokes["top"]).contains('":{}_nomatch",'.format(linux_eval))
+    env.expect.that_str(out.spokes["top"]).contains('"@ws__pkg_mid//:_reset_gate",')
 
-def _test_reset_edge_dedup_identical_nomatch(name):
+def _test_cross_spoke_gated_reset_chain(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_reset_edge_dedup_identical_nomatch_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_cross_spoke_gated_reset_chain_impl)
 
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_render_lock,
-            _test_render_lock_with_meta_has_reset,
-            _test_reset_edge_dedup_identical_nomatch,
+            _test_reset_bzl_load_only_when_resettable,
+            _test_cross_spoke_gated_reset_chain,
             _test_reset_plan,
             _test_marker_depends_on_variants_cache,
             _test_reset_cycles,
@@ -1935,18 +1464,15 @@ def resolved_lock_renderer_test_suite(name):
             _test_cycle_group_rendering,
             _test_cycle_group_marker_specific_rendering,
             _test_extras_rendering,
-            _test_lock_bzl_format,
+            _test_spoke_build_format,
             _test_no_cycles_no_cycle_targets,
             _test_marker_deps_rendering,
             _test_multi_platform_repo_map,
             _test_available_config_setting_group,
-            _test_no_available_when_all_have_sdist,
             _test_extras_inherit_base_available,
             _test_build_mode_never_no_sdist_fallback,
-            _test_resolution_marker_evaluator_rendering,
-            _test_resolution_marker_compound_rendering,
-            _test_wheel_library_tags_rendering,
-            _test_precompile_rendering,
+            _test_resolution_marker_member_rendering,
+            _test_wheel_library_tags_and_precompile_rendering,
             _test_conflict_state_rendering,
         ],
     )

@@ -4,9 +4,10 @@ load("//pycross/private:build_text.bzl", "alias", "config_setting_group", "selec
 load(
     "//pycross/private:lock_contract.bzl",
     "is_extras_proxy",
-    "lock_constraint_label",
-    "lock_marker_match_label",
-    "lock_wheel_available_label",
+    "member_constraint_label",
+    "member_marker_match_label",
+    "spoke_slot_label",
+    "state_repo_name",
 )
 load("//pycross/private:util.bzl", "base_package_key", "is_wheel_platform_specific", "marker_evaluator_name", "sanitize_name")
 load(":common.bzl", "NO_VARIANT_PREFIX")
@@ -20,14 +21,13 @@ def _maybe_select_alias(name, avail_cond, target):
         actual_is_expr = True,
     )
 
-def markers_condition(lines, group_name, markers, workspace_repo, used = None):
+def markers_condition(lines, group_name, markers, used = None):
     """Return a config_setting label matching when any marker in `markers` holds, or None.
 
     Args:
         lines: Output list of BUILD lines for a helper `match_any` group when needed.
         group_name: Target name for the `config_setting_group` when >1 unique markers exist.
         markers: Iterable of PEP 508 marker strings, or None.
-        workspace_repo: Name of the workspace (backing) repo.
         used: Optional dict where `"selects"` is set to True when `selects.config_setting_group` is emitted.
 
     Returns:
@@ -43,42 +43,41 @@ def markers_condition(lines, group_name, markers, workspace_repo, used = None):
     if not unique_evals:
         return None
     if len(unique_evals) == 1:
-        return lock_marker_match_label(workspace_repo, unique_evals[0])
+        return member_marker_match_label(unique_evals[0])
     lines.extend(config_setting_group(
         group_name,
         "match_any",
-        [lock_marker_match_label(workspace_repo, ev) for ev in unique_evals],
+        [member_marker_match_label(ev) for ev in unique_evals],
     ))
     if used != None:
         used["selects"] = True
     return ":{}".format(group_name)
 
-def availability_condition(lines, helper_prefix, lock_key, packages, workspace_repo, used = None):
+def availability_condition(lines, helper_prefix, slot_key, packages, workspace_name, used = None):
     """Return a config_setting label for a package's availability in this thin repo.
 
-    Composes this member's own `availability_markers` (via `@ws//_lock:<eval>_match`)
-    with `@ws//_lock:_wheel_available_<pkg>` when wheel selection is platform-specific,
-    so different workspace members with different root platform markers never clobber
-    each other in the shared `@ws//_lock` package.
+    Composes this member's local `availability_markers` (via `//_markers:<eval>_match`)
+    with `@<ws>__pkg_<name>//:_wheel_available[_<slot>]` when wheel selection is
+    platform-specific.
 
     Args:
         lines: Output list of BUILD lines for helper `config_setting_group` targets.
         helper_prefix: Target name prefix for generated helper groups.
-        lock_key: Package key in the lock.
-        packages: Lock packages dict, or None for legacy test callers.
-        workspace_repo: Name of the workspace (backing) repo.
+        slot_key: Version-free slot key (`foo`, `foo@s0`, `foo[extra]@s1`).
+        packages: Slimmed member packages dict keyed by slot key, or None.
+        workspace_name: Workspace name.
         used: Optional dict where `"selects"` is set to True when `selects.config_setting_group` is emitted.
 
     Returns:
-        Config setting label string that matches when `lock_key` is available.
+        Config setting label string that matches when `slot_key` is available.
     """
     if packages == None:
-        return lock_wheel_available_label(workspace_repo, lock_key)
+        return spoke_slot_label(workspace_name, slot_key, "wheel_available")
 
-    pkg = packages.get(lock_key, {})
-    extras_proxy = is_extras_proxy(lock_key, pkg)
-    base_pkg_key = base_package_key(lock_key) if extras_proxy else None
-    base_pkg = packages.get(base_pkg_key, {}) if base_pkg_key else {}
+    pkg = packages.get(slot_key, {})
+    extras_proxy = is_extras_proxy(slot_key, pkg)
+    base_slot_key = base_package_key(slot_key) if extras_proxy else None
+    base_pkg = packages.get(base_slot_key, {}) if base_slot_key else {}
 
     all_conditions = []
     seen = {}
@@ -89,11 +88,11 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
             all_conditions.append(cond)
 
     wheel_pkg = base_pkg if extras_proxy else pkg
-    wheel_lock_key = base_pkg_key if extras_proxy else lock_key
+    wheel_slot_key = base_slot_key if extras_proxy else slot_key
     if is_wheel_platform_specific(wheel_pkg):
-        _add_cond(lock_wheel_available_label(workspace_repo, wheel_lock_key))
+        _add_cond(spoke_slot_label(workspace_name, wheel_slot_key, "wheel_available"))
 
-    key_san = sanitize_name(lock_key)
+    key_san = sanitize_name(slot_key)
     marker_groups = []
     if extras_proxy and base_pkg.get("availability_markers"):
         marker_groups.append(("base", base_pkg["availability_markers"]))
@@ -105,16 +104,13 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
             lines,
             "{}_markers_{}_{}".format(helper_prefix, tag, key_san),
             markers,
-            workspace_repo,
             used = used,
         )
         if cond:
             _add_cond(cond)
 
     if not all_conditions:
-        # Unreachable for callers that filter on is_platform_specific(); kept as
-        # a defensive fallback for unit tests passing a synthetic packages dict.
-        return lock_wheel_available_label(workspace_repo, lock_key)
+        return spoke_slot_label(workspace_name, slot_key, "wheel_available")
     if len(all_conditions) == 1:
         return all_conditions[0]
 
@@ -124,24 +120,39 @@ def availability_condition(lines, helper_prefix, lock_key, packages, workspace_r
         used["selects"] = True
     return ":{}".format(combined_name)
 
-def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = None, helper_prefix = "_maybe", packages = None, used = None):
+def emit_maybe_alias(
+        lines,
+        maybe_name,
+        pkg_target,
+        target_dict,
+        available_keys,
+        workspace_name,
+        state_repo = None,
+        no_variant_fallbacks = None,
+        helper_prefix = "_maybe",
+        packages = None,
+        used = None,
+        resolution_marker_exprs = None):
     """Emit a `:maybe` or `:[extra]_maybe` alias supporting both single-branch and multi-branch pins.
 
     Args:
         lines: Output list of BUILD lines.
         maybe_name: Name of the emitted maybe alias target.
         pkg_target: Target label selected when the package is available.
-        target_dict: Constraint -> package key mapping for the pin.
-        available_keys: List of package keys that need availability gating.
-        workspace_repo: Name of the workspace (backing) repo.
+        target_dict: Constraint -> slot key mapping for the pin.
+        available_keys: List of slot keys that need availability gating.
+        workspace_name: Workspace name.
+        state_repo: Optional apparent name of `@<ws>__state` (defaults to `state_repo_name(workspace_name)`).
         no_variant_fallbacks: Result of variant_fallbacks, or None.
         helper_prefix: Prefix for intermediate helper targets.
-        packages: Lock packages dict, or None.
+        packages: Slimmed member packages dict, or None.
         used: Optional dict tracking emitted helper loads (`"selects"`).
+        resolution_marker_exprs: Optional member `resolution_marker_exprs` dict.
 
     Returns:
         Dict of `{group_name: set_suffixes}` for any `_unselected_all_*` groups referenced.
     """
+    state_repo = state_repo or state_repo_name(workspace_name)
     available_set = {k: True for k in (available_keys or [])}
     if not target_dict or (not available_set and "" in target_dict):
         return {}
@@ -150,37 +161,37 @@ def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys,
         only_key = target_dict[""]
         if only_key not in available_set:
             fail("Single-branch target '{}' not found in available_keys {}".format(only_key, available_keys))
-        avail_cond = availability_condition(lines, helper_prefix, only_key, packages, workspace_repo, used = used)
+        avail_cond = availability_condition(lines, helper_prefix, only_key, packages, workspace_name, used = used)
         lines.extend(_maybe_select_alias(maybe_name, avail_cond, pkg_target))
         return {}
 
     emitted_helpers = {}
     branch_targets = {}
-    for constraint, pkg_key in target_dict.items():
-        if pkg_key not in available_set:
+    for constraint, slot_key in target_dict.items():
+        if slot_key not in available_set:
             branch_targets[constraint] = pkg_target
             continue
         helper_name = "{}_{}".format(
             helper_prefix,
-            sanitize_name(pkg_key),
+            sanitize_name(slot_key),
         )
-        if pkg_key not in emitted_helpers:
-            emitted_helpers[pkg_key] = helper_name
-            avail_cond = availability_condition(lines, helper_prefix, pkg_key, packages, workspace_repo, used = used)
+        if slot_key not in emitted_helpers:
+            emitted_helpers[slot_key] = helper_name
+            avail_cond = availability_condition(lines, helper_prefix, slot_key, packages, workspace_name, used = used)
             lines.extend(_maybe_select_alias(helper_name, avail_cond, pkg_target))
-        branch_targets[constraint] = ":{}".format(emitted_helpers[pkg_key])
+        branch_targets[constraint] = ":{}".format(emitted_helpers[slot_key])
 
     branches = []
     for constraint, branch_target in branch_targets.items():
         if constraint == "":
             branches.append(("//conditions:default", branch_target))
         else:
-            branches.append((lock_constraint_label(workspace_repo, constraint), branch_target))
+            branches.append((member_constraint_label(state_repo, constraint, resolution_marker_exprs), branch_target))
 
     default_target = None
     unselected_groups = {}
     if "" not in branch_targets:
-        unselected = unselected_branch(branch_targets.keys(), no_variant_fallbacks, workspace_repo)
+        unselected = unselected_branch(branch_targets.keys(), no_variant_fallbacks, state_repo)
         if unselected:
             branches.append((unselected.condition, NO_VARIANT_PREFIX + unselected.error_set))
             unselected_groups.update(unselected.unselected_groups)
@@ -193,22 +204,22 @@ def emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys,
     ))
     return unselected_groups
 
-def render_maybe_build(maybe_mapping_targets, packages, workspace_repo):
+def render_maybe_build(maybe_mapping_targets, packages, workspace_name):
     """Render `__maybe/BUILD.bazel` with platform-specific aliases reusing `//:_empty_library`.
 
     Args:
-        maybe_mapping_targets: Dict mapping maybe target name -> `(pkg_key, lock_label)`.
-        packages: Lock packages dict.
-        workspace_repo: Name of the workspace (backing) repo.
+        maybe_mapping_targets: Dict mapping maybe target name -> `(slot_key, spoke_raw_label)`.
+        packages: Slimmed member packages dict.
+        workspace_name: Workspace name.
 
     Returns:
         Generated `__maybe/BUILD.bazel` file content.
     """
     maybe_body_lines = []
     used = {}
-    for maybe_name, (pkg_key, lock_label) in sorted(maybe_mapping_targets.items()):
-        avail_cond = availability_condition(maybe_body_lines, "_maybe", pkg_key, packages, workspace_repo, used = used)
-        maybe_body_lines.extend(_maybe_select_alias(maybe_name, avail_cond, lock_label))
+    for maybe_name, (slot_key, spoke_label) in sorted(maybe_mapping_targets.items()):
+        avail_cond = availability_condition(maybe_body_lines, "_maybe", slot_key, packages, workspace_name, used = used)
+        maybe_body_lines.extend(_maybe_select_alias(maybe_name, avail_cond, spoke_label))
     maybe_header_lines = []
     if used.get("selects"):
         maybe_header_lines.extend([

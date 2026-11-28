@@ -24,6 +24,7 @@ load(
     "normalize_workspace_variants",
     "render_backend_macro_bzl",
     "render_state_build",
+    "slim_member_lock",
 )
 
 # buildifier: disable=bzl-visibility
@@ -32,11 +33,13 @@ load("//pycross/private:util.bzl", "marker_evaluator_name")
 # buildifier: disable=bzl-visibility
 load(
     "//pycross/private/lock_render:reset_plan.bzl",
-    "compute_reset_plan",
     "compute_workspace_reset_states",
     "conflict_pairs",
     "render_state_reset_bzl",
 )
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/thin_repo:markers.bzl", "render_member_markers_build")
 
 def _wheel(filename, key):
     return {"filename": filename, "file_reference": {"key": key}}
@@ -165,14 +168,25 @@ def _test_workspace_reset_states_parity_impl(env, target):
     repo_map["s_su"] = "@ws__sdist_file_su//file:su.tar.gz"
     repo_map["s_cb"] = "@ws__sdist_file_cb//file:cb.tar.gz"
 
-    gate_lines = []
-    mono_plan = compute_reset_plan(packages, repo_map, cp, gate_lines)
     slots = assign_fork_slots(packages)
     ws_states = compute_workspace_reset_states(packages, repo_map, cp, "ws", slots)
 
-    for pkg_key, mono_res in mono_plan.items():
-        expected_raw = "never" if not mono_res.ok else ("gated" if mono_res.gate else "always")
-        env.expect.where(pkg = pkg_key).that_str(ws_states.raw_status[pkg_key]).equals(expected_raw)
+    expected_raw = {
+        "pure@1.0": "always",
+        "sdist-capable@1.0": "gated",
+        "sdist-univ@1.0": "always",
+        "patched@1.0": "never",
+        "variant-edge@1.0": "never",
+        "cond-never@1.0": "gated",
+        "above-gated@1.0": "gated",
+        "cyc-a@1.0": "always",
+        "cyc-b@1.0": "gated",
+        "cyc-caller@1.0": "gated",
+        "mix-a@1.0": "never",
+        "mix-b@1.0": "always",
+        "mix-caller@1.0": "never",
+    }
+    env.expect.that_dict(ws_states.raw_status).contains_exactly(expected_raw)
 
     # Check caller-facing SCC status & deterministic leader.
     env.expect.that_str(ws_states.raw_status["cyc-a@1.0"]).equals("always")
@@ -326,6 +340,66 @@ def _test_spoke_hooks_shim_and_aliases(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_spoke_hooks_shim_and_aliases_impl)
 
+# buildifier: disable=unused-variable
+def _test_member_markers_and_version_free_slim_impl(env, target):
+    """Member _markers/BUILD.bazel and version-free slim_member_lock stay invariant across version bumps."""
+
+    def _make_member(ver, extra_transitive = False):
+        pkgs = {
+            "app@1.0.0": {
+                "wheel_candidates": [_wheel("app-1.0.0-py3-none-any.whl", "k_app")],
+            },
+            "leaf@{}".format(ver): {
+                "wheel_candidates": [_wheel("leaf-{}-py3-none-any.whl".format(ver), "k_leaf")],
+                "sdist_file": {"key": "s_leaf"},
+                "availability_markers": ["sys_platform == 'linux'"],
+            },
+            "trans@{}".format(ver): {
+                "wheel_candidates": [_wheel("trans-{}-py3-none-any.whl".format(ver), "k_trans")],
+            },
+        }
+        if extra_transitive:
+            pkgs["new-trans@9.9.9"] = {"wheel_candidates": [_wheel("new_trans-9.9.9-py3-none-any.whl", "k_nt")]}
+        return {
+            "packages": pkgs,
+            "pins": {"app": "app@1.0.0", "leaf": "leaf@{}".format(ver)},
+            "resolution_marker_exprs": {
+                "res_deadbeef": "sys_platform == 'linux'",
+                "extra_app_gpu_res_deadbeef": {"variant": "extra_app_gpu", "marker": "res_deadbeef"},
+            },
+        }
+
+    m_v1 = _make_member("2.0.0", extra_transitive = False)
+    m_v2 = _make_member("2.1.0", extra_transitive = True)
+    ws_overrides = {"leaf": {"maturin_build": {"cargo_lock": '"//:Cargo.lock"'}}}
+    hook_subdirs = {"maturin_build": "_cargo"}
+
+    slim_v1 = slim_member_lock(m_v1, m_v1["packages"], ws_overrides = ws_overrides, spoke_hook_subdirs = hook_subdirs)
+    slim_v2 = slim_member_lock(m_v2, m_v2["packages"], ws_overrides = ws_overrides, spoke_hook_subdirs = hook_subdirs)
+    env.expect.that_str(json.encode(slim_v1)).equals(json.encode(slim_v2))
+    env.expect.that_str(slim_v1["pins"]["leaf"]).equals("leaf")
+    env.expect.that_bool("trans" in slim_v1["packages"]).equals(False)
+    env.expect.that_collection(slim_v1["packages"]["leaf"]["hook_subdirs"]).contains_exactly(["_cargo"])
+
+    markers_bzl = render_member_markers_build(
+        slim_v1["packages"],
+        {
+            "res_deadbeef": "sys_platform == 'linux'",
+            "extra_app_gpu_res_deadbeef": {"variant": "extra_app_gpu", "marker": "res_deadbeef"},
+        },
+        "ws__state",
+        has_variants = True,
+    )
+    env.expect.that_str(markers_bzl).contains('name = "_res_eval_res_deadbeef",')
+    env.expect.that_str(markers_bzl).contains('name = "is_res_deadbeef",')
+    env.expect.that_str(markers_bzl).contains('"@ws__state//:is_extra_app_gpu",')
+    env.expect.that_str(markers_bzl).contains('":is_res_deadbeef",')
+    env.expect.that_str(markers_bzl).contains('name = "{}_match",'.format(marker_evaluator_name("sys_platform == 'linux'")))
+
+def _test_member_markers_and_version_free_slim(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_member_markers_and_version_free_slim_impl)
+
 def hub_and_spoke_test_suite(name):
     test_suite(
         name = name,
@@ -334,5 +408,6 @@ def hub_and_spoke_test_suite(name):
             _test_workspace_reset_states_parity,
             _test_spoke_version_invariance_and_cycles,
             _test_spoke_hooks_shim_and_aliases,
+            _test_member_markers_and_version_free_slim,
         ],
     )

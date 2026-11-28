@@ -10,11 +10,11 @@ exports_files(["requirements.bzl"])
 pycross_modules_mapping(
     name = "modules_mapping",
     deps = [
-        "//__maybe:win_only_1_0_0",
-        "@golden_extras__pkgs//_lock:_raw_only-extra[opt]@1.0.0",
-        "@golden_extras__pkgs//_lock:_raw_pkg-a@1.0.0",
-        "@golden_extras__pkgs//_lock:_raw_pkg-a[cli]@1.0.0",
-        "@golden_extras__pkgs//_lock:_raw_pkg-a[fast]@1.0.0",
+        "//__maybe:win_only",
+        "@golden_extras__pkg_only_extra//:_raw_[opt]",
+        "@golden_extras__pkg_pkg_a//:_raw",
+        "@golden_extras__pkg_pkg_a//:_raw_[cli]",
+        "@golden_extras__pkg_pkg_a//:_raw_[fast]",
     ],
 )
 

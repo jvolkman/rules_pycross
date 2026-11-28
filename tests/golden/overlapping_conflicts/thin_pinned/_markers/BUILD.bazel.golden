@@ -1,0 +1,25 @@
+load("@bazel_skylib//lib:selects.bzl", "selects")
+load("@rules_pycross//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
+
+package(default_visibility = ["//:__subpackages__"])
+
+selects.config_setting_group(
+    name = "is_extra_app_x_res_py312",
+    match_all = [
+        "@golden_overlapping_conflicts__state//:is_extra_app_x",
+        ":is_res_py312",
+    ],
+)
+
+pycross_pep508_evaluator(
+    name = "_res_eval_res_py312",
+    expr = "python_full_version >= '3.12'",
+)
+
+config_setting(
+    name = "is_res_py312",
+    flag_values = {
+        ":_res_eval_res_py312": "true",
+    },
+)
+

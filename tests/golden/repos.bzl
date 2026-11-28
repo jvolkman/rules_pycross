@@ -1,10 +1,33 @@
-"""Dev-only module extension generating golden snapshots of package_repo and thin_package_repo outputs."""
+"""Dev-only module extension generating golden snapshots of state_repo, spoke_repo, and thin_package_repo outputs."""
+
+load("@pypackaging.bzl", "pypackaging")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "merge_workspace_locks", "package_repo", "slim_member_lock", "slim_workspace_lock")
+load("//pycross/private:lock_contract.bzl", "state_repo_name")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:repo_slots.bzl", "assign_fork_slots", "sdist_slot_repo_name")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:spoke_repo.bzl", "build_spoke_payloads", "spoke_repo")
+
+# buildifier: disable=bzl-visibility
+load(
+    "//pycross/private:state_repo.bzl",
+    "merge_workspace_locks",
+    "normalize_workspace_variants",
+    "slim_member_lock",
+    "state_repo",
+)
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "parse_package_key", "sdist_builds_disallowed", "underscore_name")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/lock_render:reset_plan.bzl", "compute_workspace_reset_states", "conflict_pairs")
 
 _SAMPLE_BACKEND_NAMES = [
     "pep517_build",
@@ -27,10 +50,10 @@ def _build_repo_map(lock_data):
     return repo_map
 
 def _golden_snapshot_repo_impl(rctx):
-    """Collect generated files from package_repo and thin_package_repo instances into a snapshot repo."""
+    """Collect generated files from state_repo, spoke_repo, and thin_package_repo instances into a snapshot repo."""
 
     # Build (canonical_repo_name, apparent_repo_name) pairs, longest canonical first
-    # so e.g. `golden_plain__pkgs` is replaced before `golden_plain`.
+    # so e.g. `golden_plain__state` is replaced before `golden_plain`.
     normalizations = []
     for repo_label, prefix in rctx.attr.repo_roots.items():
         apparent = rctx.attr.apparent_names[prefix]
@@ -122,8 +145,9 @@ def _register_case(
         build_repo = None,
         backend_names = None,
         skip_variant_members = None):
-    """Instantiate package_repo + thin_package_repo(s) for one golden case."""
-    pkgs_repo = "golden_{}__pkgs".format(case_name)
+    """Instantiate state_repo + spoke_repo(s) + thin_package_repo(s) for one golden case."""
+    workspace_name = "golden_{}".format(case_name)
+    ws_state_repo = state_repo_name(workspace_name)
     merged_repo_map = {}
     member_locks = []
     member_locks_by_name = {}
@@ -142,27 +166,85 @@ def _register_case(
         skip_variant_members = skip_variant_members,
     )
     merged_packages = merged_lock["packages"]
+    fork_slots = assign_fork_slots(merged_packages)
 
-    pkg_attrs = dict(
-        name = pkgs_repo,
+    sdist_repo_map = {}
+    for pkg_key, pkg in sorted(merged_packages.items()):
+        if pkg.get("build_target") or sdist_builds_disallowed(pkg):
+            continue
+        if not pkg.get("sdist_file"):
+            continue
+        slot = fork_slots.get(pkg_key, "")
+        sdist_repo_map[pkg_key] = "@{}//:wheel".format(sdist_slot_repo_name(workspace_name, pkg_key, slot))
+
+    variant_sets = merged_lock.get("variant_sets", [])
+    norm_variants = normalize_workspace_variants(variant_sets)
+    has_variants = bool(norm_variants.sets_by_suffix)
+    state_payload = {}
+    for field in ("variant_items", "variant_sets", "member_variant_flags"):
+        val = merged_lock.get(field)
+        if val:
+            state_payload[field] = val
+    known_base_packages = sorted({
+        pypackaging.utils.canonicalize_name(parse_package_key(k).name): True
+        for k in merged_packages.keys()
+        if not parse_package_key(k).extra
+    }.keys())
+
+    state_attrs = dict(
+        name = ws_state_repo,
         build_repo = build_repo or "golden_{}__build".format(case_name),
-        repo_map = merged_repo_map,
-        lock_data = json.encode(slim_workspace_lock(merged_lock)),
+        known_base_packages = known_base_packages,
     )
     if backend_names:
-        pkg_attrs["backend_names"] = backend_names
-    package_repo(**pkg_attrs)
+        state_attrs["backend_names"] = backend_names
+    if state_payload:
+        state_attrs["state_data"] = json.encode(state_payload)
+    state_repo(**state_attrs)
 
-    pkgs_prefix = "{}/pkgs".format(case_name)
-    repo_roots["@{}//:REPO.bazel".format(pkgs_repo)] = pkgs_prefix
-    apparent_names[pkgs_prefix] = pkgs_repo
+    state_prefix = "{}/state".format(case_name)
+    repo_roots["@{}//:REPO.bazel".format(ws_state_repo)] = state_prefix
+    apparent_names[state_prefix] = ws_state_repo
+
+    reset_states = (
+        compute_workspace_reset_states(
+            merged_packages,
+            merged_repo_map,
+            conflict_pairs(norm_variants.sets_by_suffix.values()),
+            workspace_name,
+            fork_slots,
+        ) if has_variants else None
+    )
+    spokes = build_spoke_payloads(
+        workspace_name,
+        ws_state_repo,
+        merged_packages,
+        merged_repo_map,
+        sdist_repo_map,
+        fork_slots,
+        cycle_groups = merged_lock.get("cycle_groups"),
+        has_variants = has_variants,
+        reset_states = reset_states,
+    )
+    for canon_name, spoke in spokes.items():
+        spoke_repo(
+            name = spoke.spoke_repo,
+            spoke_data = json.encode(spoke.payload),
+        )
+        spoke_prefix = "{}/pkg_{}".format(case_name, underscore_name(canon_name))
+        repo_roots["@{}//:REPO.bazel".format(spoke.spoke_repo)] = spoke_prefix
+        apparent_names[spoke_prefix] = spoke.spoke_repo
 
     for member in members:
         member_name = member["repo_name"]
         thin_attrs = dict(
             name = member_name,
-            lock_data = json.encode(slim_member_lock(member_locks_by_name[member_name], merged_packages)),
-            workspace_repo = pkgs_repo,
+            lock_data = json.encode(slim_member_lock(
+                member_locks_by_name[member_name],
+                merged_packages,
+                fork_slots = fork_slots,
+            )),
+            workspace_name = workspace_name,
             member_name = member_name,
         )
         if member.get("backend_names"):

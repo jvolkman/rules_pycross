@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "run_package_repo_hooks_for_testing")
+load("//pycross/private:state_repo.bzl", "backend_tool_deps_labels", "run_package_repo_hooks")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "coerce_transition_values", "is_platform_specific", "marker_evaluator_name", "split_setting_value", "url_filename")
@@ -39,7 +39,7 @@ load("//pycross/private/thin_repo:variants.bzl", "collect_variants", "transition
 def _pin_build(
         target_name,
         pin_target_dict,
-        workspace_repo,
+        workspace_name,
         extras_dict = None,
         no_variant_fallbacks = None,
         target_platform = None,
@@ -48,7 +48,8 @@ def _pin_build(
         extras_maybe_keys = None,
         testonly = False,
         sdist_target_dict = None,
-        packages = None):
+        packages = None,
+        resolution_marker_exprs = None):
     return pin_build(
         pin_spec(
             target_name = target_name,
@@ -60,11 +61,12 @@ def _pin_build(
             sdist_target_dict = sdist_target_dict,
         ),
         pin_repo_context(
-            workspace_repo = workspace_repo,
+            workspace_name = workspace_name,
             no_variant_fallbacks = no_variant_fallbacks,
             target_platform = target_platform,
             transition_bzl = transition_bzl,
             packages = packages,
+            resolution_marker_exprs = resolution_marker_exprs,
         ),
     )
 
@@ -75,8 +77,8 @@ def _test_pin_build_no_transition_impl(env, target):
     """Without target_platform, should use pycross_thin_library_proxy / pycross_file_proxy."""
     res = _pin_build(
         target_name = "numpy",
-        pin_target_dict = {"": "numpy@1.26.0"},
-        workspace_repo = "my_workspace",
+        pin_target_dict = {"": "numpy"},
+        workspace_name = "my_workspace",
     ).build
 
     # Should load the non-transitioning rules
@@ -105,8 +107,8 @@ def _test_pin_build_with_platform_impl(env, target):
     """With target_platform, should use pycross_transitioning_library_proxy / pycross_transitioning_file_proxy."""
     res = _pin_build(
         target_name = "numpy",
-        pin_target_dict = {"": "numpy@1.26.0"},
-        workspace_repo = "my_workspace",
+        pin_target_dict = {"": "numpy"},
+        workspace_name = "my_workspace",
         target_platform = "@my//platform:linux",
     ).build
 
@@ -134,13 +136,13 @@ def _test_pin_build_transition_loads_impl(env, target):
     """The load statement should import transitioning variants iff target_platform is set."""
     res_no_platform = _pin_build(
         target_name = "foo",
-        pin_target_dict = {"": "foo@1.0"},
-        workspace_repo = "ws",
+        pin_target_dict = {"": "foo"},
+        workspace_name = "ws",
     ).build
     res_with_platform = _pin_build(
         target_name = "foo",
-        pin_target_dict = {"": "foo@1.0"},
-        workspace_repo = "ws",
+        pin_target_dict = {"": "foo"},
+        workspace_name = "ws",
         target_platform = "//:my_platform",
     ).build
 
@@ -166,9 +168,9 @@ def _test_pin_build_extras_with_platform_impl(env, target):
     """Extra targets should also use the transitioning variant and include platform."""
     res = _pin_build(
         target_name = "numpy",
-        pin_target_dict = {"": "numpy@1.26.0"},
-        workspace_repo = "my_workspace",
-        extras_dict = {"gpu": {"": "numpy[gpu]@1.26.0"}},
+        pin_target_dict = {"": "numpy"},
+        workspace_name = "my_workspace",
+        extras_dict = {"gpu": {"": "numpy[gpu]"}},
         target_platform = "@my//platform:linux",
     ).build
 
@@ -194,9 +196,9 @@ def _test_pin_build_sdist_with_platform_impl(env, target):
     """When package has sdist_file and target_platform is set, sdist proxy should use transitioning file proxy."""
     res = _pin_build(
         target_name = "numpy",
-        pin_target_dict = {"": "numpy@1.26.0"},
-        sdist_target_dict = {"": "numpy@1.26.0"},
-        workspace_repo = "my_workspace",
+        pin_target_dict = {"": "numpy"},
+        sdist_target_dict = {"": "numpy"},
+        workspace_name = "my_workspace",
         target_platform = "@my//platform:linux",
     ).build
 
@@ -222,11 +224,11 @@ def _test_pin_build_variants_with_platform_impl(env, target):
     res_struct = _pin_build(
         target_name = "numpy",
         pin_target_dict = {
-            "cpu": "numpy@1.26.0",
-            "gpu": "numpy@1.26.0+gpu",
+            "cpu": "numpy@s0",
+            "gpu": "numpy@s1",
         },
-        workspace_repo = "my_workspace",
-        extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
+        workspace_name = "my_workspace",
+        extras_dict = {"extra1": {"cpu": "numpy[extra1]@s0", "gpu": "numpy[extra1]@s1"}},
         target_platform = "@my//platform:linux",
     )
     res = res_struct.build + "\n" + (res_struct.actual_build or "")
@@ -244,12 +246,12 @@ def _test_pin_build_variants_with_platform_impl(env, target):
     # Should have platform on every proxy target
     env.expect.that_bool('platform = "@my//platform:linux"' in res).equals(True)
 
-    # Must NOT reference workspace-wide [_all_] aggregates; each version branch
+    # Must NOT reference workspace-wide [_all_] aggregates; each version slot
     # aggregates its own direct extra in __actual.
     env.expect.that_bool("[_all_]@" in res).equals(False)
     actual = res_struct.actual_build or ""
-    env.expect.that_str(actual).contains('"@my_workspace//_lock:numpy[extra1]@1.26.0"')
-    env.expect.that_str(actual).contains('"@my_workspace//_lock:numpy[extra1]@1.26.0+gpu"')
+    env.expect.that_str(actual).contains('"@my_workspace__pkg_numpy//:[extra1]_s0"')
+    env.expect.that_str(actual).contains('"@my_workspace__pkg_numpy//:[extra1]_s1"')
     env.expect.that_str(actual).contains('name = "base"')
 
     # With direct extras, the [] base target uses lib_rule (not alias)
@@ -260,7 +262,7 @@ def _test_pin_build_variants_with_platform_impl(env, target):
     env.expect.that_bool("select({" in extra_section).equals(True)
 
     # Variant defaults come from the repo's transition, not from //conditions:default.
-    env.expect.that_bool('"//conditions:default": ":numpy@1.26.0' in res).equals(False)
+    env.expect.that_bool('"//conditions:default": ":numpy' in res).equals(False)
 
 def _test_pin_build_variants_with_platform(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -273,25 +275,25 @@ def _test_pin_build_basic_structure_impl(env, target):
     """Basic structure: alias, pkg proxy, wheel proxy, dist_info proxy, data alias."""
     res = _pin_build(
         target_name = "requests",
-        pin_target_dict = {"": "requests@2.31.0"},
-        workspace_repo = "ws",
+        pin_target_dict = {"": "requests"},
+        workspace_name = "ws",
     ).build
 
     # Should have the top-level alias
     env.expect.that_bool('name = "requests"' in res).equals(True)
     env.expect.that_bool('actual = ":pkg"' in res).equals(True)
 
-    # Should have pkg proxy pointing to lock target
+    # Should have pkg proxy pointing to spoke target
     env.expect.that_bool('name = "pkg"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:requests@2.31.0"' in res).equals(True)
+    env.expect.that_bool('"@ws__pkg_requests//:pkg"' in res).equals(True)
 
-    # Should have wheel proxy pointing to wheel target
+    # Should have wheel proxy pointing to spoke wheel target
     env.expect.that_bool('name = "wheel"' in res).equals(True)
-    env.expect.that_bool('"@ws//_wheel:requests@2.31.0"' in res).equals(True)
+    env.expect.that_bool('"@ws__pkg_requests//:wheel"' in res).equals(True)
 
     # Should have dist_info proxy
     env.expect.that_bool('name = "dist_info"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:_dist_info_requests@2.31.0"' in res).equals(True)
+    env.expect.that_bool('"@ws__pkg_requests//:dist_info"' in res).equals(True)
 
     # Should have data alias
     env.expect.that_bool('name = "data"' in res).equals(True)
@@ -310,10 +312,10 @@ def _test_pin_build_with_transition_bzl_impl(env, target):
     """When transition_bzl is set, per-package BUILD uses transitioning rules loaded from the generated file."""
     result = _pin_build(
         target_name = "numpy",
-        pin_target_dict = {"": "numpy@1.26.0"},
-        sdist_target_dict = {"": "numpy@1.26.0"},
-        workspace_repo = "my_workspace",
-        extras_dict = {"gpu": {"": "numpy[gpu]@1.26.0"}},
+        pin_target_dict = {"": "numpy"},
+        sdist_target_dict = {"": "numpy"},
+        workspace_name = "my_workspace",
+        extras_dict = {"gpu": {"": "numpy[gpu]"}},
         target_platform = "//:_internal_platform",
         transition_bzl = "//:_transition.bzl",
     )
@@ -337,14 +339,14 @@ def _test_pin_build_with_transition_bzl_impl(env, target):
 
     # Direct extras live on a post-transition pycross_library_proxy inside __actual.
     env.expect.that_bool(result.actual_build != None).equals(True)
-    env.expect.that_str(result.actual_build).contains('actual = "@my_workspace//_lock:numpy@1.26.0"')
-    env.expect.that_str(result.actual_build).contains('"@my_workspace//_lock:numpy[gpu]@1.26.0"')
+    env.expect.that_str(result.actual_build).contains('actual = "@my_workspace__pkg_numpy//:pkg"')
+    env.expect.that_str(result.actual_build).contains('"@my_workspace__pkg_numpy//:[gpu]"')
 
     # Without extras, single-entry target dicts emit no __actual package.
     plain_result = _pin_build(
         target_name = "numpy",
-        pin_target_dict = {"": "numpy@1.26.0"},
-        workspace_repo = "my_workspace",
+        pin_target_dict = {"": "numpy"},
+        workspace_name = "my_workspace",
         target_platform = "//:_internal_platform",
         transition_bzl = "//:_transition.bzl",
     )
@@ -362,11 +364,11 @@ def _test_pin_build_transition_bzl_variants_impl(env, target):
     result = _pin_build(
         target_name = "numpy",
         pin_target_dict = {
-            "cpu": "numpy@1.26.0",
-            "gpu": "numpy@1.26.0+gpu",
+            "cpu": "numpy@s0",
+            "gpu": "numpy@s1",
         },
-        workspace_repo = "my_workspace",
-        extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
+        workspace_name = "my_workspace",
+        extras_dict = {"extra1": {"cpu": "numpy[extra1]@s0", "gpu": "numpy[extra1]@s1"}},
         target_platform = "//:_internal_platform",
         transition_bzl = "//:_transition.bzl",
     )
@@ -587,35 +589,40 @@ def _test_requirements_bzl_extra_pins(name):
 # buildifier: disable=unused-variable
 def _test_pin_build_multi_branch_maybe_impl(env, target):
     """Multi-branch pins emit per-branch availability helpers and branch-aware maybe select()."""
+    res_exprs = {
+        "res_foo_s0": "python_version < '3.12'",
+        "res_foo_s1": "python_version >= '3.12'",
+    }
     res = _pin_build(
         target_name = "foo",
         pin_target_dict = {
-            "res_foo_1_0": "foo@1.0",
-            "res_foo_2_0": "foo@2.0",
+            "res_foo_s0": "foo@s0",
+            "res_foo_s1": "foo@s1",
         },
-        workspace_repo = "ws",
+        workspace_name = "ws",
         extras_dict = {
             "bar": {
-                "res_foo_1_0": "foo[bar]@1.0",
-                "res_foo_2_0": "foo[bar]@2.0",
+                "res_foo_s0": "foo[bar]@s0",
+                "res_foo_s1": "foo[bar]@s1",
             },
         },
-        maybe_available_keys = ["foo@1.0"],
-        extras_maybe_keys = {"bar": ["foo[bar]@1.0", "foo[bar]@2.0"]},
+        maybe_available_keys = ["foo@s0"],
+        extras_maybe_keys = {"bar": ["foo[bar]@s0", "foo[bar]@s1"]},
+        resolution_marker_exprs = res_exprs,
     ).build
 
-    # Base maybe: foo@1.0 is platform-specific (uses helper _maybe_foo_1_0),
-    # while foo@2.0 is unconditional (maps directly to :pkg).
-    env.expect.that_bool('name = "_maybe_foo_1_0"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:_wheel_available_foo@1.0": ":pkg"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1_0"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":pkg"' in res).equals(True)
+    # Base maybe: foo@s0 is platform-specific (uses helper _maybe_foo_s0),
+    # while foo@s1 is unconditional (maps directly to :pkg).
+    env.expect.that_bool('name = "_maybe_foo_s0"' in res).equals(True)
+    env.expect.that_bool('"@ws__pkg_foo//:_wheel_available_s0": ":pkg"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_foo_s0"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s1": ":pkg"' in res).equals(True)
 
-    # Extra maybe: both foo[bar]@1.0 and foo[bar]@2.0 are platform-specific.
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1_0"' in res).equals(True)
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2_0"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_extra_bar_foo_bar__1_0"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":_maybe_extra_bar_foo_bar__2_0"' in res).equals(True)
+    # Extra maybe: both foo[bar]@s0 and foo[bar]@s1 are platform-specific.
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s0"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s1"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_extra_bar_foo_bar__s0"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s1": ":_maybe_extra_bar_foo_bar__s1"' in res).equals(True)
 
 def _test_pin_build_multi_branch_maybe(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -697,20 +704,25 @@ def _test_requirements_bzl_extra_of_platform_specific(name):
 
 # buildifier: disable=unused-variable
 def _test_pin_build_aggregated_only_branches_with_extras_impl(env, target):
-    """Multi-version pin aggregates direct extras only on fork branches that match their base version."""
+    """Multi-version pin aggregates direct extras only on fork branches that match their base slot."""
+    res_exprs = {
+        "res_foo_s0": "python_version < '3.12'",
+        "res_foo_s1": "python_version >= '3.12'",
+    }
     res = _pin_build(
         target_name = "foo",
         pin_target_dict = {
-            "res_foo_1_0": "foo@1.0",
-            "res_foo_2_0": "foo@2.0",
+            "res_foo_s0": "foo@s0",
+            "res_foo_s1": "foo@s1",
         },
-        workspace_repo = "ws",
-        extras_dict = {"opt": {"res_foo_1_0": "foo[opt]@1.0"}},
+        workspace_name = "ws",
+        extras_dict = {"opt": {"res_foo_s0": "foo[opt]@s0"}},
+        resolution_marker_exprs = res_exprs,
     ).build
-    env.expect.that_str(res).contains('name = "_pkg_foo_1_0",')
-    env.expect.that_str(res).contains('"@ws//_lock:foo[opt]@1.0",')
-    env.expect.that_str(res).contains('"@ws//_lock:is_res_foo_1_0": ":_pkg_foo_1_0"')
-    env.expect.that_str(res).contains('"@ws//_lock:is_res_foo_2_0": "@ws//_lock:foo@2.0"')
+    env.expect.that_str(res).contains('name = "_pkg_foo_s0",')
+    env.expect.that_str(res).contains('"@ws__pkg_foo//:[opt]_s0",')
+    env.expect.that_str(res).contains('"//_markers:is_res_foo_s0": ":_pkg_foo_s0"')
+    env.expect.that_str(res).contains('"//_markers:is_res_foo_s1": "@ws__pkg_foo//:pkg_s1"')
     env.expect.that_bool("[_all_]" in res).equals(False)
 
 def _test_pin_build_aggregated_only_branches_with_extras(name):
@@ -722,22 +734,27 @@ def _test_pin_build_aggregated_only_branches_with_extras(name):
 # buildifier: disable=unused-variable
 def _test_pin_build_multi_branch_sdist_impl(env, target):
     """When only a non-first branch has an sdist, :sdist still reflects it."""
+    res_exprs = {
+        "res_foo_s0": "python_version < '3.12'",
+        "res_foo_s1": "python_version >= '3.12'",
+    }
     pin_target_dict = {
-        "res_foo_1_0": "foo@1.0",
-        "res_foo_2_0": "foo@2.0",
+        "res_foo_s0": "foo@s0",
+        "res_foo_s1": "foo@s1",
     }
     res = _pin_build(
         target_name = "foo",
         pin_target_dict = pin_target_dict,
-        workspace_repo = "ws",
-        sdist_target_dict = {"res_foo_2_0": "foo@2.0"},
+        workspace_name = "ws",
+        sdist_target_dict = {"res_foo_s1": "foo@s1"},
+        resolution_marker_exprs = res_exprs,
     ).build
 
     env.expect.that_bool('name = "sdist"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": "@rules_pycross//pycross/private:no_match_error"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": "@ws//_sdist:foo@2.0"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s0": "@rules_pycross//pycross/private:no_match_error"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s1": "@ws__pkg_foo//:sdist_s1"' in res).equals(True)
     env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in res).equals(True)
-    env.expect.that_bool('"@ws//_sdist:foo@1.0"' not in res).equals(True)
+    env.expect.that_bool('"@ws__pkg_foo//:sdist_s0"' not in res).equals(True)
 
 def _test_pin_build_multi_branch_sdist(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -747,67 +764,64 @@ def _test_pin_build_multi_branch_sdist(name):
 
 # buildifier: disable=unused-variable
 def _test_cargo_build_multi_branch_impl(env, target):
-    """_cargo_build uses _target_select across branches with sdist_file and falls back to no_match_error."""
+    """hook_subdir_build uses target_select across branches with hook_subdirs and falls back to no_match_error."""
+    res_exprs = {
+        "res_jiter_s0": "python_version < '3.12'",
+        "res_jiter_s1": "python_version >= '3.12'",
+        "res_partial_s0": "python_version < '3.12'",
+        "res_partial_s1": "python_version >= '3.12'",
+    }
     grouped_pins = {
         "jiter": {
             "base_target": {
-                "res_jiter_0_5_0": "jiter@0.5.0",
-                "res_jiter_0_6_0": "jiter@0.6.0",
+                "res_jiter_s0": "jiter@s0",
+                "res_jiter_s1": "jiter@s1",
             },
             "extras": {},
         },
         "partial": {
             "base_target": {
-                "res_partial_1_0": "partial@1.0",
-                "res_partial_2_0": "partial@2.0",
+                "res_partial_s0": "partial@s0",
+                "res_partial_s1": "partial@s1",
             },
             "extras": {},
         },
     }
     packages = {
-        "jiter@0.5.0": {"sdist_file": {"key": "sdist_0_5"}},
-        "jiter@0.6.0": {"sdist_file": {"key": "sdist_0_6"}},
-        "partial@1.0": {},
-        "partial@2.0": {"sdist_file": {"key": "sdist_partial_2"}},
+        "jiter@s0": {"sdist_file": True, "hook_subdirs": ["_cargo"]},
+        "jiter@s1": {"sdist_file": True, "hook_subdirs": ["_cargo"]},
+        "partial@s0": {},
+        "partial@s1": {"sdist_file": True, "hook_subdirs": ["_cargo"]},
     }
     cargo_result = hook_subdir_build(
         grouped_pins,
         packages,
-        {
-            "jiter": {"maturin_build": {}},
-            "partial": {"maturin_build": {}},
-        },
         "ws",
+        subdir = "_cargo",
+        resolution_marker_exprs = res_exprs,
     )
     env.expect.that_bool(cargo_result != None).equals(True)
     cargo_bzl = cargo_result.build
     env.expect.that_bool("select({" in cargo_bzl).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_jiter_0_5_0": "@ws//_cargo:jiter@0.5.0"' in cargo_bzl).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_jiter_0_6_0": "@ws//_cargo:jiter@0.6.0"' in cargo_bzl).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_partial_1_0": "@rules_pycross//pycross/private:no_match_error"' in cargo_bzl).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_partial_2_0": "@ws//_cargo:partial@2.0"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"//_markers:is_res_jiter_s0": "@ws__pkg_jiter//_cargo:pkg_s0"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"//_markers:is_res_jiter_s1": "@ws__pkg_jiter//_cargo:pkg_s1"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"//_markers:is_res_partial_s0": "@rules_pycross//pycross/private:no_match_error"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"//_markers:is_res_partial_s1": "@ws__pkg_partial//_cargo:pkg_s1"' in cargo_bzl).equals(True)
     env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in cargo_bzl).equals(True)
 
 def _test_cargo_build_multi_branch(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_cargo_build_multi_branch_impl)
 
-# ── Test: _backend_tool_deps_labels ────────────────────────────────
+# ── Test: backend_tool_deps_labels ─────────────────────────────────
 
 # buildifier: disable=unused-variable
 def _test_backend_tool_deps_labels_impl(env, target):
-    """_backend_tool_deps_labels skips extra keys and emits @<build_repo>//<pkg>:pkg labels."""
-    packages = {
-        "setuptools[core]@68.0.0": {},
-        "setuptools@9.0.0": {},
-        "setuptools@68.0.0": {},
-        "setuptools@75.1.0": {},
-        "scikit-build-core@0.10.0": {},
-        "wheel[testing]@0.45.0": {},
-    }
-    labels = backend_tool_deps_labels_for_testing(
+    """backend_tool_deps_labels resolves canonical base packages to @<build_repo>//<pkg>:pkg labels."""
+    known_base_packages = ["setuptools", "scikit-build-core"]
+    labels = backend_tool_deps_labels(
         ["setuptools", "scikit-build-core", "wheel", "flit-core"],
-        packages,
+        known_base_packages,
         "uv__build",
     )
     env.expect.that_collection(labels).contains_exactly([
@@ -824,18 +838,23 @@ def _test_backend_tool_deps_labels(name):
 # buildifier: disable=unused-variable
 def _test_pin_build_multi_branch_no_match_fallback_impl(env, target):
     """Multi-branch pins without a default variant emit //conditions:default -> no_match_error."""
+    res_exprs = {
+        "res_setuptools_s0": "python_version < '3.12'",
+        "res_setuptools_s1": "python_version >= '3.12'",
+    }
     res = _pin_build(
         target_name = "setuptools",
         pin_target_dict = {
-            "res_setuptools_68_0_0": "setuptools@68.0.0",
-            "res_setuptools_75_1_0": "setuptools@75.1.0",
+            "res_setuptools_s0": "setuptools@s0",
+            "res_setuptools_s1": "setuptools@s1",
         },
-        workspace_repo = "ws",
+        workspace_name = "ws",
+        resolution_marker_exprs = res_exprs,
     ).build
 
     pkg_section = res.split('name = "pkg"')[1].split(")")[0]
-    env.expect.that_bool('"@ws//_lock:is_res_setuptools_68_0_0": "@ws//_lock:setuptools@68.0.0"' in pkg_section).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_setuptools_75_1_0": "@ws//_lock:setuptools@75.1.0"' in pkg_section).equals(True)
+    env.expect.that_bool('"//_markers:is_res_setuptools_s0": "@ws__pkg_setuptools//:pkg_s0"' in pkg_section).equals(True)
+    env.expect.that_bool('"//_markers:is_res_setuptools_s1": "@ws__pkg_setuptools//:pkg_s1"' in pkg_section).equals(True)
     env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in pkg_section).equals(True)
 
     wheel_section = res.split('name = "wheel"')[1].split(")")[0]
@@ -854,37 +873,42 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
     # 1. Single-branch platform-specific pin with target_platform
     single = _pin_build(
         target_name = "pywin32",
-        pin_target_dict = {"": "pywin32@312"},
-        workspace_repo = "ws",
+        pin_target_dict = {"": "pywin32"},
+        workspace_name = "ws",
         target_platform = "@my//platform:linux",
-        maybe_available_keys = ["pywin32@312"],
+        maybe_available_keys = ["pywin32"],
     )
     env.expect.that_bool("select({" not in single.build).equals(True)
     env.expect.that_bool('name = "maybe"' in single.build).equals(True)
     env.expect.that_bool('actual = "//__actual/pywin32:maybe"' in single.build).equals(True)
     env.expect.that_bool(single.actual_build != None).equals(True)
     env.expect.that_bool('name = "maybe"' in single.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:_wheel_available_pywin32@312": "@ws//_lock:pywin32@312"' in single.actual_build).equals(True)
+    env.expect.that_bool('"@ws__pkg_pywin32//:_wheel_available": "@ws__pkg_pywin32//:pkg"' in single.actual_build).equals(True)
 
     # 2. Multi-branch pin and extra with transition_bzl + target_platform + testonly
+    res_exprs = {
+        "res_foo_s0": "python_version < '3.12'",
+        "res_foo_s1": "python_version >= '3.12'",
+    }
     multi = _pin_build(
         target_name = "foo",
         pin_target_dict = {
-            "res_foo_1_0": "foo@1.0",
-            "res_foo_2_0": "foo@2.0",
+            "res_foo_s0": "foo@s0",
+            "res_foo_s1": "foo@s1",
         },
-        workspace_repo = "ws",
+        workspace_name = "ws",
         extras_dict = {
             "bar": {
-                "res_foo_1_0": "foo[bar]@1.0",
-                "res_foo_2_0": "foo[bar]@2.0",
+                "res_foo_s0": "foo[bar]@s0",
+                "res_foo_s1": "foo[bar]@s1",
             },
         },
         target_platform = "//:_internal_platform",
         transition_bzl = "//:_transition.bzl",
-        maybe_available_keys = ["foo@1.0"],
-        extras_maybe_keys = {"bar": ["foo[bar]@1.0", "foo[bar]@2.0"]},
+        maybe_available_keys = ["foo@s0"],
+        extras_maybe_keys = {"bar": ["foo[bar]@s0", "foo[bar]@s1"]},
         testonly = True,
+        resolution_marker_exprs = res_exprs,
     )
     env.expect.that_bool("select({" not in multi.build).equals(True)
     env.expect.that_bool('actual = "//__actual/foo:maybe"' in multi.build).equals(True)
@@ -898,14 +922,14 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
     env.expect.that_bool("testonly = True," in extra_maybe_section).equals(True)
     env.expect.that_bool('platform = "//:_internal_platform"' in extra_maybe_section).equals(True)
 
-    env.expect.that_bool('name = "_maybe_foo_1_0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:_wheel_available_foo@1.0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1_0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_foo_s0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws__pkg_foo//:_wheel_available_s0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_foo_s0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s1": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
 
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1_0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2_0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:_wheel_available_foo[bar]@1.0": "//__actual/foo:extra_bar"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s1"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws__pkg_foo//:_wheel_available_[bar]_s0": "//__actual/foo:extra_bar"' in multi.actual_build).equals(True)
     env.expect.that_bool('name = "extra_bar_maybe"' in multi.actual_build).equals(True)
 
 def _test_pin_build_maybe_with_transition(name):
@@ -924,22 +948,22 @@ def _test_pin_build_no_variant_fallback_impl(env, target):
     res = _pin_build(
         target_name = "typing_extensions",
         pin_target_dict = {
-            "extra_variant-a": "typing-extensions@4.11.0",
-            "extra_variant-b": "typing-extensions@4.12.0",
+            "extra_variant-a": "typing-extensions@s0",
+            "extra_variant-b": "typing-extensions@s1",
         },
-        workspace_repo = "ws",
+        workspace_name = "ws",
         no_variant_fallbacks = no_variant_fallbacks,
-        maybe_available_keys = ["typing-extensions@4.11.0"],
+        maybe_available_keys = ["typing-extensions@s0"],
     ).build
 
     pkg_section = res.split('name = "pkg"')[1].split(")")[0]
-    env.expect.that_bool('"@ws//_lock:is_extra_variant-a": "@ws//_lock:typing-extensions@4.11.0"' in pkg_section).equals(True)
-    env.expect.that_bool('"@ws//_lock:is_extra_variant-b": "@ws//_lock:typing-extensions@4.12.0"' in pkg_section).equals(True)
-    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "//_variants:_no_variant_extra_variant-a_extra_variant-b"' in pkg_section).equals(True)
+    env.expect.that_bool('"@ws__state//:is_extra_variant-a": "@ws__pkg_typing_extensions//:pkg_s0"' in pkg_section).equals(True)
+    env.expect.that_bool('"@ws__state//:is_extra_variant-b": "@ws__pkg_typing_extensions//:pkg_s1"' in pkg_section).equals(True)
+    env.expect.that_bool('"@ws__state//:_unselected_extra_variant-a_extra_variant-b": "//_variants:_no_variant_extra_variant-a_extra_variant-b"' in pkg_section).equals(True)
     env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in pkg_section).equals(True)
 
     maybe_section = res.split('name = "maybe"')[1].split(")")[0]
-    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "//_variants:_no_variant_extra_variant-a_extra_variant-b"' in maybe_section).equals(True)
+    env.expect.that_bool('"@ws__state//:_unselected_extra_variant-a_extra_variant-b": "//_variants:_no_variant_extra_variant-a_extra_variant-b"' in maybe_section).equals(True)
     env.expect.that_bool('"//conditions:default": "//:_empty_library"' in maybe_section).equals(True)
 
 def _test_pin_build_no_variant_fallback(name):
@@ -966,11 +990,11 @@ def _test_variants_build_shared_flag_impl(env, target):
         "group_app-a_test": ["group_app-a_test"],
         "group_app-b_test": ["group_app-b_test"],
     })
-    build = variants_build(info, "ws__pkgs", "lock_all")
+    build = variants_build(info, "ws__state", "lock_all")
     group_test = build.split('name = "is_group_test"')[1].split(")")[0]
     env.expect.that_bool("match_all" in group_test).equals(True)
-    env.expect.that_bool('"@ws__pkgs//_lock:is_group_app-a_test"' in group_test).equals(True)
-    env.expect.that_bool('"@ws__pkgs//_lock:is_group_app-b_test"' in group_test).equals(True)
+    env.expect.that_bool('"@ws__state//:is_group_app-a_test"' in group_test).equals(True)
+    env.expect.that_bool('"@ws__state//:is_group_app-b_test"' in group_test).equals(True)
     env.expect.that_bool('string_flag(\n    name = "_variants",\n    build_setting_default = "",\n)' in build).equals(True)
     env.expect.that_bool('alias(\n    name = "is_group_app-a_test",' in build).equals(True)
     env.expect.that_bool(
@@ -991,8 +1015,8 @@ def _test_variants_build_repo_default_impl(env, target):
         ],
         "repo_default": "group_my-app_a",
     }])
-    build = variants_build(info, "ws__pkgs", "pypi")
-    unselected = '"@ws__pkgs//_lock:_unselected_group_my-app_a_group_my-app_b"'
+    build = variants_build(info, "ws__state", "pypi")
+    unselected = '"@ws__state//:_unselected_group_my-app_a_group_my-app_b"'
     selected_a = build.split('name = "_selected_group_my-app_a"')[1].split(")")[0]
     env.expect.that_bool("match_any" in selected_a and unselected in selected_a).equals(True)
     is_a = build.split('name = "is_group_a"')[1].split(")")[0]
@@ -1016,7 +1040,7 @@ def _test_variants_build_shared_flag_pinned_impl(env, target):
         }
         for pkg in ["app-a", "app-b"]
     ]
-    build = variants_build(collect_variants(variants), "ws__pkgs", "lock_all")
+    build = variants_build(collect_variants(variants), "ws__state", "lock_all")
     group_test = build.split('name = "is_group_test"')[1].split(")")[0]
     env.expect.that_str(group_test).contains("match_all")
     env.expect.that_str(group_test).contains('":_selected_group_app-a_test"')
@@ -1038,8 +1062,8 @@ def _test_pin_build_overlapping_sets_impl(env, target):
     fallbacks = variant_fallbacks({"extra_cpu": [s0, s1], "extra_gpu": [s0]})
     pin_res = _pin_build(
         target_name = "iniconfig",
-        pin_target_dict = {"extra_cpu": "iniconfig@1.1.1", "extra_gpu": "iniconfig@2.0.0"},
-        workspace_repo = "ws",
+        pin_target_dict = {"extra_cpu": "iniconfig@s0", "extra_gpu": "iniconfig@s1"},
+        workspace_name = "ws",
         no_variant_fallbacks = fallbacks,
     )
     res = pin_res.build
@@ -1050,21 +1074,21 @@ def _test_pin_build_overlapping_sets_impl(env, target):
     # The error names the set that covers both branches.
     pkg_section = res.split('name = "pkg"')[1].split(")")[0]
     env.expect.that_str(pkg_section).contains('"//_variants:{}": "//_variants:_no_variant_{}"'.format(group, s0))
-    env.expect.that_bool("@ws//_lock:_unselected_" in pkg_section).equals(False)
+    env.expect.that_bool("@ws__state//:_unselected_" in pkg_section).equals(False)
 
     build = variants_build(
         collect_variants([
             {"items": [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "extra", "name": "gpu"}]},
             {"items": [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "group", "name": "gpu-test"}]},
         ]),
-        "ws",
+        "ws__state",
         "pypi",
         unselected_groups = pin_res.unselected_groups,
     )
     group_section = build.split('name = "{}"'.format(group))[1].split(")")[0]
     env.expect.that_str(group_section).contains("match_all")
-    env.expect.that_str(group_section).contains('"@ws//_lock:_unselected_{}"'.format(s0))
-    env.expect.that_str(group_section).contains('"@ws//_lock:_unselected_{}"'.format(s1))
+    env.expect.that_str(group_section).contains('"@ws__state//:_unselected_{}"'.format(s0))
+    env.expect.that_str(group_section).contains('"@ws__state//:_unselected_{}"'.format(s1))
 
 def _test_pin_build_overlapping_sets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1160,7 +1184,7 @@ def _test_variants_build_hidden_flags_impl(env, _target):
         ],
         "repo_default": "extra_app_cpu",
     }])
-    build = variants_build(info, "ws__pkgs", "ws__build", expose_variant_flags = False)
+    build = variants_build(info, "ws__state", "ws__build", expose_variant_flags = False)
     env.expect.that_bool("bool_flag(" in build).equals(False)
     env.expect.that_bool("string_flag(" in build).equals(False)
     env.expect.that_bool("is_extra_cpu" in build).equals(False)
@@ -1178,83 +1202,82 @@ def _test_pin_build_member_availability_markers_impl(env, target):
     linux_eval = marker_evaluator_name("sys_platform == 'linux'", "")
     darwin_eval = marker_evaluator_name("sys_platform == 'darwin'", "")
 
-    # 1. Wheel-only package without member markers references _wheel_available_<pkg>.
+    # 1. Wheel-only package without member markers references spoke _wheel_available.
     wheel_only = _pin_build(
         target_name = "native_pkg",
-        pin_target_dict = {"": "native-pkg@1.0"},
-        workspace_repo = "ws",
-        maybe_available_keys = ["native-pkg@1.0"],
+        pin_target_dict = {"": "native-pkg"},
+        workspace_name = "ws",
+        maybe_available_keys = ["native-pkg"],
         packages = {
-            "native-pkg@1.0": {
-                "wheel_candidates": [{"filename": "native_pkg-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+            "native-pkg": {
+                "wheel_platform_specific": True,
             },
         },
     ).build
-    env.expect.that_str(wheel_only).contains('"@ws//_lock:_wheel_available_native-pkg@1.0": ":pkg"')
+    env.expect.that_str(wheel_only).contains('"@ws__pkg_native_pkg//:_wheel_available": ":pkg"')
     env.expect.that_bool("selects.config_setting_group(" in wheel_only).equals(False)
 
-    # 2. Pure-Python package with 1 member marker uses that marker evaluator directly.
+    # 2. Pure-Python package with 1 member marker uses member-local //_markers evaluator directly.
     marked = _pin_build(
         target_name = "linux_only",
-        pin_target_dict = {"": "linux-only@1.0"},
-        workspace_repo = "ws",
-        maybe_available_keys = ["linux-only@1.0"],
+        pin_target_dict = {"": "linux-only"},
+        workspace_name = "ws",
+        maybe_available_keys = ["linux-only"],
         packages = {
-            "linux-only@1.0": {
-                "wheel_candidates": [{"filename": "linux_only-1.0-py3-none-any.whl"}],
+            "linux-only": {
                 "availability_markers": ["sys_platform == 'linux'"],
             },
         },
     ).build
-    env.expect.that_str(marked).contains('"@ws//_lock:{}_match": ":pkg"'.format(linux_eval))
+    env.expect.that_str(marked).contains('"//_markers:{}_match": ":pkg"'.format(linux_eval))
     env.expect.that_bool("_available_linux-only" in marked).equals(False)
 
     # 3. Wheel-only package with 2 member markers + extra with its own marker combines with match_any + match_all.
     combined = _pin_build(
         target_name = "combo",
-        pin_target_dict = {"": "combo@1.0"},
-        workspace_repo = "ws",
-        extras_dict = {"ext": {"": "combo[ext]@1.0"}},
-        maybe_available_keys = ["combo@1.0"],
-        extras_maybe_keys = {"ext": ["combo[ext]@1.0"]},
+        pin_target_dict = {"": "combo"},
+        workspace_name = "ws",
+        extras_dict = {"ext": {"": "combo[ext]"}},
+        maybe_available_keys = ["combo"],
+        extras_maybe_keys = {"ext": ["combo[ext]"]},
         target_platform = "@my//platform:linux",
         packages = {
-            "combo@1.0": {
-                "wheel_candidates": [{"filename": "combo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+            "combo": {
+                "wheel_platform_specific": True,
                 "availability_markers": ["sys_platform == 'linux'", "sys_platform == 'darwin'"],
             },
-            "combo[ext]@1.0": {
+            "combo[ext]": {
                 "availability_markers": ["sys_platform == 'linux'"],
             },
         },
     )
     env.expect.that_str(combined.actual_build).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
-    env.expect.that_str(combined.actual_build).contains('"@ws//_lock:_wheel_available_combo@1.0"')
-    env.expect.that_str(combined.actual_build).contains('"@ws//_lock:{}_match"'.format(linux_eval))
-    env.expect.that_str(combined.actual_build).contains('"@ws//_lock:{}_match"'.format(darwin_eval))
+    env.expect.that_str(combined.actual_build).contains('"@ws__pkg_combo//:_wheel_available"')
+    env.expect.that_str(combined.actual_build).contains('"//_markers:{}_match"'.format(linux_eval))
+    env.expect.that_str(combined.actual_build).contains('"//_markers:{}_match"'.format(darwin_eval))
     env.expect.that_str(combined.actual_build).contains("match_any = [")
     env.expect.that_str(combined.actual_build).contains("match_all = [")
 
     # 4. Non-transitioned multi-marker pin loads selects before package().
     untransitioned = _pin_build(
         target_name = "combo",
-        pin_target_dict = {"": "combo@1.0"},
-        workspace_repo = "ws",
-        extras_dict = {"ext": {"": "combo[ext]@1.0"}},
-        maybe_available_keys = ["combo@1.0"],
-        extras_maybe_keys = {"ext": ["combo[ext]@1.0"]},
+        pin_target_dict = {"": "combo"},
+        workspace_name = "ws",
+        extras_dict = {"ext": {"": "combo[ext]"}},
+        maybe_available_keys = ["combo"],
+        extras_maybe_keys = {"ext": ["combo[ext]"]},
         packages = {
-            "combo@1.0": {
-                "wheel_candidates": [{"filename": "combo-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}],
+            "combo": {
+                "wheel_platform_specific": True,
                 "availability_markers": ["sys_platform == 'linux'", "sys_platform == 'darwin'"],
             },
-            "combo[ext]@1.0": {},
+            "combo[ext]": {},
         },
     ).build
     selects_idx = untransitioned.find('load("@bazel_skylib//lib:selects.bzl", "selects")')
     pkg_idx = untransitioned.find("package(")
     env.expect.that_bool(selects_idx > 0 and selects_idx < pkg_idx).equals(True)
-    env.expect.that_str(untransitioned).contains('"@ws//_lock:_wheel_available_combo@1.0"')
+    env.expect.that_str(untransitioned).contains('"@ws__pkg_combo//:_wheel_available"')
 
 def _test_pin_build_member_availability_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1262,99 +1285,75 @@ def _test_pin_build_member_availability_markers(name):
 
 # buildifier: disable=unused-variable
 def _test_cargo_build_filters_backends_and_wildcards_impl(env, target):
-    """_cargo_build only emits aliases for cargo-hook backends and supports versioned, wildcard, and extras-only pins."""
-    packages = {
-        "c-pkg@1.0": {"sdist_file": {"key": "c_sdist"}},
-        "rust-v1@1.0": {"sdist_file": {"key": "r1_sdist"}},
-        "rust-v2@2.0": {"sdist_file": {"key": "r2_sdist"}},
-        "extra-rust@1.0": {"sdist_file": {"key": "er_sdist"}},
-        "extra-rust[all]@1.0": {},
-    }
+    """hook_subdir_build emits version-free aliases from precomputed hook_subdirs and deduplicates shared hooks."""
     grouped_pins = {
-        "c-pkg": {"base_target": {"": "c-pkg@1.0"}, "extras": {}},
-        "rust-v1": {"base_target": {"": "rust-v1@1.0"}, "extras": {}},
-        "rust-v2": {"base_target": {"": "rust-v2@2.0"}, "extras": {}},
-        "extra-rust": {"base_target": {}, "extras": {"all": {"": "extra-rust[all]@1.0"}}},
+        "c-pkg": {"base_target": {"": "c-pkg"}, "extras": {}},
+        "rust-v1": {"base_target": {"": "rust-v1"}, "extras": {}},
+        "rust-v2": {"base_target": {"": "rust-v2"}, "extras": {}},
+        "extra-rust": {"base_target": {}, "extras": {"all": {"": "extra-rust[all]"}}},
     }
 
-    # Non-cargo backend overrides alone produce no _cargo/BUILD.bazel.
+    # Packages without hook_subdirs produce no _cargo/BUILD.bazel.
     non_cargo = hook_subdir_build(
         grouped_pins,
-        packages,
-        {"c-pkg": {"setuptools_build": {"copt": ["-O2"]}}, "rust-v1": {"cmake_build": {}}},
+        {
+            "c-pkg": {"sdist_file": True},
+            "rust-v1": {"sdist_file": True},
+        },
         "ws",
+        subdir = "_cargo",
     )
     env.expect.that_bool(non_cargo == None).equals(True)
 
-    # Empty hook_backends produces None even with maturin overrides.
-    no_hook = hook_subdir_build(
-        grouped_pins,
-        packages,
-        {"rust-v1": {"maturin_build": {}}},
-        "ws",
-        hook_backends = [],
-    )
-    env.expect.that_bool(no_hook == None).equals(True)
-
-    # Versioned maturin_build + setuptools_rust_build + extras-only pin emit aliases, while setuptools_build is skipped.
+    # Packages with matching hook_subdirs (including extras-only pins) emit version-free spoke aliases.
     res = hook_subdir_build(
         grouped_pins,
-        packages,
         {
-            "c-pkg": {"setuptools_build": {}},
-            "rust-v1@1.0": {"maturin_build": {}},
-            "rust-v2": {"setuptools_rust_build": {}},
-            "extra-rust": {"maturin_build": {}},
+            "c-pkg": {"sdist_file": True},
+            "rust-v1": {"sdist_file": True, "hook_subdirs": ["_cargo"]},
+            "rust-v2": {"sdist_file": True, "hook_subdirs": ["_cargo"]},
+            "extra-rust": {"sdist_file": True, "hook_subdirs": ["_cargo"]},
+            "extra-rust[all]": {},
         },
         "ws",
+        subdir = "_cargo",
     ).build
     env.expect.that_bool('name = "c_pkg"' in res).equals(False)
     env.expect.that_str(res).contains('name = "rust_v1"')
-    env.expect.that_str(res).contains('actual = "@ws//_cargo:rust-v1@1.0"')
+    env.expect.that_str(res).contains('actual = "@ws__pkg_rust_v1//_cargo:pkg"')
     env.expect.that_str(res).contains('name = "rust_v2"')
-    env.expect.that_str(res).contains('actual = "@ws//_cargo:rust-v2@2.0"')
+    env.expect.that_str(res).contains('actual = "@ws__pkg_rust_v2//_cargo:pkg"')
     env.expect.that_str(res).contains('name = "extra_rust"')
-    env.expect.that_str(res).contains('actual = "@ws//_cargo:extra-rust@1.0"')
+    env.expect.that_str(res).contains('actual = "@ws__pkg_extra_rust//_cargo:pkg"')
 
     # Third-party backend registering a custom package_repo_hook_subdir gets aliases under that subdir.
     custom_subdir = hook_subdir_build(
         grouped_pins,
-        packages,
-        {"rust-v1@1.0": {"my_third_party_rust": {}}},
+        {"rust-v1": {"sdist_file": True, "hook_subdirs": ["_custom_cargo"]}},
         "ws",
-        hook_backends = ["my_third_party_rust"],
         subdir = "_custom_cargo",
     ).build
     env.expect.that_str(custom_subdir).contains('name = "rust_v1"')
-    env.expect.that_str(custom_subdir).contains('actual = "@ws//_custom_cargo:rust-v1@1.0"')
+    env.expect.that_str(custom_subdir).contains('actual = "@ws__pkg_rust_v1//_custom_cargo:pkg"')
 
-    # Wildcard "*" maturin_build override matches all sdist packages.
-    wild = hook_subdir_build(
-        grouped_pins,
-        packages,
-        {"*": {"maturin_build": {}}},
-        "ws",
-    ).build
-    env.expect.that_str(wild).contains('name = "c_pkg"')
-    env.expect.that_str(wild).contains('name = "rust_v1"')
-
-    # Multi-branch pin where only one version has a cargo override falls back to no_match_error.
+    # Multi-branch pin where only one slot has a cargo override falls back to no_match_error.
     partial_branch = hook_subdir_build(
         {
             "rust-v1": {
-                "base_target": {"res_v1": "rust-v1@1.0", "res_v2": "rust-v1@2.0"},
+                "base_target": {"res_v1": "rust-v1@s0", "res_v2": "rust-v1@s1"},
                 "extras": {},
             },
         },
         {
-            "rust-v1@1.0": {"sdist_file": {"key": "r1_sdist"}},
-            "rust-v1@2.0": {"sdist_file": {"key": "r2_sdist"}},
+            "rust-v1@s0": {"sdist_file": True, "hook_subdirs": ["_cargo"]},
+            "rust-v1@s1": {"sdist_file": True},
         },
-        {"rust-v1@1.0": {"maturin_build": {}}},
         "ws",
+        subdir = "_cargo",
+        resolution_marker_exprs = {"res_v1": "sys_platform == 'linux'", "res_v2": "sys_platform == 'darwin'"},
     ).build
-    env.expect.that_str(partial_branch).contains('"@ws//_lock:is_res_v1": "@ws//_cargo:rust-v1@1.0"')
-    env.expect.that_str(partial_branch).contains('"@ws//_lock:is_res_v2": "@rules_pycross//pycross/private:no_match_error"')
+    env.expect.that_str(partial_branch).contains('"//_markers:is_res_v1": "@ws__pkg_rust_v1//_cargo:pkg_s0"')
+    env.expect.that_str(partial_branch).contains('"//_markers:is_res_v2": "@rules_pycross//pycross/private:no_match_error"')
 
     # Shared hook_fn across maturin_build and setuptools_rust_build runs once with merged overrides.
     invocations = []
@@ -1363,7 +1362,7 @@ def _test_cargo_build_filters_backends_and_wildcards_impl(env, target):
         invocations.append(sorted(override_packages.keys()))
         return [struct(dir = "_cargo", files = {"BUILD.bazel": "HEADER\n" + "\n".join(sorted(override_packages.keys()))})]
 
-    files = run_package_repo_hooks_for_testing(
+    files = run_package_repo_hooks(
         {"maturin_build": _shared_hook, "setuptools_rust_build": _shared_hook},
         {},
         {
@@ -1383,16 +1382,20 @@ def _test_cargo_build_filters_backends_and_wildcards(name):
 def _test_modules_mapping_deps_selection_impl(env, target):
     """modules_mapping selects active resolution-marker forks and pinned variants while unioning unpinned variants."""
     packages = {
-        "common@1.0": {"wheel_candidates": [{"filename": "common-1.0-py3-none-any.whl"}]},
-        "numpy@1.26": {"wheel_candidates": [{"filename": "numpy-1.26-py3-none-any.whl"}]},
-        "numpy@2.2": {"wheel_candidates": [{"filename": "numpy-2.2-py3-none-any.whl"}]},
-        "torch@2.0+cpu": {"wheel_candidates": [{"filename": "torch-2.0+cpu-py3-none-any.whl"}]},
-        "torch@2.0+gpu": {"wheel_candidates": [{"filename": "torch-2.0+gpu-py3-none-any.whl"}]},
+        "common": {},
+        "numpy@s0": {},
+        "numpy@s1": {},
+        "torch@s0": {},
+        "torch@s1": {},
     }
     pins = {
-        "common": {"": "common@1.0", "extra_app_gpu": "common@1.0"},
-        "numpy": {"res_py311": "numpy@1.26", "res_py312": "numpy@2.2"},
-        "torch": {"extra_app_cpu": "torch@2.0+cpu", "extra_app_gpu": "torch@2.0+gpu"},
+        "common": {"": "common", "extra_app_gpu": "common"},
+        "numpy": {"res_py311": "numpy@s0", "res_py312": "numpy@s1"},
+        "torch": {"extra_app_cpu": "torch@s0", "extra_app_gpu": "torch@s1"},
+    }
+    res_exprs = {
+        "res_py311": "python_version < '3.12'",
+        "res_py312": "python_version >= '3.12'",
     }
     variant_info = collect_variants([{
         "items": [
@@ -1413,16 +1416,17 @@ def _test_modules_mapping_deps_selection_impl(env, target):
         "ws",
         variant_info = variant_info,
         no_variant_fallbacks = fallbacks,
+        resolution_marker_exprs = res_exprs,
     )
     unpinned_deps = "\n".join(unpinned.deps_lines)
     unpinned_extra = "\n".join(unpinned.extra_target_lines)
-    env.expect.that_int(unpinned_deps.count('"@ws//_lock:_raw_common@1.0"')).equals(1)
-    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py311": [\n            "@ws//_lock:_raw_numpy@1.26",')
-    env.expect.that_str(unpinned_deps).contains('"@ws//_lock:is_res_py312": [\n            "@ws//_lock:_raw_numpy@2.2",')
+    env.expect.that_int(unpinned_deps.count('"@ws__pkg_common//:_raw"')).equals(1)
+    env.expect.that_str(unpinned_deps).contains('"//_markers:is_res_py311": [\n            "@ws__pkg_numpy//:_raw_s0",')
+    env.expect.that_str(unpinned_deps).contains('"//_markers:is_res_py312": [\n            "@ws__pkg_numpy//:_raw_s1",')
     env.expect.that_bool(unpinned.needs_selects).equals(True)
-    env.expect.that_str(unpinned_extra).contains('"@ws//_lock:is_extra_app_cpu"')
-    env.expect.that_str(unpinned_extra).contains('"@ws//_lock:is_extra_app_gpu"')
-    env.expect.that_str(unpinned_extra).contains('"@ws//_lock:_unselected_{}"'.format(s_cpu_gpu))
+    env.expect.that_str(unpinned_extra).contains('"@ws__state//:is_extra_app_cpu"')
+    env.expect.that_str(unpinned_extra).contains('"@ws__state//:is_extra_app_gpu"')
+    env.expect.that_str(unpinned_extra).contains('"@ws__state//:_unselected_{}"'.format(s_cpu_gpu))
 
     # 2. Pinned repo: no _unselected_ unioning; only is_extra_app_* selects are emitted.
     pinned = modules_mapping_deps(
@@ -1436,14 +1440,15 @@ def _test_modules_mapping_deps_selection_impl(env, target):
         }),
         pins_by_set = {s_cpu_gpu: "extra_app_gpu"},
         excluded = {"extra_app_cpu": True},
+        resolution_marker_exprs = res_exprs,
     )
     pinned_all = "\n".join(pinned.extra_target_lines + pinned.deps_lines)
     env.expect.that_bool("_unselected_" in pinned_all).equals(False)
-    env.expect.that_str(pinned_all).contains('"@ws//_lock:is_extra_app_gpu": [\n            "@ws//_lock:_raw_torch@2.0+gpu",')
+    env.expect.that_str(pinned_all).contains('"@ws__state//:is_extra_app_gpu": [\n            "@ws__pkg_torch//:_raw_s1",')
 
     # 3. Compound {variant, marker} on unpinned set preserves the marker filter when unselected.
     comp = modules_mapping_deps(
-        {"numpy": {"extra_app_gpu_res_py312": "numpy@2.2"}},
+        {"numpy": {"extra_app_gpu_res_py312": "numpy@s1"}},
         packages,
         "ws",
         variant_info = variant_info,
@@ -1452,13 +1457,14 @@ def _test_modules_mapping_deps_selection_impl(env, target):
             "extra_app_gpu_res_py312": [s_cpu_gpu],
         }),
         resolution_marker_exprs = {
+            "res_py312": "python_version >= '3.12'",
             "extra_app_gpu_res_py312": {"variant": "extra_app_gpu", "marker": "res_py312"},
         },
     )
     comp_extra = "\n".join(comp.extra_target_lines)
     env.expect.that_str(comp_extra).contains('name = "_mm_unselected_extra_app_gpu_res_py312"')
     env.expect.that_str(comp_extra).contains("match_all = [")
-    env.expect.that_str(comp_extra).contains('"@ws//_lock:is_res_py312"')
+    env.expect.that_str(comp_extra).contains('"//_markers:is_res_py312"')
 
     # 4. Overlapping sets: one unpinned (S1=[a,b]), one defaulted to a (S2=[a,c]).
     #    `a` must NOT union on _unselected_S1 (would falsely fire when rival `c` is chosen).
@@ -1480,12 +1486,12 @@ def _test_modules_mapping_deps_selection_impl(env, target):
     s2 = "extra_app_a_extra_app_c"
     overlap_mm = modules_mapping_deps(
         {
-            "pkg_a": {"extra_app_a": "pkg-a@1.0"},
-            "pkg_b": {"extra_app_b": "pkg-b@1.0"},
+            "pkg_a": {"extra_app_a": "pkg-a"},
+            "pkg_b": {"extra_app_b": "pkg-b"},
         },
         {
-            "pkg-a@1.0": {"wheel_candidates": [{"filename": "pkg_a-1.0-py3-none-any.whl"}]},
-            "pkg-b@1.0": {"wheel_candidates": [{"filename": "pkg_b-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"}]},
+            "pkg-a": {},
+            "pkg-b": {"wheel_platform_specific": True},
         },
         "ws",
         variant_info = overlap_info,
@@ -1495,18 +1501,18 @@ def _test_modules_mapping_deps_selection_impl(env, target):
         }),
     )
     overlap_deps = "\n".join(overlap_mm.deps_lines)
-    env.expect.that_str(overlap_deps).contains('"@ws//_lock:is_extra_app_a": [\n            "@ws//_lock:_raw_pkg-a@1.0",')
-    env.expect.that_bool("pkg_b_1_0" in overlap_mm.maybe_mapping_targets).equals(True)
-    env.expect.that_str(overlap_deps).contains('"//__maybe:pkg_b_1_0"')
+    env.expect.that_str(overlap_deps).contains('"@ws__state//:is_extra_app_a": [\n            "@ws__pkg_pkg_a//:_raw",')
+    env.expect.that_bool("pkg_b" in overlap_mm.maybe_mapping_targets).equals(True)
+    env.expect.that_str(overlap_deps).contains('"//__maybe:pkg_b"')
 
     # 5. _variants_build for overlapping sets S1=[a,b] (no default), S2=[a,c] (default=a):
     #    _selected_extra_app_a must require BOTH S1 and S2 unselected so selecting rival `b` doesn't fire is_extra_a.
-    overlap_vbuild = variants_build(overlap_info, "ws", "pypi")
+    overlap_vbuild = variants_build(overlap_info, "ws__state", "pypi")
     selected_a = overlap_vbuild.split('name = "_selected_extra_app_a"')[1].split("\n)")[0]
     env.expect.that_bool("_unselected_all_" in selected_a).equals(True)
-    env.expect.that_bool('"@ws//_lock:_unselected_{}"'.format(s2) in selected_a).equals(False)
-    env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s1))
-    env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s2))
+    env.expect.that_bool('"@ws__state//:_unselected_{}"'.format(s2) in selected_a).equals(False)
+    env.expect.that_str(overlap_vbuild).contains('"@ws__state//:_unselected_{}"'.format(s1))
+    env.expect.that_str(overlap_vbuild).contains('"@ws__state//:_unselected_{}"'.format(s2))
 
     # 6. excluded_variant_items returns rivals across overlapping conflict sets and ignores disjoint sets.
     env.expect.that_dict(
@@ -1522,50 +1528,54 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
     """Variant-only/partial-fork pins route through :maybe in all_requirements and propagate testonly."""
     mock_rctx = struct(name = "my_repo")
     pins = {
-        "tomli": {"res_py311": "tomli@2.0.1"},
-        "triton[cuda]": {"extra_gpu": "triton[cuda]@3.0.0"},
+        "tomli": {"res_py311": "tomli"},
+        "triton[cuda]": {"extra_gpu": "triton[cuda]"},
     }
     packages = {
-        "tomli@2.0.1": {"wheel_candidates": [{"filename": "tomli-2.0.1-py3-none-any.whl"}], "sdist_file": {"key": "t"}},
-        "triton@3.0.0": {"wheel_candidates": [{"filename": "triton-3.0.0-py3-none-any.whl"}], "sdist_file": {"key": "tr"}},
-        "triton[cuda]@3.0.0": {},
+        "tomli": {"sdist_file": True},
+        "triton": {"sdist_file": True},
+        "triton[cuda]": {},
     }
     req_bzl = requirements_bzl(mock_rctx, pins, packages)
     env.expect.that_str(req_bzl).contains('"@@my_repo//tomli:maybe"')
     env.expect.that_str(req_bzl).contains('"@@my_repo//triton:[cuda]_maybe"')
+
+    res_exprs = {"res_py311": "python_version < '3.11'"}
 
     # _pin_build emits :maybe even when maybe_available_keys is empty; untransitioned
     # :maybe targets are alias() rules (Bazel ignores testonly on alias(), inheriting
     # testonly from :pkg / :[extra]), so they omit redundant testonly = True.
     res = _pin_build(
         target_name = "tomli",
-        pin_target_dict = {"res_py311": "tomli@2.0.1"},
-        workspace_repo = "ws",
-        extras_dict = {"dev": {"res_py311": "tomli[dev]@2.0.1"}},
+        pin_target_dict = {"res_py311": "tomli"},
+        workspace_name = "ws",
+        extras_dict = {"dev": {"res_py311": "tomli[dev]"}},
         testonly = True,
+        resolution_marker_exprs = res_exprs,
     ).build
     maybe_block = res.split('name = "maybe"')[1].split("\n)")[0]
-    env.expect.that_str(maybe_block).contains('"@ws//_lock:is_res_py311": ":pkg"')
+    env.expect.that_str(maybe_block).contains('"//_markers:is_res_py311": ":pkg"')
     env.expect.that_str(maybe_block).contains('"//conditions:default": "//:_empty_library"')
     env.expect.that_bool("testonly = True," in maybe_block).equals(False)
 
     extra_maybe_block = res.split('name = "[dev]_maybe"')[1].split("\n)")[0]
-    env.expect.that_str(extra_maybe_block).contains('"@ws//_lock:is_res_py311": ":[dev]"')
+    env.expect.that_str(extra_maybe_block).contains('"//_markers:is_res_py311": ":[dev]"')
     env.expect.that_bool("testonly = True," in extra_maybe_block).equals(False)
 
     # Transitioned partial-fork pin emits :maybe in actual_build wrapped by transitioning proxy (with testonly = True).
     trans_partial = _pin_build(
         target_name = "tomli",
-        pin_target_dict = {"res_py311": "tomli@2.0.1"},
-        workspace_repo = "ws",
+        pin_target_dict = {"res_py311": "tomli"},
+        workspace_name = "ws",
         target_platform = "@my//platform:linux",
         testonly = True,
+        resolution_marker_exprs = res_exprs,
     )
     env.expect.that_str(trans_partial.build).contains('actual = "//__actual/tomli:maybe"')
     trans_maybe_block = trans_partial.build.split('name = "maybe"')[1].split("\n)")[0]
     env.expect.that_str(trans_maybe_block).contains("testonly = True,")
     env.expect.that_str(trans_partial.actual_build).contains('name = "maybe"')
-    env.expect.that_str(trans_partial.actual_build).contains('"@ws//_lock:is_res_py311": "//__actual/tomli:pkg"')
+    env.expect.that_str(trans_partial.actual_build).contains('"//_markers:is_res_py311": "//__actual/tomli:pkg"')
 
 def _test_partial_fork_maybe_and_testonly(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1587,13 +1597,13 @@ def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl(env
     # Direct extras emit pycross_library_proxy on :pkg and a base-only :[] target.
     with_extra = _pin_build(
         "foo",
-        {"": "foo@1.0"},
-        "ws__pkgs",
-        extras_dict = {"opt": {"": "foo[opt]@1.0"}},
+        {"": "foo"},
+        "ws",
+        extras_dict = {"opt": {"": "foo[opt]"}},
     )
     env.expect.that_str(with_extra.build).contains("pycross_library_proxy(")
-    env.expect.that_str(with_extra.build).contains('actual = "@ws__pkgs//_lock:foo@1.0",')
-    env.expect.that_str(with_extra.build).contains('"@ws__pkgs//_lock:foo[opt]@1.0",')
+    env.expect.that_str(with_extra.build).contains('actual = "@ws__pkg_foo//:pkg",')
+    env.expect.that_str(with_extra.build).contains('"@ws__pkg_foo//:[opt]",')
     env.expect.that_str(with_extra.build).contains('name = "[]",')
     env.expect.that_str(with_extra.build).contains("pycross_thin_library_proxy(")
     env.expect.that_bool("[_all_]" in with_extra.build).equals(False)
@@ -1601,8 +1611,8 @@ def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl(env
     # Without direct extras, :pkg stays a lean pycross_thin_library_proxy and :[] is omitted.
     bare = _pin_build(
         "foo",
-        {"": "foo@1.0"},
-        "ws__pkgs",
+        {"": "foo"},
+        "ws",
         extras_dict = {},
     )
     env.expect.that_bool("pycross_library_proxy(" in bare.build).equals(False)
@@ -1617,7 +1627,7 @@ def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl(env
             ],
         },
     ])
-    vbuild = variants_build(vinfo, "ws__pkgs", "pypi", expose_variant_flags = False)
+    vbuild = variants_build(vinfo, "ws__state", "pypi", expose_variant_flags = False)
     env.expect.that_str(vbuild).contains("has no _variants flag for it (app-a[cpu], app-a[gpu])")
 
 def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras(name):
@@ -1633,7 +1643,7 @@ def _test_render_transition_bzl_and_maybe_build_impl(env, _target):
         "pypi",
         ["--@rules_python//python/config_settings:python_version=3.12"],
         {},
-        variant_state_label = "@ws//_lock:_state",
+        variant_state_label = "@ws__state//:_state",
         variant_state_overrides = {"p:set": "extra_a"},
     )
     env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_library_proxy_rule")')
@@ -1650,7 +1660,7 @@ def _test_render_transition_bzl_and_maybe_build_impl(env, _target):
         "pypi",
         [],
         {},
-        variant_state_label = "@ws//_lock:_state",
+        variant_state_label = "@ws__state//:_state",
         variant_state_overrides = {"d:set": "extra_a"},
     )
     env.expect.that_bool(":util.bzl" in state_only).equals(False)
@@ -1680,8 +1690,8 @@ def _test_render_transition_bzl_and_maybe_build_impl(env, _target):
     env.expect.that_str(both).contains("_CANONICAL_FLAG_LABELS = {")
 
     maybe = render_maybe_build(
-        {"pywin32_312": ("pywin32@312", "@ws//_lock:pywin32@312")},
-        {"pywin32@312": {"wheel_candidates": [{"filename": "pywin32-312-cp312-cp312-win_amd64.whl"}]}},
+        {"pywin32": ("pywin32", "@ws__pkg_pywin32//:_raw")},
+        {"pywin32": {"wheel_platform_specific": True}},
         "ws",
     )
     env.expect.that_str(maybe).contains('"//conditions:default": "//:_empty_library",')
@@ -1785,58 +1795,58 @@ def _test_pin_build_direct_extras_aggregation_shapes_impl(env, target):
     fallbacks = variant_fallbacks({"extra_alpha": ["alpha_beta"]})
     shape_a = _pin_build(
         target_name = "wrapper",
-        pin_target_dict = {"": "wrapper@1.0.0"},
-        extras_dict = {"v1": {"extra_alpha": "wrapper[v1]@1.0.0"}},
-        workspace_repo = "ws__pkgs",
+        pin_target_dict = {"": "wrapper"},
+        extras_dict = {"v1": {"extra_alpha": "wrapper[v1]"}},
+        workspace_name = "ws",
         no_variant_fallbacks = fallbacks,
         transition_bzl = "//:_transition.bzl",
     )
     env.expect.that_str(shape_a.build).contains('actual = "//__actual/wrapper:pkg",')
     env.expect.that_str(shape_a.actual_build).contains('load("@rules_pycross//pycross/private:proxy.bzl", "pycross_library_proxy")')
     pkg_block_a = shape_a.actual_build.split('name = "pkg"')[1].split("\n)")[0]
-    env.expect.that_str(pkg_block_a).contains('actual = "@ws__pkgs//_lock:wrapper@1.0.0",')
-    env.expect.that_str(pkg_block_a).contains('"@ws__pkgs//_lock:is_extra_alpha": [')
-    env.expect.that_str(pkg_block_a).contains('"@ws__pkgs//_lock:wrapper[v1]@1.0.0",')
+    env.expect.that_str(pkg_block_a).contains('actual = "@ws__pkg_wrapper//:pkg",')
+    env.expect.that_str(pkg_block_a).contains('"@ws__state//:is_extra_alpha": [')
+    env.expect.that_str(pkg_block_a).contains('"@ws__pkg_wrapper//:[v1]",')
     env.expect.that_str(pkg_block_a).contains('"//conditions:default": [],')
     env.expect.that_bool("no_match_error" in pkg_block_a).equals(False)
     env.expect.that_bool("_no_variant_" in pkg_block_a).equals(False)
-    env.expect.that_bool(":[v1]" in pkg_block_a).equals(False)
+    env.expect.that_bool('":[v1]"' in pkg_block_a).equals(False)
 
-    # Shape B: multi-version mixed pin ({cpu: foo@1, gpu: foo@2, "": foo@2}) +
-    # foo[opt]: {cpu: foo[opt]@1, "": foo[opt]@1} -> gpu and "" get bare foo@2, ONLY cpu gets foo[opt]@1.
+    # Shape B: multi-version mixed pin ({cpu: foo@s0, gpu: foo@s1, "": foo@s1}) +
+    # foo[opt]: {cpu: foo[opt]@s0, "": foo[opt]@s0} -> gpu and "" get bare foo@s1, ONLY cpu gets foo[opt]@s0.
     shape_b = _pin_build(
         target_name = "foo",
-        pin_target_dict = {"cpu": "foo@1", "gpu": "foo@2", "": "foo@2"},
-        extras_dict = {"opt": {"cpu": "foo[opt]@1", "": "foo[opt]@1"}},
-        workspace_repo = "ws__pkgs",
+        pin_target_dict = {"cpu": "foo@s0", "gpu": "foo@s1", "": "foo@s1"},
+        extras_dict = {"opt": {"cpu": "foo[opt]@s0", "": "foo[opt]@s0"}},
+        workspace_name = "ws",
     )
-    env.expect.that_str(shape_b.build).contains('name = "_pkg_foo_1",')
-    pkg_foo_1_block = shape_b.build.split('name = "_pkg_foo_1"')[1].split("\n)")[0]
-    env.expect.that_str(pkg_foo_1_block).contains('actual = "@ws__pkgs//_lock:foo@1",')
-    env.expect.that_str(pkg_foo_1_block).contains('"@ws__pkgs//_lock:foo[opt]@1",')
+    env.expect.that_str(shape_b.build).contains('name = "_pkg_foo_s0",')
+    pkg_foo_1_block = shape_b.build.split('name = "_pkg_foo_s0"')[1].split("\n)")[0]
+    env.expect.that_str(pkg_foo_1_block).contains('actual = "@ws__pkg_foo//:pkg_s0",')
+    env.expect.that_str(pkg_foo_1_block).contains('"@ws__pkg_foo//:[opt]_s0",')
     pkg_block_b = shape_b.build.split('name = "pkg"')[1].split("\n)")[0]
-    env.expect.that_str(pkg_block_b).contains('"@ws__pkgs//_lock:is_cpu": ":_pkg_foo_1",')
-    env.expect.that_str(pkg_block_b).contains('"@ws__pkgs//_lock:is_gpu": "@ws__pkgs//_lock:foo@2",')
-    env.expect.that_str(pkg_block_b).contains('"//conditions:default": "@ws__pkgs//_lock:foo@2",')
-    env.expect.that_bool("foo[opt]" in pkg_block_b).equals(False)
-    env.expect.that_bool("_pkg_foo_2" in shape_b.build).equals(False)
+    env.expect.that_str(pkg_block_b).contains('"@ws__state//:is_cpu": ":_pkg_foo_s0",')
+    env.expect.that_str(pkg_block_b).contains('"@ws__state//:is_gpu": "@ws__pkg_foo//:pkg_s1",')
+    env.expect.that_str(pkg_block_b).contains('"//conditions:default": "@ws__pkg_foo//:pkg_s1",')
+    env.expect.that_bool("[opt]" in pkg_block_b).equals(False)
+    env.expect.that_bool("_pkg_foo_s1" in shape_b.build).equals(False)
 
     # Shape C: disjoint constraints (base under is_a, extra under is_b).
     disjoint_base = effective_base_target_dict({
-        "base_target": {"is_a": "foo@1"},
-        "extras": {"opt": {"is_b": "foo[opt]@1"}},
+        "base_target": {"is_a": "foo"},
+        "extras": {"opt": {"is_b": "foo[opt]"}},
     })
     shape_c = _pin_build(
         target_name = "foo",
         pin_target_dict = disjoint_base,
-        extras_dict = {"opt": {"is_b": "foo[opt]@1"}},
-        workspace_repo = "ws__pkgs",
+        extras_dict = {"opt": {"is_b": "foo[opt]"}},
+        workspace_name = "ws",
     )
     pkg_block_c = shape_c.build.split('name = "pkg"')[1].split("\n)")[0]
-    env.expect.that_str(pkg_block_c).contains('"@ws__pkgs//_lock:is_is_a": "@ws__pkgs//_lock:foo@1",')
-    env.expect.that_str(pkg_block_c).contains('"@ws__pkgs//_lock:is_is_b": "@ws__pkgs//_lock:foo@1",')
-    env.expect.that_str(pkg_block_c).contains('"@ws__pkgs//_lock:is_is_b": [')
-    env.expect.that_str(pkg_block_c).contains('"@ws__pkgs//_lock:foo[opt]@1",')
+    env.expect.that_str(pkg_block_c).contains('"@ws__state//:is_is_a": "@ws__pkg_foo//:pkg",')
+    env.expect.that_str(pkg_block_c).contains('"@ws__state//:is_is_b": "@ws__pkg_foo//:pkg",')
+    env.expect.that_str(pkg_block_c).contains('"@ws__state//:is_is_b": [')
+    env.expect.that_str(pkg_block_c).contains('"@ws__pkg_foo//:[opt]",')
     env.expect.that_str(pkg_block_c).contains('"//conditions:default": [],')
 
     # Shape D: direct extra with availability_markers (single marker, variant + marker match_all, multi-marker match_any).
@@ -1845,49 +1855,49 @@ def _test_pin_build_direct_extras_aggregation_shapes_impl(env, target):
     ev_darwin = marker_evaluator_name("sys_platform == 'darwin'", "")
     shape_d = _pin_build(
         target_name = "foo",
-        pin_target_dict = {"": "foo@1"},
+        pin_target_dict = {"": "foo"},
         extras_dict = {
-            "win": {"": "foo[win]@1"},
-            "var_win": {"extra_a": "foo[var-win]@1"},
-            "unix": {"": "foo[unix]@1"},
+            "win": {"": "foo[win]"},
+            "var_win": {"extra_a": "foo[var-win]"},
+            "unix": {"": "foo[unix]"},
         },
-        workspace_repo = "ws__pkgs",
+        workspace_name = "ws",
         packages = {
-            "foo@1": {},
-            "foo[win]@1": {"availability_markers": ["sys_platform == 'win32'"]},
-            "foo[var-win]@1": {"availability_markers": ["sys_platform == 'win32'"]},
-            "foo[unix]@1": {"availability_markers": ["sys_platform == 'linux'", "sys_platform == 'darwin'"]},
+            "foo": {},
+            "foo[win]": {"availability_markers": ["sys_platform == 'win32'"]},
+            "foo[var-win]": {"availability_markers": ["sys_platform == 'win32'"]},
+            "foo[unix]": {"availability_markers": ["sys_platform == 'linux'", "sys_platform == 'darwin'"]},
         },
     )
     env.expect.that_str(shape_d.build).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
-    env.expect.that_str(shape_d.build).contains('"@ws__pkgs//_lock:{}_match": ['.format(ev_win))
+    env.expect.that_str(shape_d.build).contains('"//_markers:{}_match": ['.format(ev_win))
     env.expect.that_str(shape_d.build).contains("match_all = [")
-    env.expect.that_str(shape_d.build).contains('"@ws__pkgs//_lock:is_extra_a",')
-    env.expect.that_str(shape_d.build).contains('"@ws__pkgs//_lock:{}_match",'.format(ev_win))
-    env.expect.that_str(shape_d.build).contains('name = "_extra_avail_foo_unix__1",')
+    env.expect.that_str(shape_d.build).contains('"@ws__state//:is_extra_a",')
+    env.expect.that_str(shape_d.build).contains('"//_markers:{}_match",'.format(ev_win))
+    env.expect.that_str(shape_d.build).contains('name = "_extra_avail_foo_unix_",')
     env.expect.that_str(shape_d.build).contains("match_any = [")
-    env.expect.that_str(shape_d.build).contains('"@ws__pkgs//_lock:{}_match",'.format(ev_linux))
-    env.expect.that_str(shape_d.build).contains('"@ws__pkgs//_lock:{}_match",'.format(ev_darwin))
+    env.expect.that_str(shape_d.build).contains('"//_markers:{}_match",'.format(ev_linux))
+    env.expect.that_str(shape_d.build).contains('"//_markers:{}_match",'.format(ev_darwin))
 
     # Multi-constraint same extra emits match_any without duplicate labels in deps.
     multi_c = _pin_build(
         target_name = "foo",
-        pin_target_dict = {"": "foo@1"},
-        extras_dict = {"opt": {"is_a": "foo[opt]@1", "is_b": "foo[opt]@1"}},
-        workspace_repo = "ws__pkgs",
+        pin_target_dict = {"": "foo"},
+        extras_dict = {"opt": {"is_a": "foo[opt]", "is_b": "foo[opt]"}},
+        workspace_name = "ws",
     )
     env.expect.that_str(multi_c.build).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
     env.expect.that_str(multi_c.build).contains("match_any = [")
     pkg_block_mc = multi_c.build.split('name = "pkg"')[1].split("\n)")[0]
-    env.expect.that_int(pkg_block_mc.count('"@ws__pkgs//_lock:foo[opt]@1"')).equals(1)
+    env.expect.that_int(pkg_block_mc.count('"@ws__pkg_foo//:[opt]"')).equals(1)
 
     # append_root_aliases emits pkg[] iff group["extras"] is non-empty.
     root_lines = []
     append_root_aliases(
         root_lines,
         {
-            "bare": {"base_target": {"": "bare@1.0"}, "extras": {}},
-            "with-extra": {"base_target": {"": "with-extra@1.0"}, "extras": {"opt": {"": "with-extra[opt]@1.0"}}},
+            "bare": {"base_target": {"": "bare"}, "extras": {}},
+            "with-extra": {"base_target": {"": "with-extra"}, "extras": {"opt": {"": "with-extra[opt]"}}},
         },
     )
     root_text = "\n".join(root_lines)
@@ -1895,7 +1905,7 @@ def _test_pin_build_direct_extras_aggregation_shapes_impl(env, target):
     env.expect.that_bool('name = "with-extra[]"' in root_text).equals(True)
 
     # Forked base + compound variant-gated extra: no _unselected_ or extra_alpha_* in
-    # pkg/wheel/[] selects, and each version branch gets its own conditional extra dep.
+    # pkg/wheel/[] selects, and each slot branch gets its own conditional extra dep.
     fork_res_exprs = {
         "res_py_lt_310": "python_version < '3.10'",
         "res_py_ge_310": "python_version >= '3.10'",
@@ -1909,11 +1919,11 @@ def _test_pin_build_direct_extras_aggregation_shapes_impl(env, target):
     })
     fork_compound_base = effective_base_target_dict(
         {
-            "base_target": {"res_py_lt_310": "foo@1", "res_py_ge_310": "foo@2"},
+            "base_target": {"res_py_lt_310": "foo@s0", "res_py_ge_310": "foo@s1"},
             "extras": {
                 "opt": {
-                    "extra_alpha_res_py_lt_310": "foo[opt]@1",
-                    "extra_alpha_res_py_ge_310": "foo[opt]@2",
+                    "extra_alpha_res_py_lt_310": "foo[opt]@s0",
+                    "extra_alpha_res_py_ge_310": "foo[opt]@s1",
                 },
             },
         },
@@ -1925,31 +1935,32 @@ def _test_pin_build_direct_extras_aggregation_shapes_impl(env, target):
         pin_target_dict = fork_compound_base,
         extras_dict = {
             "opt": {
-                "extra_alpha_res_py_lt_310": "foo[opt]@1",
-                "extra_alpha_res_py_ge_310": "foo[opt]@2",
+                "extra_alpha_res_py_lt_310": "foo[opt]@s0",
+                "extra_alpha_res_py_ge_310": "foo[opt]@s1",
             },
         },
-        workspace_repo = "ws__pkgs",
+        workspace_name = "ws",
         no_variant_fallbacks = fork_fallbacks,
+        resolution_marker_exprs = fork_res_exprs,
     )
     for target_hdr in ('name = "pkg"', 'name = "wheel"', 'name = "[]"'):
         block = fork_compound.build.split(target_hdr)[1].split("\n)")[0]
         env.expect.that_bool("_unselected_" in block).equals(False)
         env.expect.that_bool("extra_alpha" in block).equals(False)
-    fc_pkg_1 = fork_compound.build.split('name = "_pkg_foo_1"')[1].split("\n)")[0]
-    env.expect.that_str(fc_pkg_1).contains('"@ws__pkgs//_lock:is_extra_alpha_res_py_lt_310": [')
-    env.expect.that_str(fc_pkg_1).contains('"@ws__pkgs//_lock:foo[opt]@1",')
+    fc_pkg_1 = fork_compound.build.split('name = "_pkg_foo_s0"')[1].split("\n)")[0]
+    env.expect.that_str(fc_pkg_1).contains('"//_markers:is_extra_alpha_res_py_lt_310": [')
+    env.expect.that_str(fc_pkg_1).contains('"@ws__pkg_foo//:[opt]_s0",')
     env.expect.that_str(fc_pkg_1).contains('"//conditions:default": [],')
-    fc_pkg_2 = fork_compound.build.split('name = "_pkg_foo_2"')[1].split("\n)")[0]
-    env.expect.that_str(fc_pkg_2).contains('"@ws__pkgs//_lock:is_extra_alpha_res_py_ge_310": [')
-    env.expect.that_str(fc_pkg_2).contains('"@ws__pkgs//_lock:foo[opt]@2",')
+    fc_pkg_2 = fork_compound.build.split('name = "_pkg_foo_s1"')[1].split("\n)")[0]
+    env.expect.that_str(fc_pkg_2).contains('"//_markers:is_extra_alpha_res_py_ge_310": [')
+    env.expect.that_str(fc_pkg_2).contains('"@ws__pkg_foo//:[opt]_s1",')
     env.expect.that_str(fc_pkg_2).contains('"//conditions:default": [],')
 
-    # Forked base + plain variant extra attaches only to the matching version branch.
+    # Forked base + plain variant extra attaches only to the matching slot branch.
     fork_plain_base = effective_base_target_dict(
         {
-            "base_target": {"res_py_lt_310": "foo@1", "res_py_ge_310": "foo@2"},
-            "extras": {"opt": {"extra_alpha": "foo[opt]@2"}},
+            "base_target": {"res_py_lt_310": "foo@s0", "res_py_ge_310": "foo@s1"},
+            "extras": {"opt": {"extra_alpha": "foo[opt]@s1"}},
         },
         resolution_marker_exprs = fork_res_exprs,
         variant_constraints = fork_fallbacks.sets,
@@ -1957,48 +1968,49 @@ def _test_pin_build_direct_extras_aggregation_shapes_impl(env, target):
     fork_plain = _pin_build(
         target_name = "foo",
         pin_target_dict = fork_plain_base,
-        extras_dict = {"opt": {"extra_alpha": "foo[opt]@2"}},
-        workspace_repo = "ws__pkgs",
+        extras_dict = {"opt": {"extra_alpha": "foo[opt]@s1"}},
+        workspace_name = "ws",
         no_variant_fallbacks = fork_fallbacks,
+        resolution_marker_exprs = fork_res_exprs,
     )
     fp_pkg = fork_plain.build.split('name = "pkg"')[1].split("\n)")[0]
     env.expect.that_bool("_unselected_" in fp_pkg).equals(False)
     env.expect.that_bool("extra_alpha" in fp_pkg).equals(False)
-    env.expect.that_str(fp_pkg).contains('"@ws__pkgs//_lock:is_res_py_lt_310": "@ws__pkgs//_lock:foo@1",')
-    env.expect.that_str(fp_pkg).contains('"@ws__pkgs//_lock:is_res_py_ge_310": ":_pkg_foo_2",')
-    fp_pkg_2 = fork_plain.build.split('name = "_pkg_foo_2"')[1].split("\n)")[0]
-    env.expect.that_str(fp_pkg_2).contains('"@ws__pkgs//_lock:is_extra_alpha": [')
-    env.expect.that_str(fp_pkg_2).contains('"@ws__pkgs//_lock:foo[opt]@2",')
+    env.expect.that_str(fp_pkg).contains('"//_markers:is_res_py_lt_310": "@ws__pkg_foo//:pkg_s0",')
+    env.expect.that_str(fp_pkg).contains('"//_markers:is_res_py_ge_310": ":_pkg_foo_s1",')
+    fp_pkg_2 = fork_plain.build.split('name = "_pkg_foo_s1"')[1].split("\n)")[0]
+    env.expect.that_str(fp_pkg_2).contains('"@ws__state//:is_extra_alpha": [')
+    env.expect.that_str(fp_pkg_2).contains('"@ws__pkg_foo//:[opt]_s1",')
 
-    # Multi-version pin with orthogonal extra on non-default + default branches shares _pkg_foo_2.
+    # Multi-version pin with orthogonal extra on non-default + default branches shares _pkg_foo_s1.
     ortho = _pin_build(
         target_name = "foo",
-        pin_target_dict = {"cpu": "foo@1", "gpu": "foo@2", "": "foo@2"},
-        extras_dict = {"opt": {"extra_x": "foo[opt]@2"}},
-        workspace_repo = "ws__pkgs",
+        pin_target_dict = {"cpu": "foo@s0", "gpu": "foo@s1", "": "foo@s1"},
+        extras_dict = {"opt": {"extra_x": "foo[opt]@s1"}},
+        workspace_name = "ws",
     )
     ortho_pkg = ortho.build.split('name = "pkg"')[1].split("\n)")[0]
-    env.expect.that_str(ortho_pkg).contains('"@ws__pkgs//_lock:is_cpu": "@ws__pkgs//_lock:foo@1",')
-    env.expect.that_str(ortho_pkg).contains('"@ws__pkgs//_lock:is_gpu": ":_pkg_foo_2",')
-    env.expect.that_str(ortho_pkg).contains('"//conditions:default": ":_pkg_foo_2",')
-    env.expect.that_int(ortho.build.count('name = "_pkg_foo_2"')).equals(1)
-    ortho_pkg_2 = ortho.build.split('name = "_pkg_foo_2"')[1].split("\n)")[0]
-    env.expect.that_str(ortho_pkg_2).contains('"@ws__pkgs//_lock:is_extra_x": [')
-    env.expect.that_str(ortho_pkg_2).contains('"@ws__pkgs//_lock:foo[opt]@2",')
+    env.expect.that_str(ortho_pkg).contains('"@ws__state//:is_cpu": "@ws__pkg_foo//:pkg_s0",')
+    env.expect.that_str(ortho_pkg).contains('"@ws__state//:is_gpu": ":_pkg_foo_s1",')
+    env.expect.that_str(ortho_pkg).contains('"//conditions:default": ":_pkg_foo_s1",')
+    env.expect.that_int(ortho.build.count('name = "_pkg_foo_s1"')).equals(1)
+    ortho_pkg_2 = ortho.build.split('name = "_pkg_foo_s1"')[1].split("\n)")[0]
+    env.expect.that_str(ortho_pkg_2).contains('"@ws__state//:is_extra_x": [')
+    env.expect.that_str(ortho_pkg_2).contains('"@ws__pkg_foo//:[opt]_s1",')
 
     # Multi-version testonly pin propagates testonly = True to _pkg_* and :[] with and without transition.
     for trans_bzl in (None, "//:_transition.bzl"):
         to_res = _pin_build(
             target_name = "foo",
-            pin_target_dict = {"cpu": "foo@1", "gpu": "foo@2"},
-            extras_dict = {"opt": {"cpu": "foo[opt]@1", "gpu": "foo[opt]@2"}},
-            workspace_repo = "ws__pkgs",
+            pin_target_dict = {"cpu": "foo@s0", "gpu": "foo@s1"},
+            extras_dict = {"opt": {"cpu": "foo[opt]@s0", "gpu": "foo[opt]@s1"}},
+            workspace_name = "ws",
             transition_bzl = trans_bzl,
             testonly = True,
         )
         helper_src = to_res.actual_build if trans_bzl else to_res.build
-        env.expect.that_str(helper_src.split('name = "_pkg_foo_1"')[1].split("\n)")[0]).contains("testonly = True,")
-        env.expect.that_str(helper_src.split('name = "_pkg_foo_2"')[1].split("\n)")[0]).contains("testonly = True,")
+        env.expect.that_str(helper_src.split('name = "_pkg_foo_s0"')[1].split("\n)")[0]).contains("testonly = True,")
+        env.expect.that_str(helper_src.split('name = "_pkg_foo_s1"')[1].split("\n)")[0]).contains("testonly = True,")
         env.expect.that_str(to_res.build.split('name = "[]"')[1].split("\n)")[0]).contains("testonly = True,")
 
 def _test_pin_build_direct_extras_aggregation_shapes(name):

@@ -31,10 +31,10 @@ def render_transition_bzl(repo_name, flags, settings, variant_state_label = "", 
         repo_name: User-facing repo name for docstrings.
         flags: Normalized `--<label>[=<value>]` flag strings.
         settings: Canonical build setting label -> value dict.
-        variant_state_label: Label of the workspace's `//_lock:_state` setting,
+        variant_state_label: Label of the workspace's `@<ws>__state//:_state` setting,
             when `variant_state_overrides` is non-empty.
         variant_state_overrides: `{key: value}` overrides to merge over incoming
-            `//_lock:_state` (pins, defaults, and usable narrowing).
+            `@<ws>__state//:_state` (pins, defaults, and usable narrowing).
 
     Returns:
         Generated `_transition.bzl` file content.

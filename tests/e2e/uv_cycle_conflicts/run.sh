@@ -14,24 +14,25 @@ installs=$(bazel aquery "$@" 'mnemonic("PycrossWheelInstall", deps(//...))' \
   --output=text 2>/dev/null | grep "^  Outputs:")
 
 assert_installs() {
-  local pkg="$1"
-  local expected="$2"
+  local spoke="$1"
+  local target="$2"
+  local expected="$3"
   local count
-  count=$(grep -c "_lock/\(_reset_\)\?${pkg} (TreeArtifact)" <<<"$installs" || true)
+  count=$(grep -c "__pkg_${spoke}/\(_reset_\)\?${target} (TreeArtifact)" <<<"$installs" || true)
   if [[ "$count" != "$expected" ]]; then
-    echo "Expected ${expected} install(s) of ${pkg}, got ${count}:"
+    echo "Expected ${expected} install(s) of __pkg_${spoke}/${target}, got ${count}:"
     echo "$installs"
     exit 1
   fi
 }
 
-assert_installs "above@1.0.0" 1
-assert_installs "_raw_cyc-p@1.0.0" 1
-assert_installs "_raw_cyc-q@1.0.0" 1
-assert_installs "_raw_cyc-y@1.0.0" 1
-assert_installs "_raw_cyc-x@1.0.0" 2
-assert_installs "iniconfig@1.1.1" 1
-assert_installs "iniconfig@2.0.0" 1
+assert_installs "above" "pkg" 1
+assert_installs "cyc_p" "_raw" 1
+assert_installs "cyc_q" "_raw" 1
+assert_installs "cyc_y" "_raw" 1
+assert_installs "cyc_x" "_raw" 2
+assert_installs "iniconfig" "pkg_s0" 1
+assert_installs "iniconfig" "pkg_s1" 1
 
 total=$(wc -l <<<"$installs" | tr -d ' ')
 if [[ "$total" != 8 ]]; then

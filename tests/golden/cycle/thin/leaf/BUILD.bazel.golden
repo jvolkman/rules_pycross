@@ -9,17 +9,17 @@ alias(
 
 pycross_thin_library_proxy(
     name = "pkg",
-    actual = "@golden_cycle__pkgs//_lock:leaf@1.0.0",
+    actual = "@golden_cycle__pkg_leaf//:pkg",
 )
 
 pycross_file_proxy(
     name = "wheel",
-    actual = "@golden_cycle__pkgs//_wheel:leaf@1.0.0",
+    actual = "@golden_cycle__pkg_leaf//:wheel",
 )
 
 pycross_file_proxy(
     name = "dist_info",
-    actual = "@golden_cycle__pkgs//_lock:_dist_info_leaf@1.0.0",
+    actual = "@golden_cycle__pkg_leaf//:dist_info",
 )
 
 alias(

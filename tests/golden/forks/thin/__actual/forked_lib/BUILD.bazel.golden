@@ -3,8 +3,8 @@ package(default_visibility = ["//forked_lib:__pkg__"])
 alias(
     name = "pkg",
     actual = select({
-        "@golden_forks__pkgs//_lock:is_res_py311": "@golden_forks__pkgs//_lock:forked-lib@1.0.0",
-        "@golden_forks__pkgs//_lock:is_res_py312": "@golden_forks__pkgs//_lock:forked-lib@2.0.0",
+        "//_markers:is_res_py311": "@golden_forks__pkg_forked_lib//:pkg_s0",
+        "//_markers:is_res_py312": "@golden_forks__pkg_forked_lib//:pkg_s1",
         "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
     }),
 )
@@ -12,8 +12,8 @@ alias(
 alias(
     name = "wheel",
     actual = select({
-        "@golden_forks__pkgs//_lock:is_res_py311": "@golden_forks__pkgs//_wheel:forked-lib@1.0.0",
-        "@golden_forks__pkgs//_lock:is_res_py312": "@golden_forks__pkgs//_wheel:forked-lib@2.0.0",
+        "//_markers:is_res_py311": "@golden_forks__pkg_forked_lib//:wheel_s0",
+        "//_markers:is_res_py312": "@golden_forks__pkg_forked_lib//:wheel_s1",
         "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
     }),
 )
@@ -21,8 +21,8 @@ alias(
 alias(
     name = "dist_info",
     actual = select({
-        "@golden_forks__pkgs//_lock:is_res_py311": "@golden_forks__pkgs//_lock:_dist_info_forked-lib@1.0.0",
-        "@golden_forks__pkgs//_lock:is_res_py312": "@golden_forks__pkgs//_lock:_dist_info_forked-lib@2.0.0",
+        "//_markers:is_res_py311": "@golden_forks__pkg_forked_lib//:dist_info_s0",
+        "//_markers:is_res_py312": "@golden_forks__pkg_forked_lib//:dist_info_s1",
         "//conditions:default": "@rules_pycross//pycross/private:no_match_error",
     }),
 )
@@ -30,8 +30,8 @@ alias(
 alias(
     name = "maybe",
     actual = select({
-        "@golden_forks__pkgs//_lock:is_res_py311": "//__actual/forked_lib:pkg",
-        "@golden_forks__pkgs//_lock:is_res_py312": "//__actual/forked_lib:pkg",
+        "//_markers:is_res_py311": "//__actual/forked_lib:pkg",
+        "//_markers:is_res_py312": "//__actual/forked_lib:pkg",
         "//conditions:default": "//:_empty_library",
     }),
 )

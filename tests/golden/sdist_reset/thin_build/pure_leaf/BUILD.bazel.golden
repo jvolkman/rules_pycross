@@ -9,17 +9,17 @@ alias(
 
 pycross_transitioning_library_proxy(
     name = "pkg",
-    actual = "@golden_sdist_reset__pkgs//_lock:pure-leaf@1.0.0",
+    actual = "@golden_sdist_reset__pkg_pure_leaf//:pkg",
 )
 
 pycross_transitioning_file_proxy(
     name = "wheel",
-    actual = "@golden_sdist_reset__pkgs//_wheel:pure-leaf@1.0.0",
+    actual = "@golden_sdist_reset__pkg_pure_leaf//:wheel",
 )
 
 pycross_transitioning_file_proxy(
     name = "dist_info",
-    actual = "@golden_sdist_reset__pkgs//_lock:_dist_info_pure-leaf@1.0.0",
+    actual = "@golden_sdist_reset__pkg_pure_leaf//:dist_info",
 )
 
 alias(

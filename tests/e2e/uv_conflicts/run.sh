@@ -93,8 +93,8 @@ bazel test "$@" //:test_config_settings_variant_b --@project//_variants=extra_va
 # (jinja2 has conflict-gated edges in uv.lock, so it stays per-configuration.)
 installs=$(bazel aquery "$@" 'mnemonic("PycrossWheelInstall", deps(//:test_config_settings_variant_a + //:test_config_settings_variant_b))' \
   --output=text 2>/dev/null | grep "^  Outputs:")
-for pkg in idna@3.7 markupsafe@3.0.4; do
-  count=$(grep -c "_lock/\(_reset_\)\?${pkg} (TreeArtifact)" <<<"$installs" || true)
+for pkg in "__pkg_idna/\(_reset_\)\?pkg\(_s[0-9]\+\)\?" "__pkg_markupsafe/\(_reset_\)\?pkg"; do
+  count=$(grep -c "${pkg} (TreeArtifact)" <<<"$installs" || true)
   if [[ "$count" != 1 ]]; then
     echo "Expected 1 install of ${pkg} across config_settings variants, got ${count}:"
     echo "$installs"
@@ -135,22 +135,22 @@ bazel test "$@" \
 
 # Verify via aquery that neither beta target nor unselected wrapper pulls in idna@3.7 from alpha's wrapper[v1].
 for target in //:test_extras_cross_repo_beta //:test_extras_multi_beta; do
-  beta_installs=$(bazel aquery "$@" "mnemonic(\"PycrossWheelInstall\", deps(${target}))" \
-    --output=text 2>/dev/null | grep "^  Outputs:")
-  if grep -q "idna@3.7" <<<"$beta_installs"; then
-    echo "Unexpected idna@3.7 install leaked into ${target}:"
-    echo "$beta_installs"
+  beta_aquery=$(bazel aquery "$@" "mnemonic(\"PycrossWheelInstall\", deps(${target}))" \
+    --output=text 2>/dev/null)
+  if grep -q "idna-3\.7-" <<<"$beta_aquery"; then
+    echo "Unexpected idna 3.7 install leaked into ${target}:"
+    echo "$beta_aquery" | grep -E "^  (Inputs|Outputs):"
     exit 1
   fi
-  if ! grep -q "idna@3.10" <<<"$beta_installs"; then
-    echo "Expected idna@3.10 install in ${target}, got:"
-    echo "$beta_installs"
+  if ! grep -q "idna-3\.10-" <<<"$beta_aquery"; then
+    echo "Expected idna 3.10 install in ${target}, got:"
+    echo "$beta_aquery" | grep -E "^  (Inputs|Outputs):"
     exit 1
   fi
 done
 unselected_installs=$(bazel aquery "$@" "mnemonic(\"PycrossWheelInstall\", deps(//:test_extras_multi_unselected))" \
   --output=text 2>/dev/null | grep "^  Outputs:")
-if grep -q "idna@" <<<"$unselected_installs"; then
+if grep -q "__pkg_idna/" <<<"$unselected_installs"; then
   echo "Unexpected idna install leaked into //:test_extras_multi_unselected:"
   echo "$unselected_installs"
   exit 1
@@ -191,7 +191,7 @@ while idx < len(text):
     obj, idx = dec.raw_decode(text, idx)
     mnemonic = obj.get("mnemonic", "")
     label = obj.get("targetLabel", "")
-    if mnemonic in ("PycrossWheelDir", "PycrossWheelInstall") and "typing-extensions" in label:
+    if mnemonic in ("PycrossWheelDir", "PycrossWheelInstall") and "typing_extensions" in label:
         seen[mnemonic] = bool(obj.get("cacheHit", False))
 
 expected = {"PycrossWheelDir": want_dir, "PycrossWheelInstall": want_install}

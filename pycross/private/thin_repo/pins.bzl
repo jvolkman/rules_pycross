@@ -3,11 +3,9 @@
 load("//pycross/private:build_text.bzl", "alias", "config_setting_group", "deps_plus_selects")
 load(
     "//pycross/private:lock_contract.bzl",
-    "lock_constraint_label",
-    "lock_dist_info_prefix",
-    "lock_label_prefix",
-    "sdist_label_prefix",
-    "wheel_label_prefix",
+    "member_constraint_label",
+    "spoke_slot_label",
+    "state_repo_name",
 )
 load("//pycross/private:util.bzl", "base_package_key", "is_platform_specific", "sanitize_name", "underscore_name")
 load(":availability.bzl", "emit_maybe_alias", "markers_condition")
@@ -24,7 +22,7 @@ def _cond_group(out_lines, out_used, group_cache, kind, labels):
         group_cache[key] = ":" + name
     return group_cache[key]
 
-def _extra_availability_condition(out_lines, out_used, avail_cache, extra_key, packages, workspace_repo):
+def _extra_availability_condition(out_lines, out_used, avail_cache, extra_key, packages):
     """Return a config_setting label for `extra_key`'s own `availability_markers`, or None."""
     if not packages:
         return None
@@ -35,14 +33,13 @@ def _extra_availability_condition(out_lines, out_used, avail_cache, extra_key, p
         out_lines,
         "_extra_avail_" + sanitize_name(extra_key),
         markers,
-        workspace_repo,
         used = out_used,
     )
     avail_cache[extra_key] = cond
     return cond
 
-def _build_extra_deps(extra_constraints, lock_ref, packages, workspace_repo, out_lines, out_used, avail_cache, group_cache):
-    """Build `(static_deps, conditional_by_cond)` from `{extra_key: {constraint: True}}`."""
+def _build_extra_deps(extra_constraints, workspace_name, state_repo, packages, resolution_marker_exprs, out_lines, out_used, avail_cache, group_cache):
+    """Build `(static_deps, conditional_by_cond)` from `{extra_slot_key: {constraint: True}}`."""
     static_deps = []
     conditional_by_cond = {}
     for extra_key in sorted(extra_constraints.keys()):
@@ -53,9 +50,8 @@ def _build_extra_deps(extra_constraints, lock_ref, packages, workspace_repo, out
             avail_cache,
             extra_key,
             packages,
-            workspace_repo,
         )
-        dep_label = lock_ref + extra_key
+        dep_label = spoke_slot_label(workspace_name, extra_key, "pkg")
         if "" in constraints:
             if avail_cond:
                 conditional_by_cond.setdefault(avail_cond, []).append(dep_label)
@@ -65,14 +61,14 @@ def _build_extra_deps(extra_constraints, lock_ref, packages, workspace_repo, out
 
         sorted_cs = sorted(constraints.keys())
         if len(sorted_cs) == 1:
-            c_cond = lock_constraint_label(workspace_repo, sorted_cs[0])
+            c_cond = member_constraint_label(state_repo, sorted_cs[0], resolution_marker_exprs)
         else:
             c_cond = _cond_group(
                 out_lines,
                 out_used,
                 group_cache,
                 "match_any",
-                [lock_constraint_label(workspace_repo, c) for c in sorted_cs],
+                [member_constraint_label(state_repo, c, resolution_marker_exprs) for c in sorted_cs],
             )
         final_cond = _cond_group(
             out_lines,
@@ -104,29 +100,35 @@ def _emit_library_proxy_with_deps(out_lines, out_used, name, actual_expr, static
     out_used["library_proxy"] = True
 
 def pin_repo_context(
-        workspace_repo,
+        workspace_name,
+        state_repo = None,
         no_variant_fallbacks = None,
         target_platform = None,
         transition_bzl = None,
-        packages = None):
+        packages = None,
+        resolution_marker_exprs = None):
     """Build the repo-wide context struct shared by every `pin_build` call in a thin repo.
 
     Args:
-        workspace_repo: Name of the workspace (backing) repo.
+        workspace_name: Workspace name (used to derive spoke repo names).
+        state_repo: Optional apparent name of `@<ws>__state` (defaults to `state_repo_name(workspace_name)`).
         no_variant_fallbacks: Result of `variant_fallbacks`, or None.
         target_platform: Optional platform label for transitioning proxies.
         transition_bzl: Optional repo-local transition `.bzl` label.
-        packages: Lock packages dict, or None.
+        packages: Slimmed member packages dict, or None.
+        resolution_marker_exprs: Optional member `resolution_marker_exprs` dict.
 
     Returns:
         Context struct passed to `pin_build`.
     """
     return struct(
-        workspace_repo = workspace_repo,
+        workspace_name = workspace_name,
+        state_repo = state_repo or state_repo_name(workspace_name),
         no_variant_fallbacks = no_variant_fallbacks,
         target_platform = target_platform,
         transition_bzl = transition_bzl,
         packages = packages,
+        resolution_marker_exprs = resolution_marker_exprs,
     )
 
 def pin_spec(
@@ -141,12 +143,12 @@ def pin_spec(
 
     Args:
         target_name: Underscore-normalized pin directory and default alias name.
-        pin_target_dict: Constraint -> package key mapping for the base package.
+        pin_target_dict: Constraint -> version-free slot key mapping for the base package.
         extras_dict: Optional dict of extra name -> constraint mapping.
-        maybe_available_keys: Package keys needing `:maybe` availability gating.
-        extras_maybe_keys: Dict of extra name -> list of platform-specific keys.
+        maybe_available_keys: Slot keys needing `:maybe` availability gating.
+        extras_maybe_keys: Dict of extra name -> list of platform-specific slot keys.
         testonly: Whether library proxy targets are marked `testonly = True`.
-        sdist_target_dict: Constraint -> package key mapping for branches with sdists.
+        sdist_target_dict: Constraint -> slot key mapping for branches with sdists.
 
     Returns:
         Pin specification struct passed to `pin_build`.
@@ -162,7 +164,7 @@ def pin_spec(
     )
 
 def pin_build(pin, repo_ctx):
-    """Generates the BUILD file for a pin directory, pointing to the workspace.
+    """Generates the BUILD file for a pin directory, pointing to version-free spoke targets.
 
     Args:
         pin: Per-pin specification from `pin_spec`.
@@ -180,15 +182,18 @@ def pin_build(pin, repo_ctx):
     testonly = pin.testonly
     sdist_target_dict = pin.sdist_target_dict
 
-    workspace_repo = repo_ctx.workspace_repo
+    workspace_name = repo_ctx.workspace_name
+    state_repo = repo_ctx.state_repo
     no_variant_fallbacks = repo_ctx.no_variant_fallbacks
     target_platform = repo_ctx.target_platform
     transition_bzl = repo_ctx.transition_bzl
     packages = repo_ctx.packages
+    resolution_marker_exprs = repo_ctx.resolution_marker_exprs
 
-    lock_ref = lock_label_prefix(workspace_repo)
-    wheel_ref = wheel_label_prefix(workspace_repo)
-    sdist_ref = sdist_label_prefix(workspace_repo)
+    pkg_label_fn = lambda skey: spoke_slot_label(workspace_name, skey, "pkg")
+    wheel_label_fn = lambda skey: spoke_slot_label(workspace_name, skey, "wheel")
+    dist_info_label_fn = lambda skey: spoke_slot_label(workspace_name, skey, "dist_info")
+    sdist_label_fn = lambda skey: spoke_slot_label(workspace_name, skey, "sdist")
 
     actual_lines = []
     used_main = {}
@@ -196,10 +201,7 @@ def pin_build(pin, repo_ctx):
     unselected_groups = {}
     actual_pkg_ref = "//__actual/{}".format(target_name)
 
-    if transition_bzl:
-        lib_rule = "pycross_transitioning_library_proxy"
-        file_rule = "pycross_transitioning_file_proxy"
-    elif target_platform:
+    if transition_bzl or target_platform:
         lib_rule = "pycross_transitioning_library_proxy"
         file_rule = "pycross_transitioning_file_proxy"
     else:
@@ -207,7 +209,6 @@ def pin_build(pin, repo_ctx):
         file_rule = "pycross_file_proxy"
 
     lines = []
-
     has_transition = bool(transition_bzl or target_platform)
 
     def _emit_proxy(rule_name, name, actual_expr, is_testonly = False):
@@ -239,11 +240,13 @@ def pin_build(pin, repo_ctx):
             alias_target,
             target_dict,
             available_keys,
-            workspace_repo,
+            workspace_name,
+            state_repo = state_repo,
             no_variant_fallbacks = no_variant_fallbacks,
             helper_prefix = helper_prefix,
             packages = packages,
             used = used,
+            resolution_marker_exprs = resolution_marker_exprs,
         ))
         if has_transition:
             _emit_proxy(lib_rule, maybe_name, json.encode("{}:{}".format(actual_pkg_ref, actual_maybe_name)), is_testonly = testonly)
@@ -273,9 +276,10 @@ def pin_build(pin, repo_ctx):
 
             static_deps, conditional_by_cond = _build_extra_deps(
                 extra_constraints,
-                lock_ref,
+                workspace_name,
+                state_repo,
                 packages,
-                workspace_repo,
+                resolution_marker_exprs,
                 out_lines,
                 out_used,
                 avail_cache,
@@ -286,9 +290,10 @@ def pin_build(pin, repo_ctx):
                 pkg_emitted = True
                 base_sel = target_select(
                     pin_target_dict,
-                    lock_ref,
-                    workspace_repo,
+                    pkg_label_fn,
+                    state_repo,
                     no_variant_fallbacks = no_variant_fallbacks,
+                    resolution_marker_exprs = resolution_marker_exprs,
                 )
                 unselected_groups.update(base_sel.unselected_groups)
                 _emit_library_proxy_with_deps(
@@ -330,16 +335,17 @@ def pin_build(pin, repo_ctx):
 
                 static_deps, conditional_by_cond = _build_extra_deps(
                     branch_extra_constraints,
-                    lock_ref,
+                    workspace_name,
+                    state_repo,
                     packages,
-                    workspace_repo,
+                    resolution_marker_exprs,
                     out_lines,
                     out_used,
                     avail_cache,
                     group_cache,
                 )
                 if not static_deps and not conditional_by_cond:
-                    branch_target_labels[pin_constraint] = lock_ref + base_key
+                    branch_target_labels[pin_constraint] = pkg_label_fn(base_key)
                     continue
 
                 has_pkg_extras = True
@@ -357,7 +363,7 @@ def pin_build(pin, repo_ctx):
                         out_lines,
                         out_used,
                         helper_name,
-                        json.encode(lock_ref + base_key),
+                        json.encode(pkg_label_fn(base_key)),
                         static_deps,
                         conditional_by_cond,
                         is_testonly = testonly,
@@ -369,8 +375,9 @@ def pin_build(pin, repo_ctx):
                 pkg_sel = target_select(
                     branch_target_labels,
                     "",
-                    workspace_repo,
+                    state_repo,
                     no_variant_fallbacks = no_variant_fallbacks,
+                    resolution_marker_exprs = resolution_marker_exprs,
                 )
                 unselected_groups.update(pkg_sel.unselected_groups)
                 if has_transition:
@@ -382,23 +389,63 @@ def pin_build(pin, repo_ctx):
                     actual_pkg_label = pkg_sel.label
 
         if not pkg_emitted:
-            actual_pkg = proxy_actual(actual_lines, pin_target_dict, lock_ref, workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
+            actual_pkg = proxy_actual(
+                actual_lines,
+                pin_target_dict,
+                pkg_label_fn,
+                state_repo,
+                "pkg",
+                actual_pkg_ref,
+                has_transition = has_transition,
+                no_variant_fallbacks = no_variant_fallbacks,
+                resolution_marker_exprs = resolution_marker_exprs,
+            )
             unselected_groups.update(actual_pkg.unselected_groups)
             _emit_proxy(lib_rule, pkg_target_name, actual_pkg.expr, is_testonly = testonly)
             actual_pkg_label = actual_pkg.label
 
-        actual_wheel = proxy_actual(actual_lines, pin_target_dict, wheel_ref, workspace_repo, "wheel", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
+        actual_wheel = proxy_actual(
+            actual_lines,
+            pin_target_dict,
+            wheel_label_fn,
+            state_repo,
+            "wheel",
+            actual_pkg_ref,
+            has_transition = has_transition,
+            no_variant_fallbacks = no_variant_fallbacks,
+            resolution_marker_exprs = resolution_marker_exprs,
+        )
         unselected_groups.update(actual_wheel.unselected_groups)
         _emit_proxy(file_rule, safe_name(target_name, "wheel"), actual_wheel.expr)
 
-        actual_dist_info = proxy_actual(actual_lines, pin_target_dict, lock_dist_info_prefix(workspace_repo), workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
+        actual_dist_info = proxy_actual(
+            actual_lines,
+            pin_target_dict,
+            dist_info_label_fn,
+            state_repo,
+            "dist_info",
+            actual_pkg_ref,
+            has_transition = has_transition,
+            no_variant_fallbacks = no_variant_fallbacks,
+            resolution_marker_exprs = resolution_marker_exprs,
+        )
         unselected_groups.update(actual_dist_info.unselected_groups)
         _emit_proxy(file_rule, safe_name(target_name, "dist_info"), actual_dist_info.expr)
         lines.extend(alias(safe_name(target_name, "data"), ":" + pkg_target_name, trailing_blank = False))
 
         if extras_dict:
             if has_pkg_extras:
-                actual_base = proxy_actual(actual_lines, pin_target_dict, lock_ref, workspace_repo, "base", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
+                actual_base = proxy_actual(
+                    actual_lines,
+                    pin_target_dict,
+                    pkg_label_fn,
+                    state_repo,
+                    "base",
+                    actual_pkg_ref,
+                    has_transition = has_transition,
+                    no_variant_fallbacks = no_variant_fallbacks,
+                    resolution_marker_exprs = resolution_marker_exprs,
+                )
                 unselected_groups.update(actual_base.unselected_groups)
                 _emit_proxy(lib_rule, "[]", actual_base.expr, is_testonly = testonly)
             else:
@@ -408,20 +455,31 @@ def pin_build(pin, repo_ctx):
             actual_sdist = proxy_actual(
                 actual_lines,
                 sdist_target_dict,
-                sdist_ref,
-                workspace_repo,
+                sdist_label_fn,
+                state_repo,
                 "sdist",
                 actual_pkg_ref,
                 has_transition = has_transition,
                 no_variant_fallbacks = no_variant_fallbacks,
                 all_target_dict = pin_target_dict,
                 fallback_target = NO_MATCH_ERROR_TARGET,
+                resolution_marker_exprs = resolution_marker_exprs,
             )
             unselected_groups.update(actual_sdist.unselected_groups)
             _emit_proxy(file_rule, safe_name(target_name, "sdist"), actual_sdist.expr)
 
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
-        actual_extra = proxy_actual(actual_lines, extra_target_dict, lock_ref, workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
+        actual_extra = proxy_actual(
+            actual_lines,
+            extra_target_dict,
+            pkg_label_fn,
+            state_repo,
+            "extra_{}".format(extra_name),
+            actual_pkg_ref,
+            has_transition = has_transition,
+            no_variant_fallbacks = no_variant_fallbacks,
+            resolution_marker_exprs = resolution_marker_exprs,
+        )
         unselected_groups.update(actual_extra.unselected_groups)
         _emit_proxy(lib_rule, "[{}]".format(extra_name), actual_extra.expr, is_testonly = testonly)
         _emit_maybe_target(
@@ -514,29 +572,42 @@ def append_root_aliases(root_build_lines, grouped_pins):
         for extra_name, _extra_target in sorted(group["extras"].items()):
             root_build_lines.extend(alias("{}[{}]".format(base_pin_name, extra_name), "//{}:[{}]".format(us_name, extra_name)))
 
-def emit_pin_directories(rctx, grouped_pins, packages, workspace_repo, no_variant_fallbacks, target_platform, has_flags, testonly_pins_set, resolution_marker_exprs = None):
+def emit_pin_directories(
+        rctx,
+        grouped_pins,
+        packages,
+        workspace_name,
+        no_variant_fallbacks,
+        target_platform,
+        has_flags,
+        testonly_pins_set,
+        state_repo = None,
+        resolution_marker_exprs = None):
     """Generate `<pkg>/BUILD.bazel` (and `__actual/<pkg>/BUILD.bazel`) for each pinned package.
 
     Args:
         rctx: Repository context.
         grouped_pins: Dict of base pin name -> `{"base_target", "extras"}`.
-        packages: Lock packages dict.
-        workspace_repo: Name of the workspace (backing) repo.
+        packages: Slimmed member packages dict keyed by version-free slot key.
+        workspace_name: Workspace name.
         no_variant_fallbacks: Result of variant_fallbacks.
         target_platform: Optional platform label for transitioning proxies.
         has_flags: Whether `_transition.bzl` was generated for this repo.
         testonly_pins_set: Set/dict of pin names marked testonly.
-        resolution_marker_exprs: Optional lock `resolution_marker_exprs` dict.
+        state_repo: Optional apparent name of `@<ws>__state` (defaults to `state_repo_name(workspace_name)`).
+        resolution_marker_exprs: Optional member `resolution_marker_exprs` dict.
 
     Returns:
         Dict of `{group_name: set_suffixes}` for all `_unselected_all_*` groups referenced.
     """
     repo_ctx = pin_repo_context(
-        workspace_repo = workspace_repo,
+        workspace_name = workspace_name,
+        state_repo = state_repo or state_repo_name(workspace_name),
         no_variant_fallbacks = no_variant_fallbacks,
         target_platform = target_platform,
         transition_bzl = "//:_transition.bzl" if has_flags else None,
         packages = packages,
+        resolution_marker_exprs = resolution_marker_exprs,
     )
     variant_constraints = no_variant_fallbacks.sets if no_variant_fallbacks else None
     unselected_groups = {}
@@ -553,19 +624,19 @@ def emit_pin_directories(rctx, grouped_pins, packages, workspace_repo, no_varian
         maybe_available_keys = []
         sdist_target_dict = {}
         if base_target_dict:
-            for constraint, pkg_key in base_target_dict.items():
-                pkg = packages.get(pkg_key, {})
+            for constraint, slot_key in base_target_dict.items():
+                pkg = packages.get(slot_key, {})
                 if is_platform_specific(pkg):
-                    maybe_available_keys.append(pkg_key)
+                    maybe_available_keys.append(slot_key)
                 if pkg.get("sdist_file"):
-                    sdist_target_dict[constraint] = pkg_key
+                    sdist_target_dict[constraint] = slot_key
 
         extras_maybe_keys = {}
         for extra_name, extra_target_dict in extras_dict.items():
             extra_avail = []
-            for _constraint, pkg_key in extra_target_dict.items():
-                if is_key_platform_specific(packages, pkg_key):
-                    extra_avail.append(pkg_key)
+            for _constraint, slot_key in extra_target_dict.items():
+                if is_key_platform_specific(packages, slot_key):
+                    extra_avail.append(slot_key)
             if extra_avail:
                 extras_maybe_keys[extra_name] = extra_avail
 

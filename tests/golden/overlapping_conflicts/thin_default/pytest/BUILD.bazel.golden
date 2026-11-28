@@ -9,17 +9,17 @@ alias(
 
 pycross_transitioning_library_proxy(
     name = "pkg",
-    actual = "@golden_overlapping_conflicts__pkgs//_lock:pytest@7.4.4",
+    actual = "@golden_overlapping_conflicts__pkg_pytest//:pkg",
 )
 
 pycross_transitioning_file_proxy(
     name = "wheel",
-    actual = "@golden_overlapping_conflicts__pkgs//_wheel:pytest@7.4.4",
+    actual = "@golden_overlapping_conflicts__pkg_pytest//:wheel",
 )
 
 pycross_transitioning_file_proxy(
     name = "dist_info",
-    actual = "@golden_overlapping_conflicts__pkgs//_lock:_dist_info_pytest@7.4.4",
+    actual = "@golden_overlapping_conflicts__pkg_pytest//:dist_info",
 )
 
 alias(

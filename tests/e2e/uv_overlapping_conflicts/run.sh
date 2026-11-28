@@ -26,8 +26,8 @@ fi
 # configurations reach them. pytest has variant-gated edges, so it doesn't.
 installs=$(bazel aquery "$@" 'mnemonic("PycrossWheelInstall", deps(//:test_cpu_only + //:test_runtime_cpu + //:test_gpu_only_pytest + //:test_gpu_dev_pytest))' \
   --@runtime//_variants:extra_cpu=True --output=text 2>/dev/null | grep "^  Outputs:")
-for pkg in iniconfig@1.1.1 iniconfig@2.0.0 packaging@26.3 pluggy@1.7.0; do
-  count=$(grep -c "_lock/\(_reset_\)\?${pkg} (TreeArtifact)" <<<"$installs" || true)
+for pkg in "__pkg_iniconfig/\(_reset_\)\?pkg_s0" "__pkg_iniconfig/\(_reset_\)\?pkg_s1" "__pkg_packaging/\(_reset_\)\?pkg" "__pkg_pluggy/\(_reset_\)\?pkg"; do
+  count=$(grep -c "${pkg} (TreeArtifact)" <<<"$installs" || true)
   if [[ "$count" != 1 ]]; then
     echo "Expected 1 install of ${pkg}, got ${count}:"
     echo "$installs"

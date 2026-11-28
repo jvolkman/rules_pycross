@@ -9,17 +9,17 @@ alias(
 
 pycross_thin_library_proxy(
     name = "pkg",
-    actual = "@golden_plain__pkgs//_lock:gamma@1.0.0",
+    actual = "@golden_plain__pkg_gamma//:pkg",
 )
 
 pycross_file_proxy(
     name = "wheel",
-    actual = "@golden_plain__pkgs//_wheel:gamma@1.0.0",
+    actual = "@golden_plain__pkg_gamma//:wheel",
 )
 
 pycross_file_proxy(
     name = "dist_info",
-    actual = "@golden_plain__pkgs//_lock:_dist_info_gamma@1.0.0",
+    actual = "@golden_plain__pkg_gamma//:dist_info",
 )
 
 alias(
@@ -29,7 +29,7 @@ alias(
 alias(
     name = "maybe",
     actual = select({
-        "@golden_plain__pkgs//_lock:_wheel_available_gamma@1.0.0": ":pkg",
+        "@golden_plain__pkg_gamma//:_wheel_available": ":pkg",
         "//conditions:default": "//:_empty_library",
     }),
 )

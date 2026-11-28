@@ -17,8 +17,8 @@ load(":variant_util.bzl", "variant_item_qname")
 #   "label": stringify scalar Label during tag conversion
 #   "label_list": stringify each Label in a list during tag conversion
 #   "dedup": deduplicate list entries while preserving order
-# Note: fields consumed by package_repo / lock_render must also be listed in
-# package_repo.bzl:_PACKAGE_REPO_PKG_FIELDS.
+# Note: fields consumed by spoke_repo must also be forwarded in
+# spoke_repo.bzl:build_spoke_payloads.
 PASSTHROUGH_PACKAGE_ATTRS = {
     "build_backend": (None, "plain"),
     "build_target": (None, "label"),

@@ -1,17 +1,17 @@
 package(default_visibility = ["//visibility:public"])
 
 alias(
-    name = "beta_2_0_0",
+    name = "beta",
     actual = select({
-        "@golden_plain__pkgs//_lock:_wheel_available_beta@2.0.0": "@golden_plain__pkgs//_lock:_raw_beta@2.0.0",
+        "@golden_plain__pkg_beta//:_wheel_available": "@golden_plain__pkg_beta//:_raw",
         "//conditions:default": "//:_empty_library",
     }),
 )
 
 alias(
-    name = "gamma_1_0_0",
+    name = "gamma",
     actual = select({
-        "@golden_plain__pkgs//_lock:_wheel_available_gamma@1.0.0": "@golden_plain__pkgs//_lock:_raw_gamma@1.0.0",
+        "@golden_plain__pkg_gamma//:_wheel_available": "@golden_plain__pkg_gamma//:_raw",
         "//conditions:default": "//:_empty_library",
     }),
 )

@@ -9,18 +9,18 @@ alias(
 
 pycross_thin_library_proxy(
     name = "pkg",
-    actual = "@golden_plain__pkgs//_lock:devtool@0.1.0",
+    actual = "@golden_plain__pkg_devtool//:pkg",
     testonly = True,
 )
 
 pycross_file_proxy(
     name = "wheel",
-    actual = "@golden_plain__pkgs//_wheel:devtool@0.1.0",
+    actual = "@golden_plain__pkg_devtool//:wheel",
 )
 
 pycross_file_proxy(
     name = "dist_info",
-    actual = "@golden_plain__pkgs//_lock:_dist_info_devtool@0.1.0",
+    actual = "@golden_plain__pkg_devtool//:dist_info",
 )
 
 alias(

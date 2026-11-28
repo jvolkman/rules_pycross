@@ -1,9 +1,9 @@
 package(default_visibility = ["//visibility:public"])
 
 alias(
-    name = "win_only_1_0_0",
+    name = "win_only",
     actual = select({
-        "@golden_extras__pkgs//_lock:_marker_eval_sys_platform__win32_1913209870_match": "@golden_extras__pkgs//_lock:_raw_win-only@1.0.0",
+        "//_markers:_marker_eval_sys_platform__win32_1913209870_match": "@golden_extras__pkg_win_only//:_raw",
         "//conditions:default": "//:_empty_library",
     }),
 )
