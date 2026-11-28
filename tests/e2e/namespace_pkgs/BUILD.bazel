@@ -1,3 +1,4 @@
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 load("@rules_python//python:defs.bzl", "py_test")
 load("@uv//:requirements.bzl", "all_requirements", "requirement")
 
@@ -43,5 +44,28 @@ py_test(
     deps = [
         requirement("backports.entry-points-selectable"),
         requirement("backports.tarfile"),
+    ],
+)
+
+pycross_wheel_library(
+    name = "hybrid_core",
+    package_name = "hybrid-core",
+    package_version = "1.0.0",
+    wheel = "@hybrid_core_whl//:wheel",
+)
+
+pycross_wheel_library(
+    name = "hybrid_plugin",
+    package_name = "hybrid-plugin",
+    package_version = "1.0.0",
+    wheel = "@hybrid_plugin_whl//:wheel",
+)
+
+py_test(
+    name = "test_hybrid_namespace",
+    srcs = ["test_hybrid_namespace.py"],
+    deps = [
+        ":hybrid_core",
+        ":hybrid_plugin",
     ],
 )

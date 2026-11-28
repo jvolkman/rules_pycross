@@ -37,3 +37,6 @@ uv.repo(
     workspace = "uv",
 )
 use_repo(uv, "uv")
+
+hybrid_ns = use_extension("//:hybrid_ns.bzl", "hybrid_ns_ext")
+use_repo(hybrid_ns, "hybrid_core_whl", "hybrid_plugin_whl")
