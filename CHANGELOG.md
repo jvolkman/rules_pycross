@@ -178,8 +178,10 @@ All notable changes to this project will be documented in this file.
   indexes, patched-sdist `trusted_dirs` checks and Python 3.10 lazy `tomllib`
   imports in `inspect_package`, marker-gated sdist `deps`, Windows
   `ARM64`/`x86_32`/PyPy markers, `pylock` selection pruning and edge markers,
-  Poetry caret/tilde epochs, quote-aware PEP 503 parsing, and `inspect_package`
-  single-file, `.pyd`, script, and file-only sdist layouts.
+  Poetry caret/tilde epochs, quote-aware PEP 503 parsing, code-bearing `pkgutil`
+  / `pkg_resources` hybrid namespace packages (such as `apache-airflow-core`)
+  under `venvs_site_packages=yes`, and `inspect_package` single-file, `.pyd`,
+  script, and file-only sdist layouts.
 - **Wheel rules, installer, and patching.** Fixed single-file `.pyc` venv
   symlinks, plain `.whl` inputs to `pycross_wheel_transform`, Windows `RECORD`
   paths, `modules_mapping` Windows/PyPy ABI stripping, and atomic patching of

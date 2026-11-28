@@ -605,39 +605,132 @@ class InspectPackageTest(unittest.TestCase):
 
     def test_namespace_init_classification(self):
         pkgutil_stub = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+        stub = {"pkg/sub"}
+        hybrid = {"pkg/__init__.py", "pkg/sub"}
+        regular = {"pkg"}
         cases = {
-            # Namespace stubs.
-            "pkgutil_one_liner": (pkgutil_stub, True),
-            "pkgutil_import": ("import pkgutil\n__path__ = pkgutil.extend_path(__path__, __name__)\n", True),
-            "from_import": ("from pkgutil import extend_path\n__path__ = extend_path(__path__, __name__)\n", True),
+            # Pure namespace stubs (drop __init__.py).
+            "pkgutil_one_liner": (pkgutil_stub, stub),
+            "pkgutil_import": ("import pkgutil\n__path__ = pkgutil.extend_path(__path__, __name__)\n", stub),
+            "from_import": ("from pkgutil import extend_path\n__path__ = extend_path(__path__, __name__)\n", stub),
+            "future_import_stub": (
+                "from __future__ import annotations\n"
+                "from pkgutil import extend_path\n"
+                "__path__ = extend_path(__path__, __name__)\n",
+                stub,
+            ),
             "docstring_stub": (
                 '"""Namespace package.\n\nShared by several distributions.\n"""\n'
                 "__import__('pkg_resources').declare_namespace(__name__)\n",
-                True,
+                stub,
             ),
             "try_except_dual_stub": (
                 "try:\n"
                 "    __import__('pkg_resources').declare_namespace(__name__)\n"
                 "except ImportError:\n"
                 "    __path__ = __import__('pkgutil').extend_path(__path__, __name__)\n",
-                True,
+                stub,
             ),
-            # Regular packages.
-            "extend_path_with_version": (pkgutil_stub + "__version__ = '1.0'\n", False),
+            # Code-bearing hybrid namespaces (split dir, keep __init__.py).
+            "extend_path_with_version": (pkgutil_stub + "__version__ = '1.0'\n", hybrid),
+            "declare_namespace_with_version": (
+                "__import__('pkg_resources').declare_namespace(__name__)\n__version__ = '1.0'\n",
+                hybrid,
+            ),
+            "extend_path_under_top_level_if": (
+                "import sys\n"
+                "if sys.version_info >= (3, 0):\n"
+                "    __path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+                "VALUE = 1\n",
+                hybrid,
+            ),
+            "extend_path_annotated_assign": (
+                "__path__: list[str] = __import__('pkgutil').extend_path(__path__, __name__)\nVALUE = 1\n",
+                hybrid,
+            ),
+            # Regular packages (keep whole dir).
+            "extend_path_inside_def": (
+                "import pkgutil\ndef helper():\n    __path__ = pkgutil.extend_path(__path__, __name__)\n",
+                regular,
+            ),
+            "extend_path_inside_class": (
+                "import pkgutil\nclass Helper:\n    __path__ = pkgutil.extend_path(__path__, __name__)\n",
+                regular,
+            ),
             "comment_mentions_declare_namespace": (
                 "# Unlike pkg_resources.declare_namespace, this is a regular package.\nVALUE = 1\n",
-                False,
+                regular,
             ),
-            "defines_declare_namespace": ("def declare_namespace(packageName):\n    pass\n", False),
-            "empty": ("", False),
-            "imports_only": ("import pkgutil\n", False),
-            "syntax_error": ("def (\n", False),
+            "defines_declare_namespace": ("def declare_namespace(packageName):\n    pass\n", regular),
+            "empty": ("", regular),
+            "imports_only": ("import pkgutil\n", regular),
+            "syntax_error": ("def (\n", regular),
         }
-        for name, (init, is_namespace) in cases.items():
+        for name, (init, expected) in cases.items():
             with self.subTest(name):
                 files = {"pkg/__init__.py": init, "pkg/sub/__init__.py": ""}
-                expected = {"pkg/sub"} if is_namespace else {"pkg"}
                 self.assertEqual(_resolve_top_level_paths(set(files), {"pkg"}, files.get), expected)
+
+    def test_wheel_hybrid_namespace_package(self):
+        """Code-bearing extend_path packages (e.g. airflow) split top-level while keeping __init__.py and asset dirs."""
+        hybrid_init = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n__version__ = '3.4.0'\n"
+        wheel_files = {
+            "myfw/__init__.py": hybrid_init,
+            "myfw/__pycache__/__init__.cpython-314.pyc": b"",
+            "myfw/config.py": "SETTING = 1\n",
+            "myfw/api/__init__.py": "",
+            "myfw/api/routes.py": "",
+            "myfw/ui/index.html": "<html></html>",
+            "myfw/ui/assets/app.js": "console.log(1);",
+            "myfw/providers/builtin/__init__.py": "",
+            "myfw/native/ext.so": b"",
+            "myfw/native/data.txt": "x",
+            "myfw/libs/libfoo.dylib": b"",
+            "myfw/libs/README.txt": "lib",
+            "myfw/subns/__init__.py": hybrid_init,
+            "myfw/subns/child/__init__.py": "",
+            "myfw/subns/assets/logo.svg": "<svg/>",
+            "myfw_core-3.4.0.dist-info/METADATA": "Name: myfw-core\nVersion: 3.4.0\n",
+        }
+        wheel_path = self.create_zip("myfw_core-3.4.0-py3-none-any.whl", wheel_files)
+        expected = [
+            "myfw/__init__.py",
+            "myfw/api",
+            "myfw/config.py",
+            "myfw/libs/README.txt",
+            "myfw/libs/libfoo.dylib",
+            "myfw/native/data.txt",
+            "myfw/native/ext.so",
+            "myfw/providers/builtin",
+            "myfw/subns/__init__.py",
+            "myfw/subns/assets",
+            "myfw/subns/child",
+            "myfw/ui",
+        ]
+        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], expected)
+
+        # Install-time validation (find_installed_site_paths) must agree with inspect_wheel.
+        lib_dir = self.temp_path / "hybrid_site_packages"
+        for rel, content in wheel_files.items():
+            if rel.startswith("myfw_core-"):
+                continue
+            target = lib_dir / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if isinstance(content, bytes):
+                target.write_bytes(content)
+            else:
+                target.write_text(content, encoding="utf-8")
+        self.assertEqual(inspect_package_mod.find_installed_site_paths(lib_dir), expected)
+
+        # Standalone hybrid package with only __init__.py keeps it so sibling wheels can extend it.
+        init_only = self.create_zip(
+            "meta_ns-1.0-py3-none-any.whl",
+            {
+                "meta_ns/__init__.py": hybrid_init,
+                "meta_ns-1.0.dist-info/METADATA": "Name: meta-ns\nVersion: 1.0\n",
+            },
+        )
+        self.assertEqual(inspect_wheel(init_only)["site_paths"], ["meta_ns/__init__.py"])
 
     def test_resolve_top_level_paths(self):
         pkgutil_init = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"

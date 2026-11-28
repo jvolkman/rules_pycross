@@ -73,19 +73,45 @@ def _is_namespace_call(node: ast.AST, function: str, args: tuple[str, ...]) -> b
     return all(_is_name(arg, name) for arg, name in zip(node.args, args))
 
 
-def _is_pkgutil_namespace_init(content: str) -> bool:
-    """Whether an __init__.py is a pure pkgutil- or pkg_resources-style namespace package stub.
+def _is_namespace_declaration(node: ast.stmt) -> bool:
+    """Whether a statement is a pkgutil.extend_path or pkg_resources.declare_namespace call."""
+    if (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and _is_name(node.targets[0], "__path__")
+        and _is_namespace_call(node.value, "extend_path", ("__path__", "__name__"))
+    ):
+        return True
+    if (
+        isinstance(node, ast.AnnAssign)
+        and node.value is not None
+        and _is_name(node.target, "__path__")
+        and _is_namespace_call(node.value, "extend_path", ("__path__", "__name__"))
+    ):
+        return True
+    return isinstance(node, ast.Expr) and _is_namespace_call(node.value, "declare_namespace", ("__name__",))
 
-    Only stubs qualify: every statement (also inside try/except/else/finally) must be a docstring,
-    `pass`, an import of pkgutil/pkg_resources (or of extend_path/declare_namespace from them),
-    `__path__ = <...>extend_path(__path__, __name__)`, or `<...>declare_namespace(__name__)`, with
-    at least one declaration. Anything else (real code, `__version__`, a module that merely defines
-    or mentions these functions, like setuptools' pkg_resources) is a regular package.
+
+def _classify_namespace_init(content: str) -> str:
+    """Classify an __init__.py as a pure namespace stub, a code-bearing hybrid namespace, or regular.
+
+    Returns:
+        * "stub": every statement (including inside try/except/else/finally) is a docstring,
+          `pass`, an import of pkgutil/pkg_resources (or extend_path/declare_namespace from them),
+          or a namespace declaration, with at least one declaration. Multiple wheels may ship
+          identical stubs, so `__init__.py` is omitted when splitting the directory.
+        * "hybrid": contains a top-level (module body, or nested only in top-level try/if blocks,
+          never inside functions or classes) `__path__ = ...extend_path(__path__, __name__)` or
+          `...declare_namespace(__name__)` alongside real package code (e.g. `airflow/__init__.py`).
+          The directory is split so sibling wheels can contribute subpackages, while `__init__.py`
+          itself is kept.
+        * "regular": everything else (including modules like setuptools' pkg_resources that only
+          define or call these functions inside functions).
     """
     try:
         tree = ast.parse(content)
     except (SyntaxError, ValueError):
-        return False
+        return "regular"
 
     declarations = 0
 
@@ -105,32 +131,44 @@ def _is_pkgutil_namespace_init(content: str) -> bool:
                     return False
                 continue
             if isinstance(node, ast.ImportFrom):
+                if node.level != 0:
+                    return False
+                if node.module == "__future__":
+                    continue
                 if node.module not in _NAMESPACE_MODULES or not all(
                     alias.name in _NAMESPACE_FUNCTIONS and alias.asname is None for alias in node.names
                 ):
                     return False
                 continue
-            if (
-                isinstance(node, ast.Assign)
-                and len(node.targets) == 1
-                and _is_name(node.targets[0], "__path__")
-                and _is_namespace_call(node.value, "extend_path", ("__path__", "__name__"))
-            ):
-                declarations += 1
-                continue
-            if isinstance(node, ast.Expr) and _is_namespace_call(node.value, "declare_namespace", ("__name__",)):
+            if _is_namespace_declaration(node):
                 declarations += 1
                 continue
             if isinstance(node, ast.Try):
-                if not all(
-                    is_stub(body) for body in [node.body, node.orelse, node.finalbody] + [h.body for h in node.handlers]
-                ):
+                bodies = [node.body, node.orelse, node.finalbody] + [h.body for h in node.handlers]
+                if not all(is_stub(body) for body in bodies):
                     return False
                 continue
             return False
         return True
 
-    return is_stub(tree.body) and declarations > 0
+    def has_top_level_declaration(statements: list[ast.stmt]) -> bool:
+        for node in statements:
+            if _is_namespace_declaration(node):
+                return True
+            if isinstance(node, ast.Try):
+                bodies = [node.body, node.orelse, node.finalbody] + [h.body for h in node.handlers]
+                if any(has_top_level_declaration(body) for body in bodies):
+                    return True
+            elif isinstance(node, ast.If):
+                if has_top_level_declaration(node.body) or has_top_level_declaration(node.orelse):
+                    return True
+        return False
+
+    if is_stub(tree.body) and declarations > 0:
+        return "stub"
+    if has_top_level_declaration(tree.body):
+        return "hybrid"
+    return "regular"
 
 
 def _extract_module_name(filename: str) -> str | None:
@@ -257,51 +295,74 @@ def _resolve_top_level_paths(
 
     # dir -> (file names, subdirectory names) directly inside it.
     children: dict[str, tuple[set[str], set[str]]] = {}
-    # Directories that contain a shared library at any depth.
+    # Directories that contain a shared library or a Python module at any depth.
     library_dirs: set[str] = set()
+    python_dirs: set[str] = set()
     for f in all_files:
         parent, _, name = f.rpartition("/")
         if not parent:
             continue
         children.setdefault(parent, (set(), set()))[0].add(name)
         is_library = _is_shared_library(name)
+        is_python = bool(_extract_module_name(name))
         while parent:
             if is_library:
                 library_dirs.add(parent)
+            if is_python:
+                python_dirs.add(parent)
             grandparent, _, dir_name = parent.rpartition("/")
             if grandparent:
                 children.setdefault(grandparent, (set(), set()))[1].add(dir_name)
             parent = grandparent
 
-    def is_namespace(dir_path: str) -> bool:
+    def namespace_kind(dir_path: str, parent_is_hybrid: bool) -> str:
         init = f"{dir_path}/__init__.py"
         if init not in init_files:
-            return True
+            # Under a code-bearing hybrid namespace (e.g. airflow/), only treat
+            # __init__-less subdirectories that contain Python modules as PEP 420
+            # sub-namespaces; static asset trees like airflow/ui/ stay linked whole.
+            if parent_is_hybrid and dir_path not in python_dirs:
+                return "regular"
+            return "implicit"
         if dir_path in _WELL_KNOWN_NAMESPACE_PACKAGES:
-            return True
+            return "stub"
         content = read_file(init) if read_file else None
-        return bool(content) and _is_pkgutil_namespace_init(content)
+        return _classify_namespace_init(content) if content else "regular"
 
-    def resolve(dir_path: str, in_namespace: bool, split_libraries: bool) -> list[str]:
+    def resolve(
+        dir_path: str,
+        in_namespace: bool,
+        split_libraries: bool,
+        parent_is_hybrid: bool = False,
+    ) -> list[str]:
         # Namespaces are only detected directly below other namespaces: other distributions can't
         # install into a regular package's subdirectories. Directories holding shared libraries
         # are split below a namespace (split_libraries), never at the top level.
-        namespace = in_namespace and is_namespace(dir_path)
+        ns_kind = namespace_kind(dir_path, parent_is_hybrid) if in_namespace else "regular"
+        is_ns = ns_kind != "regular"
         split = split_libraries and dir_path in library_dirs
-        if not namespace and not split:
+        if not is_ns and not split:
             # Regular package (or plain directory): can be linked directly.
             return [dir_path]
 
         # Namespace package, or a directory holding shared libraries: link its files and descend
-        # into its subdirectories. A namespace's own __init__.py (if any) is shared by every
-        # distribution, so it isn't linked, and neither are its bytecode caches.
+        # into its subdirectories. A pure stub/well-known namespace's own __init__.py is shared by
+        # every distribution so it is omitted; a code-bearing hybrid namespace keeps its __init__.py.
+        drop_init = ns_kind in ("implicit", "stub")
         file_names, subdir_names = children.get(dir_path, (set(), set()))
-        kept = [f"{dir_path}/{name}" for name in file_names if not (namespace and name == "__init__.py")]
+        kept = [f"{dir_path}/{name}" for name in file_names if not (drop_init and name == "__init__.py")]
         for name in sorted(subdir_names):
-            if namespace and name == "__pycache__":
+            if is_ns and name == "__pycache__":
                 continue
-            kept.extend(resolve(f"{dir_path}/{name}", namespace, True))
-        # A namespace dir with no concrete sub-packages or files resolves to nothing.
+            kept.extend(
+                resolve(
+                    f"{dir_path}/{name}",
+                    in_namespace=is_ns,
+                    split_libraries=True,
+                    parent_is_hybrid=(ns_kind == "hybrid"),
+                )
+            )
+        # A pure namespace dir with no concrete sub-packages or files resolves to nothing.
         return kept
 
     result = set()
