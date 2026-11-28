@@ -217,7 +217,7 @@ def _thin_package_repo_impl(rctx):
     variants_content = variants_build(
         variant_info,
         state_repo,
-        getattr(rctx, "original_name", "") or "<repo>",
+        rctx.attr.member_name,
         unselected_groups = unselected_groups,
         pins_by_set = pins_by_set,
         defaults_by_set = defaults_by_set,

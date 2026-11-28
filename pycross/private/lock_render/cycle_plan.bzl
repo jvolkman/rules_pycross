@@ -1,7 +1,7 @@
 """Pure reachability planning for cycle SCC members with PEP 508 markers.
 
 Computes unconditional in-cycle dependencies and grouped conditional reachability
-checks at repo-rule time (used by `//pycross/private/lock_render:cycles.bzl`).
+checks at repo-rule time (used by `//pycross/private:spoke_repo.bzl`).
 
 Optimization: members that form unconditional linear chains are grouped together
 and share a single reachability check.  For example, in a cycle where
@@ -12,7 +12,7 @@ reduces the number of evaluator targets from N×(N-1) towards N×G where G is
 the number of reachability groups (G ≤ N-1).
 """
 
-load("//pycross/private:util.bzl", "marker_evaluator_name", "marker_uses_extra", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "hex_hash8", "marker_evaluator_name", "marker_uses_extra", "parse_package_key", "sanitize_name")
 
 def find_unconditional_deps(member, other_members, edges):
     """Finds all members unconditionally reachable from member within the cycle.
@@ -306,9 +306,10 @@ def plan_cycle_member_deps(member, edges, marker_extra_cache = None):
         eval_match_name = (
             marker_evaluator_name(single_marker, single_extra, extra_cache = marker_extra_cache) + "_match" if single_gate else None
         )
-        pair_name = "_cycle_needed_{}_{}".format(
+        pair_name = "_cycle_needed_{}__{}_{}".format(
             sanitize_name(source),
             sanitize_name(representative),
+            hex_hash8("{}|{}".format(source, representative)),
         )
         conditional_groups.append(struct(
             representative = representative,

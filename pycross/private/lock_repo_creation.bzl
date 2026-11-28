@@ -16,6 +16,7 @@ load(
     "VARIANTS_PACKAGE",
     "VARIANTS_STRING_FLAG_TARGET",
     "build_repo_name",
+    "is_extras_proxy",
     "spoke_repo_name",
     "spoke_sdist_deps_target",
     "spoke_sdist_target",
@@ -415,7 +416,7 @@ def create_repos(
         sdist_repo_map = {}
         default_known_packages = known_packages_by_repo[ws.repos[0].name] if ws.repos else []
         for pkg_key, pkg in sorted(merged_packages.items()):
-            if pkg.get("build_target") or sdist_builds_disallowed(pkg):
+            if is_extras_proxy(pkg_key, pkg) or pkg.get("build_target") or sdist_builds_disallowed(pkg):
                 continue
 
             sdist_file = pkg.get("sdist_file")
@@ -482,10 +483,16 @@ def create_repos(
             val = merged_lock.get(field)
             if val:
                 state_payload[field] = val
+        backend_tool_pkgs = {}
+        for bname in backend_names:
+            cfg = BACKEND_CONFIGS.get(bname)
+            if cfg:
+                for tp in cfg.get("tool_packages", []):
+                    backend_tool_pkgs[pypackaging.utils.canonicalize_name(tp)] = True
         known_base_packages = sorted({
             pypackaging.utils.canonicalize_name(parse_package_key(k).name): True
             for k in merged_packages.keys()
-            if not parse_package_key(k).extra
+            if not parse_package_key(k).extra and pypackaging.utils.canonicalize_name(parse_package_key(k).name) in backend_tool_pkgs
         }.keys())
         state_repo_attrs = dict(
             name = ws_state_repo,

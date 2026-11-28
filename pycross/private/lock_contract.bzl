@@ -206,6 +206,27 @@ def cycle_node_key(pkg_key, slot = ""):
     base = "{}[{}]".format(parts.name, parts.extra) if parts.extra else parts.name
     return "{}@{}".format(base, slot) if slot else base
 
+def slot_key_id(slot_key):
+    """Return a collision-free Bazel target identifier for a version-free `slot_key`.
+
+    Uses `__` delimiters between canonical package name, optional extra, and
+    optional fork slot so e.g. `foo@s0` (`foo__s0`) never collides with
+    `foo-s0` (`foo_s0`).
+
+    Args:
+        slot_key: Version-free slot key (`foo`, `foo@s0`, `foo[opt]`, `foo[opt]@s1`).
+
+    Returns:
+        Collision-free Bazel target identifier string.
+    """
+    parts = parse_package_key(slot_key)
+    out = underscore_name(parts.name)
+    if parts.extra:
+        out += "__e_" + underscore_name(parts.extra)
+    if parts.version:
+        out += "__" + parts.version
+    return out
+
 def spoke_slot_label(workspace_name, slot_key, kind = "pkg", subdir = ""):
     """Resolve a version-free `slot_key` (`name([extra])[@slot]`) to its spoke target label.
 

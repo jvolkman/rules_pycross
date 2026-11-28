@@ -6,10 +6,11 @@ load(
     "is_extras_proxy",
     "member_constraint_label",
     "member_marker_match_label",
+    "slot_key_id",
     "spoke_slot_label",
     "state_repo_name",
 )
-load("//pycross/private:util.bzl", "base_package_key", "is_wheel_platform_specific", "marker_evaluator_name", "sanitize_name")
+load("//pycross/private:util.bzl", "base_package_key", "is_wheel_platform_specific", "marker_evaluator_name")
 load(":common.bzl", "NO_VARIANT_PREFIX")
 load(":selects.bzl", "unselected_branch")
 
@@ -92,7 +93,7 @@ def availability_condition(lines, helper_prefix, slot_key, packages, workspace_n
     if is_wheel_platform_specific(wheel_pkg):
         _add_cond(spoke_slot_label(workspace_name, wheel_slot_key, "wheel_available"))
 
-    key_san = sanitize_name(slot_key)
+    key_san = slot_key_id(slot_key)
     marker_groups = []
     if extras_proxy and base_pkg.get("availability_markers"):
         marker_groups.append(("base", base_pkg["availability_markers"]))
@@ -173,7 +174,7 @@ def emit_maybe_alias(
             continue
         helper_name = "{}_{}".format(
             helper_prefix,
-            sanitize_name(slot_key),
+            slot_key_id(slot_key),
         )
         if slot_key not in emitted_helpers:
             emitted_helpers[slot_key] = helper_name

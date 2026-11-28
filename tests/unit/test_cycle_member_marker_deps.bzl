@@ -13,7 +13,7 @@ load("//pycross/private:repo_slots.bzl", "assign_fork_slots")
 load("//pycross/private:spoke_repo.bzl", "build_spoke_payloads", "render_spoke_build")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "marker_evaluator_name")
+load("//pycross/private:util.bzl", "hex_hash8", "marker_evaluator_name")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -651,8 +651,9 @@ def _test_repo_time_cycle_rendering_impl(env, _target):
     a_build = mh_spokes["a"]
     env.expect.that_str(a_build).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
     env.expect.that_int(a_build.count("_CYCLE_EDGES_JSON = ")).equals(1)
-    env.expect.that_str(a_build).contains('name = "_cycle_needed_a_c",')
-    env.expect.that_str(a_build).contains('":_cycle_needed_a_c_match": ["@ws__pkg_c//:_raw"]')
+    ac_pair = "_cycle_needed_a__c_{}".format(hex_hash8("a|c"))
+    env.expect.that_str(a_build).contains('name = "{}",'.format(ac_pair))
+    env.expect.that_str(a_build).contains('":{}_match": ["@ws__pkg_c//:_raw"]'.format(ac_pair))
     edges_rhs = a_build.split("_CYCLE_EDGES_JSON = ")[1].split("\n", 1)[0]
     decoded_edges = json.decode(json.decode(edges_rhs))
     env.expect.that_bool("a" in decoded_edges).equals(True)

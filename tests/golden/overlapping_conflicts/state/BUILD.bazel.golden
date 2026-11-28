@@ -1,7 +1,7 @@
-package(default_visibility = ["//visibility:public"])
-
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_item_projection", "variant_set_projection", "variant_state")
+
+package(default_visibility = ["//visibility:public"])
 
 exports_files(["reset.bzl"])
 

@@ -123,10 +123,10 @@ def _test_workspace_remote_slots_impl(env, target):
     env.expect.that_str(slots_v1["torch@2.9.1~bbbb2222"]).equals("s1")
 
     map_v1 = plan_workspace_remote_slots("ws_a", pkgs_v1, remote_v1, fork_slots = slots_v1)
-    env.expect.that_str(map_v1["req_whl_v1"]).equals("ws_a__whl_requests_py3_none_any")
-    env.expect.that_str(map_v1["req_sdist_v1"]).equals("ws_a__sdist_file_requests")
+    env.expect.that_str(map_v1["req_whl_v1"]).equals("ws_a__whl_requests__t_py3_none_any")
+    env.expect.that_str(map_v1["req_sdist_v1"]).equals("ws_a__sdistfile_requests")
     env.expect.that_str(sdist_slot_repo_name("ws_a", "requests@2.32.3", "")).equals("ws_a__sdist_requests")
-    env.expect.that_str(sdist_slot_repo_name("ws_a", "numpy@2.2.0", "s1")).equals("ws_a__sdist_numpy_s1")
+    env.expect.that_str(sdist_slot_repo_name("ws_a", "numpy@2.2.0", "s1")).equals("ws_a__sdist_numpy__s1")
 
     # Multi-source forks and PEP 427 build tags get distinct repo names.
     env.expect.that_bool(map_v1["t_a"] != map_v1["t_b"]).equals(True)
@@ -134,12 +134,64 @@ def _test_workspace_remote_slots_impl(env, target):
     env.expect.that_bool(map_v1["col1"] != map_v1["col2"]).equals(True)
 
     # Long wheel tag names are truncated + hashed to keep repo names bounded.
-    env.expect.that_bool(len(map_v1["long1"]) <= len("ws_a__whl_collide_") + 48).equals(True)
+    env.expect.that_bool(len(map_v1["long1"]) <= len("ws_a__whl_collide__t_") + 48).equals(True)
 
     # Workspace isolation: another workspace gets distinct repo names.
     map_ws_b = plan_workspace_remote_slots("ws_b", pkgs_v1, remote_v1, fork_slots = slots_v1)
-    env.expect.that_str(map_ws_b["req_whl_v1"]).equals("ws_b__whl_requests_py3_none_any")
+    env.expect.that_str(map_ws_b["req_whl_v1"]).equals("ws_b__whl_requests__t_py3_none_any")
     env.expect.that_bool(map_v1["req_whl_v1"] != map_ws_b["req_whl_v1"]).equals(True)
+
+    # Cross-package delimiter collision safety:
+    # foo@s0 vs foo-s0 (sdist, sdistfile, wheel), foo + py2.py3 vs foo-py2 + py3,
+    # and file-foo sdist vs foo sdistfile never collide and stay version-free across bumps.
+    def _collision_case(ver_hi, ver_py2):
+        cpkgs = {
+            "foo@2.0.0": {
+                "wheel_candidates": [{"filename": "foo-2.0.0-py2.py3-none-any.whl", "file_reference": {"key": "f_lo_w"}}],
+                "sdist_file": {"key": "f_lo_s"},
+            },
+            "foo@{}".format(ver_hi): {
+                "wheel_candidates": [{"filename": "foo-{}-py3-none-any.whl".format(ver_hi), "file_reference": {"key": "f_hi_w"}}],
+                "sdist_file": {"key": "f_hi_s"},
+            },
+            "foo-s0@1.0.0": {
+                "wheel_candidates": [{"filename": "foo_s0-1.0.0-py3-none-any.whl", "file_reference": {"key": "fs0_w"}}],
+                "sdist_file": {"key": "fs0_s"},
+            },
+            "foo-py2@{}".format(ver_py2): {
+                "wheel_candidates": [{"filename": "foo_py2-{}-py3-none-any.whl".format(ver_py2), "file_reference": {"key": "fpy2_w_" + ver_py2}}],
+            },
+            "file-foo@1.0.0": {
+                "sdist_file": {"key": "ff_s"},
+            },
+        }
+        cremote = {
+            "f_lo_w": {"name": "foo-2.0.0-py2.py3-none-any.whl"},
+            "f_lo_s": {"name": "foo-2.0.0.tar.gz"},
+            "f_hi_w": {"name": "foo-{}-py3-none-any.whl".format(ver_hi)},
+            "f_hi_s": {"name": "foo-{}.tar.gz".format(ver_hi)},
+            "fs0_w": {"name": "foo_s0-1.0.0-py3-none-any.whl"},
+            "fs0_s": {"name": "foo-s0-1.0.0.tar.gz"},
+            "fpy2_w_" + ver_py2: {"name": "foo_py2-{}-py3-none-any.whl".format(ver_py2)},
+            "ff_s": {"name": "file-foo-1.0.0.tar.gz"},
+        }
+        cslots = assign_fork_slots(cpkgs)
+        cmap = plan_workspace_remote_slots("ws", cpkgs, cremote, fork_slots = cslots)
+        sdist_repos = [
+            sdist_slot_repo_name("ws", k, cslots[k])
+            for k in sorted(cpkgs.keys())
+            if cpkgs[k].get("sdist_file")
+        ]
+        return cmap, sdist_repos
+
+    cmap_v1, csdist_v1 = _collision_case("9.0.0", "1.0.0")
+    cmap_v2, csdist_v2 = _collision_case("10.0.0", "2.0.0")
+    all_v1 = list(cmap_v1.values()) + csdist_v1
+    env.expect.that_int(len({r: True for r in all_v1})).equals(len(all_v1))
+    env.expect.that_str(cmap_v1["fpy2_w_1.0.0"]).equals(cmap_v2["fpy2_w_2.0.0"])
+    env.expect.that_str(cmap_v1["f_hi_w"]).equals(cmap_v2["f_hi_w"])
+    env.expect.that_str(cmap_v1["fs0_s"]).equals(cmap_v2["fs0_s"])
+    env.expect.that_collection(sorted(csdist_v1)).contains_exactly(sorted(csdist_v2))
 
     # Bumping requests 2.32.3 -> 2.32.4 and numpy 1.26.4/2.2.0 -> 1.26.5/2.2.1 preserves all repo names.
     pkgs_v2 = {

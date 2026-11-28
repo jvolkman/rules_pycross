@@ -69,28 +69,30 @@ def _wheel_raw_tag(filename):
         return "{}__{}-{}-{}".format(parts[2], parts[3], parts[4], parts[5])
     return stem
 
-def _disambiguate_repo_name(base_name, file_key, used_repo_names):
+def _disambiguate_repo_name(base_name, used_repo_names):
     if base_name not in used_repo_names:
         return base_name
-    hashed = "{}_{}".format(base_name, hex_hash8(file_key))
-    if hashed not in used_repo_names:
-        return hashed
     for idx in range(1, len(used_repo_names) + 2):
-        cand = "{}_{}".format(hashed, idx)
+        cand = "{}__d{}".format(base_name, idx)
         if cand not in used_repo_names:
             return cand
-    fail("Failed to assign unique repository name for {}".format(file_key))
+    fail("Failed to assign unique repository name for {}".format(base_name))
 
 def _slot_suffix(extra, slot):
     parts = []
     if extra:
-        parts.append("e_" + sanitize_name(extra))
+        parts.append("e_" + underscore_name(extra))
     if slot:
         parts.append(slot)
-    return ("_" + "_".join(parts)) if parts else ""
+    return ("__" + "__".join(parts)) if parts else ""
 
 def sdist_slot_repo_name(workspace_name, pkg_key, slot = ""):
     """Return the workspace-scoped, version-free `pycross_sdist_repo` name for `pkg_key`.
+
+    Uses `__` delimiters between canonical package name (`underscore_name`,
+    which never contains `__`), optional extra (`__e_<extra>`), and optional
+    fork slot (`__<slot>`) so cross-package collisions (e.g. `foo@s0` vs
+    `foo-s0`) are impossible.
 
     Args:
         workspace_name: Workspace name.
@@ -98,7 +100,7 @@ def sdist_slot_repo_name(workspace_name, pkg_key, slot = ""):
         slot: Fork slot string (`""` or `"s0"`, `"s1"`, ...).
 
     Returns:
-        Repository name string like `<ws>__sdist_<pkg>` or `<ws>__sdist_<pkg>_s0`.
+        Repository name string like `<ws>__sdist_<pkg>` or `<ws>__sdist_<pkg>__s0`.
     """
     parts = parse_package_key(pkg_key)
     return "{}__sdist_{}{}".format(
@@ -110,10 +112,14 @@ def sdist_slot_repo_name(workspace_name, pkg_key, slot = ""):
 def plan_workspace_remote_slots(workspace_name, merged_packages, merged_remote_files, fork_slots = None):
     """Map every remote file key in a workspace to a version-free repository name.
 
-    Wheel repos use `<ws>__whl_<pkg>[_e_<extra>][_<slot>]_<tag_id>`, where
+    Wheel repos use `<ws>__whl_<pkg>[__e_<extra>][__<slot>]__t_<tag_id>`, where
     `<tag_id>` is the sanitized PEP 427 `{build}__py-abi-plat` (hashed to keep
     names <= 48 chars and prevent sanitization collisions). Sdist archive repos
-    use `<ws>__sdist_file_<pkg>[_e_<extra>][_<slot>]`.
+    use `<ws>__sdistfile_<pkg>[__e_<extra>][__<slot>]`. Using `__` field
+    delimiters and distinct `__sdist_` / `__sdistfile_` / `__whl_` prefixes
+    prevents any cross-package collision (such as `foo@s0` vs `foo-s0`,
+    `foo` + `py2.py3-none-any` vs `foo-py2` + `py3-none-any`, or `file-foo`
+    sdist repo vs `foo` sdist archive).
 
     Args:
         workspace_name: Workspace name.
@@ -128,8 +134,20 @@ def plan_workspace_remote_slots(workspace_name, merged_packages, merged_remote_f
     file_key_to_repo = {}
     used_repo_names = {}
 
+    # Order packages by version-free (canonical_name, slot, extra) so routine
+    # version bumps never change iteration order.
+    ordered_pkg_keys = sorted(
+        merged_packages.keys(),
+        key = lambda k: (
+            pypackaging.utils.canonicalize_name(parse_package_key(k).name),
+            slots.get(k, ""),
+            parse_package_key(k).extra,
+            k,
+        ),
+    )
+
     # 1. Wheel candidates: deterministic tag-based slots per (package, extra, fork_slot).
-    for pkg_key in sorted(merged_packages.keys()):
+    for pkg_key in ordered_pkg_keys:
         pkg = merged_packages[pkg_key]
         candidates = pkg.get("wheel_candidates", [])
         if not candidates:
@@ -157,13 +175,13 @@ def plan_workspace_remote_slots(workspace_name, merged_packages, merged_remote_f
                 tag_id = "{}_{}".format(san_tag[:_TRUNCATED_TAG_PREFIX_LEN], hex_hash8(raw_tag))
             else:
                 tag_id = san_tag
-            base_repo = "{}__whl_{}{}_{}".format(workspace_name, us_pkg, suffix, tag_id)
-            repo_name = _disambiguate_repo_name(base_repo, file_key, used_repo_names)
+            base_repo = "{}__whl_{}{}__t_{}".format(workspace_name, us_pkg, suffix, tag_id)
+            repo_name = _disambiguate_repo_name(base_repo, used_repo_names)
             file_key_to_repo[file_key] = repo_name
             used_repo_names[repo_name] = True
 
     # 2. Sdist archive files: one version-free slot per (package, extra, fork_slot).
-    for pkg_key in sorted(merged_packages.keys()):
+    for pkg_key in ordered_pkg_keys:
         sdist_file = merged_packages[pkg_key].get("sdist_file")
         if not sdist_file:
             continue
@@ -173,8 +191,8 @@ def plan_workspace_remote_slots(workspace_name, merged_packages, merged_remote_f
         parts = parse_package_key(pkg_key)
         us_pkg = underscore_name(parts.name)
         suffix = _slot_suffix(parts.extra, slots.get(pkg_key, ""))
-        base_repo = "{}__sdist_file_{}{}".format(workspace_name, us_pkg, suffix)
-        repo_name = _disambiguate_repo_name(base_repo, file_key, used_repo_names)
+        base_repo = "{}__sdistfile_{}{}".format(workspace_name, us_pkg, suffix)
+        repo_name = _disambiguate_repo_name(base_repo, used_repo_names)
         file_key_to_repo[file_key] = repo_name
         used_repo_names[repo_name] = True
 
@@ -183,9 +201,9 @@ def plan_workspace_remote_slots(workspace_name, merged_packages, merged_remote_f
         if file_key in file_key_to_repo:
             continue
         filename = merged_remote_files[file_key]["name"]
-        prefix = "whl" if filename.lower().endswith(".whl") else "sdist_file"
-        base_repo = "{}__{}_unreferenced_{}".format(workspace_name, prefix, hex_hash8(file_key))
-        repo_name = _disambiguate_repo_name(base_repo, file_key, used_repo_names)
+        prefix = "whl" if filename.lower().endswith(".whl") else "sdistfile"
+        base_repo = "{}__{}__unreferenced_{}".format(workspace_name, prefix, hex_hash8(file_key))
+        repo_name = _disambiguate_repo_name(base_repo, used_repo_names)
         file_key_to_repo[file_key] = repo_name
         used_repo_names[repo_name] = True
 

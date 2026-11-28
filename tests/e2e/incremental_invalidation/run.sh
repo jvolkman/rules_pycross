@@ -2,9 +2,14 @@
 set -euo pipefail
 
 # Verifies O(1) incremental repo invalidation on a single-package version bump (#443):
-# bumping idna 3.7 -> 3.10 invalidates ONLY @uv__pkg_idna and @uv__whl_idna_py3_none_any,
-# leaving @uv (thin member), @uv__state, @uv__pkg_cowsay, @uv__pkg_iniconfig, and their
-# wheel repos completely untouched.
+# bumping six 1.16.0 -> 1.17.0 invalidates ONLY @uv__pkg_six and
+# @uv__whl_six__t_py2_py3_none_any, leaving:
+#   - @uv (thin member facade)
+#   - @uv__state (workspace variant state, reset.bzl, _backend/)
+#   - @uv__pkg_python_dateutil (upstream spoke depending directly on six)
+#   - @uv__pkg_cowsay (sibling spoke)
+#   - their wheel repos
+# completely untouched.
 
 cd "$(dirname "$0")"
 
@@ -17,8 +22,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 1. Warm build with idna 3.7.
-bazel test "$@" --test_env=EXPECTED_IDNA_VERSION=3.7 //:test_all --test_output=errors
+# 1. Warm build with six 1.16.0 and active conflict variant extra_a (fetches @uv__state).
+bazel test "$@" \
+  --@uv//_variants=extra_a \
+  --test_env=EXPECTED_SIX_VERSION=1.16.0 \
+  //:test_all --test_output=errors
 
 output_base="$(bazel info output_base)"
 python3 - "$output_base/external" "$tmp_dir/before.json" <<'PY'
@@ -42,10 +50,11 @@ with open(out_path, "w", encoding="utf-8") as fh:
     json.dump(snap, fh, indent=2, sort_keys=True)
 PY
 
-# 2. Bump ONLY idna (3.7 -> 3.10) and run an incremental build with a Bazel profile.
+# 2. Bump ONLY six (1.16.0 -> 1.17.0) and run an incremental build with a Bazel profile.
 cp uv.lock.v2 uv.lock
 bazel test "$@" \
-  --test_env=EXPECTED_IDNA_VERSION=3.10 \
+  --@uv//_variants=extra_a \
+  --test_env=EXPECTED_SIX_VERSION=1.17.0 \
   --profile="$tmp_dir/inc_profile.json.gz" \
   --noslim_profile \
   //:test_all --test_output=errors
@@ -79,14 +88,15 @@ prefix = uv_entries[0][:-len("uv")]
 
 unchanged_short = [
     "uv",
+    "uv__state",
     "uv__pkg_cowsay",
-    "uv__pkg_iniconfig",
-    "uv__whl_cowsay_py3_none_any",
-    "uv__whl_iniconfig_py3_none_any",
+    "uv__pkg_python_dateutil",
+    "uv__whl_cowsay__t_py3_none_any",
+    "uv__whl_python_dateutil__t_py2_py3_none_any",
 ]
 changed_short = [
-    "uv__pkg_idna",
-    "uv__whl_idna_py3_none_any",
+    "uv__pkg_six",
+    "uv__whl_six__t_py2_py3_none_any",
 ]
 
 for short in unchanged_short:
@@ -135,6 +145,6 @@ assert not unexpected_fetches, (
 
 print(
     f"Verified O(1) incremental invalidation: "
-    f"reloaded={sorted(reloaded_repos)}, unchanged={len(unchanged_short)} repos"
+    f"reloaded={sorted(reloaded_repos)}, unchanged={len(unchanged_short)} repos (including @uv, @uv__state, upstream @uv__pkg_python_dateutil)"
 )
 PY

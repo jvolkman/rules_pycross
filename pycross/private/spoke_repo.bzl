@@ -139,7 +139,10 @@ def build_spoke_payloads(
     # Precompute version-free cycle edge maps and node -> (spoke, raw_target) tables once per SCC.
     scc_payloads = {}  # group_name -> {"edges": {...}, "node_targets": {...}}
     for group_name, scc in sorted(cycle_groups.items()):
-        resolved_members = sorted([m for m in scc if m in merged_packages])
+        resolved_members = sorted(
+            [m for m in scc if m in merged_packages],
+            key = lambda m: (cycle_node_key(m, fork_slots.get(m, "")), m),
+        )
         if len(resolved_members) <= 1:
             continue
         scc_set = {m: True for m in resolved_members}
@@ -170,7 +173,7 @@ def build_spoke_payloads(
                 edge_list.append(entry)
             if is_extras_proxy(m, pkg) and not has_unconditional_base and bkey in scc_set:
                 edge_list.append({"dep": cycle_node_key(bkey, fork_slots.get(bkey, ""))})
-            edges[m_node] = edge_list
+            edges[m_node] = sorted(edge_list, key = lambda e: (e["dep"], e.get("marker", "")))
         scc_payloads[group_name] = {
             "edges": edges,
             "node_targets": node_targets,
@@ -255,6 +258,7 @@ def build_spoke_payloads(
                         if dep_caller_st == "gated":
                             dep_entry["reset_gate_target"] = spoke_reset_gate_target(dep_slot, dp.extra)
                 deps.append(dep_entry)
+            deps = sorted(deps, key = lambda d: (d["spoke"], d["target"], d.get("marker", "")))
 
             entry = {
                 "pkg_key": pkg_key,
@@ -476,9 +480,6 @@ def render_spoke_build(payload):
                 eval_name = marker_evaluator_name(marker, extra, extra_cache = marker_extra_cache)
                 nomatch_evals[eval_name] = True
                 nomatch_label = ":{}_nomatch".format(eval_name)
-                if dep_gate_lbl == nomatch_label:
-                    items.append(nomatch_label)
-                    continue
                 edge_key = (eval_name, dep_gate_lbl)
                 if edge_key not in emitted_edge_gates:
                     gate_name = "_reset_edge_{}_{}".format(eval_name, hex_hash8(dep_gate_lbl))
@@ -488,6 +489,8 @@ def render_spoke_build(payload):
                 items.append(emitted_edge_gates[edge_key])
 
             items = sorted({i: True for i in items}.keys())
+            if not items:
+                fail("Spoke {} entry {} has gated reset status with no gate conditions".format(spoke_repo, entry["pkg_key"]))
             gate_target = spoke_raw_reset_gate_target(slot, extra) if in_cycle else spoke_reset_gate_target(slot, extra)
             if len(items) == 1:
                 body_lines.extend(alias(gate_target, items[0]))
@@ -505,6 +508,8 @@ def render_spoke_build(payload):
                     spoke_target_label(ms, mt, current_spoke = spoke_repo)
                     for ms, mt in reset.get("scc_gated_member_gates", [])
                 ]
+                if not member_gates:
+                    fail("Spoke {} SCC leader {} has gated reset status with no member gates".format(spoke_repo, entry["pkg_key"]))
                 if len(member_gates) == 1:
                     body_lines.extend(alias(leader_gate_target, member_gates[0]))
                 else:
@@ -837,6 +842,13 @@ def render_spoke_build(payload):
 
     return "\n".join(header + body_lines) + "\n"
 
+def _hook_has_target(content, target_name):
+    for quote in ('"', "'"):
+        for eq in ("name = ", "name="):
+            if "{}{}{}{}".format(eq, quote, target_name, quote) in content:
+                return True
+    return False
+
 def render_spoke_hook_files(payload, hooks, override_configs):
     """Run spoke-scoped `PACKAGE_REPO_HOOKS` and emit `_sdist/` shim + version-free aliases.
 
@@ -878,10 +890,22 @@ def render_spoke_hook_files(payload, hooks, override_configs):
             alias_lines = []
             for e in base_entries:
                 pkg_key = e["pkg_key"]
-                if 'name = "{}"'.format(pkg_key) in content or "name = '{}'".format(pkg_key) in content:
-                    alias_lines.extend(alias(spoke_hook_target(e.get("slot", "")), ":" + pkg_key))
+                versioned = "{}@{}".format(canon_name, e["version"])
+                matched_name = None
+                if _hook_has_target(content, pkg_key):
+                    matched_name = pkg_key
+                elif versioned != pkg_key and _hook_has_target(content, versioned):
+                    matched_name = versioned
+                if matched_name:
+                    alias_lines.extend(alias(spoke_hook_target(e.get("slot", "")), ":" + matched_name))
             if alias_lines:
                 content = content.rstrip("\n") + "\n\n" + "\n".join(alias_lines)
+            elif "name =" in content or "name=" in content:
+                fail("Package repo hook emitted '{}' for spoke '{}' without any target matching {}".format(
+                    path,
+                    canon_name,
+                    [e["pkg_key"] for e in base_entries],
+                ))
         files[path] = content
 
     # Emit _sdist/BUILD.bazel shim so published hooks referencing "//_sdist:<package_key>"

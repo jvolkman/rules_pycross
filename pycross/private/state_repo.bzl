@@ -42,13 +42,18 @@ def _merge_package_entries(entries):
     # Merge marker_dependencies: union across workspace members, dedup by (key, marker).
     seen_marker_deps = {}  # (key, marker) -> entry
     for md in merged.get("marker_dependencies", []):
-        seen_marker_deps[(md["key"], md.get("marker"))] = md
+        marker = md.get("marker") or ""
+        seen_marker_deps[(md["key"], marker)] = md
     for pkg_data in entries[1:]:
         for md in pkg_data.get("marker_dependencies", []):
-            dedupe_key = (md["key"], md.get("marker"))
+            marker = md.get("marker") or ""
+            dedupe_key = (md["key"], marker)
             if dedupe_key not in seen_marker_deps:
                 seen_marker_deps[dedupe_key] = md
-    merged["marker_dependencies"] = sorted(seen_marker_deps.values(), key = lambda m: (m["key"], m.get("marker", "")))
+    merged["marker_dependencies"] = sorted(
+        seen_marker_deps.values(),
+        key = lambda m: (m["key"], m.get("marker") or ""),
+    )
 
     # Merge wheel_candidates: union across members, dedup by filename.
     seen_candidates = {}  # filename -> entry
@@ -402,10 +407,7 @@ def render_state_build(variant_items, normalized_variants, member_variant_flags,
         Generated `BUILD.bazel` string.
     """
     qname_to_resolvers = qname_to_resolvers if qname_to_resolvers != None else normalized_variants.qname_to_resolvers
-    lines = [
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-    ]
+    lines = []
 
     sets_by_suffix = normalized_variants.sets_by_suffix
     needs_item_projection = any([len(resolvers) > 1 for resolvers in qname_to_resolvers.values()])
@@ -416,6 +418,11 @@ def render_state_build(variant_items, normalized_variants, member_variant_flags,
         else:
             lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_set_projection", "variant_state")')
         lines.append("")
+
+    lines.extend([
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ])
 
     if sets_by_suffix:
         lines.extend([

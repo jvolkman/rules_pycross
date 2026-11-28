@@ -4,6 +4,7 @@ load("//pycross/private:build_text.bzl", "config_setting_group", "deps_plus_sele
 load(
     "//pycross/private:lock_contract.bzl",
     "member_constraint_label",
+    "slot_key_id",
     "spoke_slot_label",
     "state_repo_name",
 )
@@ -66,7 +67,7 @@ def modules_mapping_deps(
             spoke_label = spoke_slot_label(workspace_name, pin_target, "raw")
 
             if is_key_platform_specific(packages, pin_target):
-                maybe_name = sanitize_name(pin_target)
+                maybe_name = slot_key_id(pin_target)
                 maybe_mapping_targets[maybe_name] = (pin_target, spoke_label)
                 dep_label = "//__maybe:%s" % maybe_name
             else:

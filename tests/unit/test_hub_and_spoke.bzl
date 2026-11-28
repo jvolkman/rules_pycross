@@ -5,6 +5,12 @@ load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
 load(
+    "//pycross/private:lock_contract.bzl",
+    "slot_key_id",
+)
+
+# buildifier: disable=bzl-visibility
+load(
     "//pycross/private:repo_slots.bzl",
     "assign_fork_slots",
 )
@@ -21,6 +27,7 @@ load(
 load(
     "//pycross/private:state_repo.bzl",
     "backend_tool_deps_labels",
+    "merge_workspace_locks",
     "normalize_workspace_variants",
     "render_backend_macro_bzl",
     "render_state_build",
@@ -29,6 +36,9 @@ load(
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:util.bzl", "marker_evaluator_name")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/lock_render:cycle_plan.bzl", "plan_cycle_member_deps")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -40,6 +50,9 @@ load(
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/thin_repo:markers.bzl", "render_member_markers_build")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/thin_repo:modules_mapping_deps.bzl", "modules_mapping_deps")
 
 def _wheel(filename, key):
     return {"filename": filename, "file_reference": {"key": key}}
@@ -400,6 +413,172 @@ def _test_member_markers_and_version_free_slim(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_member_markers_and_version_free_slim_impl)
 
+# buildifier: disable=unused-variable
+def _test_review_edge_cases_impl(env, target):
+    """Covers delimiter collisions, None marker merges, digit-boundary fork bumps, hook syntax, and gated cycle extras."""
+
+    # 1. merge_workspace_locks handles mixed marker=None and string marker without crashing.
+    merged = merge_workspace_locks([
+        ("m1", {"packages": {"a@1.0": {"marker_dependencies": [{"key": "b@1.0", "marker": None}]}}}),
+        ("m2", {"packages": {"a@1.0": {"marker_dependencies": [
+            {"key": "b@1.0", "marker": ""},
+            {"key": "b@1.0", "marker": "sys_platform == 'linux'"},
+        ]}}}),
+    ])
+    env.expect.that_int(len(merged["packages"]["a@1.0"]["marker_dependencies"])).equals(2)
+
+    # 2. Upstream spoke deps and cycle _CYCLE_EDGES_JSON stay byte-identical when a fork bumps 9.0 -> 10.0.
+    def _fork_digit_spokes(hi_ver):
+        pkgs = {
+            "app@1.0": {
+                "wheel_candidates": [_wheel("app-1.0-py3-none-any.whl", "k_app")],
+                "marker_dependencies": [
+                    {"key": "dep@2.0", "marker": "python_version < '3.12'"},
+                    {"key": "dep@{}".format(hi_ver), "marker": "python_version >= '3.12'"},
+                ],
+            },
+            "dep@2.0": {
+                "cycle_group": "cg",
+                "wheel_candidates": [_wheel("dep-2.0-py3-none-any.whl", "k_d0")],
+                "marker_dependencies": [{"key": "peer@1.0"}],
+            },
+            "dep@{}".format(hi_ver): {
+                "cycle_group": "cg",
+                "wheel_candidates": [_wheel("dep-{}-py3-none-any.whl".format(hi_ver), "k_d1")],
+                "marker_dependencies": [{"key": "peer@1.0"}],
+            },
+            "peer@1.0": {
+                "cycle_group": "cg",
+                "wheel_candidates": [_wheel("peer-1.0-py3-none-any.whl", "k_p")],
+                "marker_dependencies": [
+                    {"key": "dep@2.0", "marker": "python_version < '3.12'"},
+                    {"key": "dep@{}".format(hi_ver), "marker": "python_version >= '3.12'"},
+                ],
+            },
+        }
+        rmap = {
+            "k_app": "@ws__whl_app__t_py3_none_any//:wheel",
+            "k_d0": "@ws__whl_dep__s0__t_py3_none_any//:wheel",
+            "k_d1": "@ws__whl_dep__s1__t_py3_none_any//:wheel",
+            "k_p": "@ws__whl_peer__t_py3_none_any//:wheel",
+        }
+        slots = assign_fork_slots(pkgs)
+        return build_spoke_payloads(
+            "ws",
+            "ws__state",
+            pkgs,
+            rmap,
+            {},
+            slots,
+            cycle_groups = {"cg": ["dep@2.0", "dep@{}".format(hi_ver), "peer@1.0"]},
+        )
+
+    sp_9 = _fork_digit_spokes("9.0")
+    sp_10 = _fork_digit_spokes("10.0")
+    env.expect.that_str(json.encode(sp_9["app"].payload)).equals(json.encode(sp_10["app"].payload))
+    env.expect.that_str(json.encode(sp_9["peer"].payload)).equals(json.encode(sp_10["peer"].payload))
+
+    # 3. slot_key_id and modules_mapping_deps keep foo@s0 and foo-s0 distinct in //__maybe:.
+    env.expect.that_bool(slot_key_id("foo@s0") != slot_key_id("foo-s0")).equals(True)
+    mm = modules_mapping_deps(
+        {"foo": {"": "foo@s0"}, "foo_s0": {"": "foo-s0"}},
+        {
+            "foo@s0": {"wheel_platform_specific": True},
+            "foo-s0": {"wheel_platform_specific": True},
+        },
+        "ws",
+    )
+    env.expect.that_int(len(mm.maybe_mapping_targets)).equals(2)
+    env.expect.that_bool("foo__s0" in mm.maybe_mapping_targets).equals(True)
+    env.expect.that_bool("foo_s0" in mm.maybe_mapping_targets).equals(True)
+
+    # 4. cycle_plan pair_name keeps b@s0 vs b-s0 distinct.
+    plan = plan_cycle_member_deps(
+        "root",
+        {
+            "root": [{"dep": "mid", "marker": "sys_platform == 'linux'"}],
+            "mid": [
+                {"dep": "b@s0", "marker": "python_version < '3.12'"},
+                {"dep": "b-s0", "marker": "python_version >= '3.12'"},
+            ],
+            "b@s0": [{"dep": "root"}],
+            "b-s0": [{"dep": "root"}],
+        },
+    )
+    pair_names = [cg.pair_name for cg in plan.conditional_groups]
+    env.expect.that_int(len({p: True for p in pair_names})).equals(len(pair_names))
+
+    # 5. render_spoke_hook_files handles compact name="..." and legacy name@version targets.
+    compact_payload = {
+        "name": "my-pkg",
+        "spoke_repo": "ws__pkg_my_pkg",
+        "state_repo": "ws__state",
+        "entries": [{
+            "pkg_key": "my-pkg@1.0~abcd1234",
+            "name": "my-pkg",
+            "version": "1.0",
+            "extra": "",
+            "slot": "s0",
+            "sdist_label": "@ws__sdistfile_my_pkg__s0//file:my_pkg-1.0.tar.gz",
+        }],
+    }
+
+    def compact_hook(_packages_info, _overrides):
+        return [struct(dir = "_cargo", files = {"BUILD.bazel": 'genrule(name="my-pkg@1.0")\n'})]
+
+    compact_files = render_spoke_hook_files(
+        compact_payload,
+        {"maturin_build": compact_hook},
+        {"my-pkg": {"maturin_build": {"cargo_lock": '"//:Cargo.lock"'}}},
+    )
+    env.expect.that_str(compact_files["_cargo/BUILD.bazel"]).contains('name = "pkg_s0",\n    actual = ":my-pkg@1.0",')
+
+    # 6. Extras proxy inside a gated cycle emits valid reset gate targets.
+    cp = conflict_pairs([["v_a", "v_b"]])
+    gc_pkgs = {
+        "ca@1.0": {
+            "cycle_group": "gcyc",
+            "wheel_candidates": [_wheel("ca-1.0-cp312-cp312-manylinux_2_17_x86_64.whl", "k_ca")],
+            "sdist_file": {"key": "s_ca"},
+            "marker_dependencies": [{"key": "ca[ext]@1.0"}],
+        },
+        "ca[ext]@1.0": {
+            "cycle_group": "gcyc",
+            "marker_dependencies": [{"key": "cb@1.0"}],
+        },
+        "cb@1.0": {
+            "cycle_group": "gcyc",
+            "wheel_candidates": [_wheel("cb-1.0-py3-none-any.whl", "k_cb")],
+            "marker_dependencies": [{"key": "ca@1.0"}],
+        },
+    }
+    gc_rmap = {
+        "k_ca": "@ws__whl_ca__t_cp312_cp312_manylinux_2_17_x86_64//:wheel",
+        "s_ca": "@ws__sdistfile_ca//file:ca-1.0.tar.gz",
+        "k_cb": "@ws__whl_cb__t_py3_none_any//:wheel",
+    }
+    gc_slots = assign_fork_slots(gc_pkgs)
+    gc_reset = compute_workspace_reset_states(gc_pkgs, gc_rmap, cp, "ws", gc_slots)
+    gc_spokes = build_spoke_payloads(
+        "ws",
+        "ws__state",
+        gc_pkgs,
+        gc_rmap,
+        {"ca@1.0": "@ws__sdist_ca//:wheel"},
+        gc_slots,
+        cycle_groups = {"gcyc": ["ca@1.0", "ca[ext]@1.0", "cb@1.0"]},
+        has_variants = True,
+        reset_states = gc_reset,
+    )
+    ca_gc_build = render_spoke_build(gc_spokes["ca"].payload)
+    env.expect.that_str(ca_gc_build).contains('name = "_raw_reset_gate",')
+    env.expect.that_str(ca_gc_build).contains('name = "_scc_reset_gate",')
+    env.expect.that_str(ca_gc_build).contains('name = "_reset_gate_[ext]",')
+
+def _test_review_edge_cases(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_review_edge_cases_impl)
+
 def hub_and_spoke_test_suite(name):
     test_suite(
         name = name,
@@ -409,5 +588,6 @@ def hub_and_spoke_test_suite(name):
             _test_spoke_version_invariance_and_cycles,
             _test_spoke_hooks_shim_and_aliases,
             _test_member_markers_and_version_free_slim,
+            _test_review_edge_cases,
         ],
     )

@@ -6,7 +6,7 @@ py_test(
     main = "test_versions.py",
     deps = [
         "@uv//cowsay",
-        "@uv//idna",
-        "@uv//iniconfig",
+        "@uv//python_dateutil",
+        "@uv//six",
     ],
 )

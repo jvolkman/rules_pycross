@@ -345,7 +345,7 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
             continue
         marker_dependencies.append({
             "key": dep_key,
-            "marker": dep.get("marker", ""),
+            "marker": dep.get("marker") or "",
         })
         all_dependency_keys.append(dep_key)
 
@@ -370,10 +370,9 @@ def _create_package_resolver(pkg_key, pkg, ann, context):
 
     # When build_mode = "always" or build_target is set, the user explicitly wants the
     # sdist/build_target used rather than pre-built wheels from the registry.
-    # Clear wheel_candidates and wheel_candidate_files so the renderer aliases
+    # Clear wheel_candidates and wheel_candidate_files so the spoke aliases
     # directly to the sdist/build_target and lock_repo_creation does not
-    # instantiate unused pycross_wheel_file repos or leak dead entries into
-    # package_repo.repo_map.
+    # instantiate unused pycross_wheel_file repos.
     if always_build or build_target:
         wheel_candidates = []
         wheel_candidate_files = {}

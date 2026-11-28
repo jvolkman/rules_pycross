@@ -18,6 +18,11 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
+    dependency_groups = [
+        "default",
+        "optional:a",
+        "optional:b",
+    ],
     workspace = "uv",
 )
 use_repo(uv, "uv")

@@ -10,7 +10,7 @@ load("//pycross/private:repo_slots.bzl", "assign_fork_slots", "sdist_slot_repo_n
 load("//pycross/private:spoke_repo.bzl", "build_spoke_payloads", "render_spoke_build")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "marker_evaluator_name", "sanitize_name", "sdist_builds_disallowed")
+load("//pycross/private:util.bzl", "hex_hash8", "marker_evaluator_name", "sanitize_name", "sdist_builds_disallowed")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -200,9 +200,10 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
     mh_a = _render_spokes(mh_lock, repo_map).spokes["a"]
     env.expect.that_str(mh_a).contains('load("@rules_pycross//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")')
     env.expect.that_int(mh_a.count("_CYCLE_EDGES_JSON = ")).equals(1)
-    env.expect.that_str(mh_a).contains('name = "_cycle_needed_a_c",')
+    ac_pair = "_cycle_needed_a__c_{}".format(hex_hash8("a|c"))
+    env.expect.that_str(mh_a).contains('name = "{}",'.format(ac_pair))
     env.expect.that_str(mh_a).contains("edges = _CYCLE_EDGES_JSON,")
-    env.expect.that_str(mh_a).contains('":_cycle_needed_a_c_match": ["@ws__pkg_c//:_raw"]')
+    env.expect.that_str(mh_a).contains('":{}_match": ["@ws__pkg_c//:_raw"]'.format(ac_pair))
 
 def _test_cycle_group_marker_specific_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1180,7 +1181,8 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
     env.expect.that_bool("_CYCLE_EDGES_JSON" in sp["cyca"]).equals(False)
     env.expect.that_bool("_cycle_needed_" in sp["cyca"]).equals(False)
 
-    cyc_block = sp["mha"].split('pycross_cycle_dep_needed(\n    name = "_cycle_needed_mha_mhc",')[1].split("\n)")[0]
+    mh_pair = "_cycle_needed_mha__mhc_{}".format(hex_hash8("mha|mhc"))
+    cyc_block = sp["mha"].split('pycross_cycle_dep_needed(\n    name = "{}",'.format(mh_pair))[1].split("\n)")[0]
     env.expect.that_str(cyc_block).contains('variants = ["@ws__state//:_variant_state"]')
 
 def _test_scoped_variants_and_grouped_deps(name):

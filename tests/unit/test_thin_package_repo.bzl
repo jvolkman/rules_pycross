@@ -611,18 +611,18 @@ def _test_pin_build_multi_branch_maybe_impl(env, target):
         resolution_marker_exprs = res_exprs,
     ).build
 
-    # Base maybe: foo@s0 is platform-specific (uses helper _maybe_foo_s0),
+    # Base maybe: foo@s0 is platform-specific (uses helper _maybe_foo__s0),
     # while foo@s1 is unconditional (maps directly to :pkg).
-    env.expect.that_bool('name = "_maybe_foo_s0"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_foo__s0"' in res).equals(True)
     env.expect.that_bool('"@ws__pkg_foo//:_wheel_available_s0": ":pkg"' in res).equals(True)
-    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_foo_s0"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_foo__s0"' in res).equals(True)
     env.expect.that_bool('"//_markers:is_res_foo_s1": ":pkg"' in res).equals(True)
 
     # Extra maybe: both foo[bar]@s0 and foo[bar]@s1 are platform-specific.
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s0"' in res).equals(True)
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s1"' in res).equals(True)
-    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_extra_bar_foo_bar__s0"' in res).equals(True)
-    env.expect.that_bool('"//_markers:is_res_foo_s1": ":_maybe_extra_bar_foo_bar__s1"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo__e_bar__s0"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo__e_bar__s1"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_extra_bar_foo__e_bar__s0"' in res).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s1": ":_maybe_extra_bar_foo__e_bar__s1"' in res).equals(True)
 
 def _test_pin_build_multi_branch_maybe(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -922,13 +922,13 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
     env.expect.that_bool("testonly = True," in extra_maybe_section).equals(True)
     env.expect.that_bool('platform = "//:_internal_platform"' in extra_maybe_section).equals(True)
 
-    env.expect.that_bool('name = "_maybe_foo_s0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_foo__s0"' in multi.actual_build).equals(True)
     env.expect.that_bool('"@ws__pkg_foo//:_wheel_available_s0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_foo_s0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"//_markers:is_res_foo_s0": ":_maybe_foo__s0"' in multi.actual_build).equals(True)
     env.expect.that_bool('"//_markers:is_res_foo_s1": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
 
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__s1"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo__e_bar__s0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo__e_bar__s1"' in multi.actual_build).equals(True)
     env.expect.that_bool('"@ws__pkg_foo//:_wheel_available_[bar]_s0": "//__actual/foo:extra_bar"' in multi.actual_build).equals(True)
     env.expect.that_bool('name = "extra_bar_maybe"' in multi.actual_build).equals(True)
 
